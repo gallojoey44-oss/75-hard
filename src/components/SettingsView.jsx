@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDateShort } from '../utils/dateUtils';
 import TaskManager from './TaskManager';
+import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 
 export default function SettingsView() {
   const {
@@ -13,6 +14,23 @@ export default function SettingsView() {
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(profile?.name || '');
   const [showReset, setShowReset] = useState(false);
+
+  // Update check state
+  // 'idle' | 'checking' | 'up-to-date' | 'update-available' | 'unavailable' | 'error'
+  const [updateStatus, setUpdateStatus] = useState('idle');
+
+  // If the banner fires while Settings is open, reflect it here too
+  useEffect(() => {
+    const handler = () => setUpdateStatus('update-available');
+    window.addEventListener('sw-update-available', handler);
+    return () => window.removeEventListener('sw-update-available', handler);
+  }, []);
+
+  async function handleCheckUpdate() {
+    setUpdateStatus('checking');
+    const result = await checkForUpdate();
+    setUpdateStatus(result);
+  }
 
   function saveName() {
     if (nameVal.trim()) updateProfile({ name: nameVal.trim() });
@@ -119,6 +137,66 @@ export default function SettingsView() {
             <span>The app will appear on your home screen and open fullscreen like a native app.</span>
           </div>
         </div>
+      </div>
+
+      {/* App updates */}
+      <div className="settings-section">
+        <div className="section-title">🔄 App Updates</div>
+        <p className="text-muted" style={{ marginBottom: 12, lineHeight: 1.6 }}>
+          Your data is always saved locally. Checking for updates only refreshes the app code — it never deletes your progress.
+        </p>
+
+        {updateStatus === 'idle' && (
+          <button className="btn btn-ghost btn-full" onClick={handleCheckUpdate}>
+            Check for Updates
+          </button>
+        )}
+
+        {updateStatus === 'checking' && (
+          <div className="update-status-row">
+            <span className="update-status-spinner">⏳</span>
+            <span>Checking…</span>
+          </div>
+        )}
+
+        {updateStatus === 'up-to-date' && (
+          <div className="update-status-row success">
+            <span>✅</span>
+            <span>You're on the latest version.</span>
+            <button className="btn btn-ghost" style={{ marginLeft: 'auto', padding: '4px 10px', fontSize: 12 }} onClick={() => setUpdateStatus('idle')}>
+              Check again
+            </button>
+          </div>
+        )}
+
+        {updateStatus === 'update-available' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="update-status-row accent">
+              <span>🆕</span>
+              <span>A new version is ready!</span>
+            </div>
+            <button className="btn btn-primary btn-full" onClick={applyUpdate}>
+              Apply Update &amp; Restart
+            </button>
+          </div>
+        )}
+
+        {updateStatus === 'unavailable' && (
+          <div className="update-status-row">
+            <span>ℹ️</span>
+            <span>Service worker unavailable (only works when deployed).</span>
+          </div>
+        )}
+
+        {updateStatus === 'error' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="update-status-row warn">
+              <span>⚠️</span>
+              <span>Couldn't check — are you online?</span>
+            </div>
+            <button className="btn btn-ghost btn-full" onClick={handleCheckUpdate}>Retry</button>
+          </div>
+        )}
       </div>
 
       {/* Reset confirmation */}
