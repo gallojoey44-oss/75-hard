@@ -33,6 +33,7 @@ function AppContent() {
           <DailyView
             editDayNum={editDayNum}
             onBack={editDayNum ? handleBackFromEdit : undefined}
+            setView={setView}
           />
         )}
         {view === 'calendar' && <CalendarView onEditDay={handleEditDay} />}

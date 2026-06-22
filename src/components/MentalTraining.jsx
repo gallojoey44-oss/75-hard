@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
-export default function MentalTraining({ dayNumber, dayData, onUpdate }) {
+export default function MentalTraining({ dayNumber, dayData, onUpdate, mentalTaskId = 'mental' }) {
   const { MENTAL_OPTIONS } = useApp();
   const [open, setOpen] = useState(false);
 
@@ -17,14 +17,14 @@ export default function MentalTraining({ dayNumber, dayData, onUpdate }) {
     if (!mt.selected) return;
     onUpdate({
       mentalTraining: { ...mt, completed: true },
-      tasks: { ...(dayData?.tasks || {}), mental: true },
+      tasks: { ...(dayData?.tasks || {}), [mentalTaskId]: true },
     });
   }
 
   function unmark() {
     onUpdate({
       mentalTraining: { ...mt, completed: false },
-      tasks: { ...(dayData?.tasks || {}), mental: false },
+      tasks: { ...(dayData?.tasks || {}), [mentalTaskId]: false },
     });
   }
 
@@ -44,7 +44,7 @@ export default function MentalTraining({ dayNumber, dayData, onUpdate }) {
                 {mt.completed
                   ? `Done · ${MENTAL_OPTIONS.find(o => o.id === mt.selected)?.label || ''}`
                   : mt.selected
-                    ? `Selected · tap to expand`
+                    ? 'Selected · tap to expand'
                     : 'Choose a practice'}
               </div>
             </div>

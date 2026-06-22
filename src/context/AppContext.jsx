@@ -2,35 +2,39 @@ import { createContext, useContext, useState, useCallback } from 'react';
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
 
 export const MENTAL_OPTIONS = [
-  { id: 'breathwork',   label: '5 min breathwork',              icon: '🫁' },
-  { id: 'meditation',   label: '5 min meditation',              icon: '🧘' },
-  { id: 'journaling',   label: '5 min journaling',              icon: '📝' },
-  { id: 'visualization',label: 'Visualization',                 icon: '🎯' },
-  { id: 'reframe',      label: 'Reframe one negative thought',  icon: '💭' },
-  { id: 'do_avoided',   label: 'Do one thing I was avoiding',   icon: '⚡' },
-  { id: 'no_phone',     label: '30 min no phone before bed',    icon: '📵' },
+  { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
+  { id: 'meditation',    label: '5 min meditation',             icon: '🧘' },
+  { id: 'journaling',    label: '5 min journaling',             icon: '📝' },
+  { id: 'visualization', label: 'Visualization',                icon: '🎯' },
+  { id: 'reframe',       label: 'Reframe one negative thought', icon: '💭' },
+  { id: 'do_avoided',    label: 'Do one thing I was avoiding',  icon: '⚡' },
+  { id: 'no_phone',      label: '30 min no phone before bed',   icon: '📵' },
 ];
 
 const DEFAULT_TASKS_ME = [
-  { id: 'workout',   name: 'Workout complete',           icon: '🏋️', order: 0 },
-  { id: 'diet',      name: 'Diet followed',              icon: '🥗', order: 1 },
-  { id: 'water',     name: 'Water goal hit',             icon: '💧', order: 2 },
-  { id: 'reading',   name: '10 pages read',              icon: '📚', order: 3 },
-  { id: 'photo',     name: 'Progress photo taken',       icon: '📸', order: 4 },
-  { id: 'sleep_log', name: 'Sleep/energy logged',        icon: '😴', order: 5 },
-  { id: 'glucose',   name: 'Glucose/Dexcom notes',       icon: '📊', order: 6 },
-  { id: 'mental',    name: 'Mental training complete',   icon: '🧠', order: 7 },
+  { id: 'workout',   name: '45-minute workout complete', icon: '🏋️', order: 0 },
+  { id: 'diet',      name: 'Diet followed',              icon: '🥗',  order: 1 },
+  { id: 'water',     name: 'Water goal hit',             icon: '💧',  order: 2 },
+  { id: 'reading',   name: '10 pages read',              icon: '📚',  order: 3 },
+  { id: 'photo',     name: 'Progress photo taken',       icon: '📸',  order: 4 },
+  { id: 'sleep_log', name: 'Sleep/energy logged',        icon: '😴',  order: 5 },
+  { id: 'glucose',   name: 'Glucose/Dexcom notes',       icon: '📊',  order: 6 },
+  { id: 'mental',    name: 'Mental training complete',   icon: '🧠',  order: 7 },
 ];
 
 const DEFAULT_TASKS_GF = [
-  { id: 'gf_bed',    name: 'Make my bed',                            color: '#FF6B6B', order: 0 },
-  { id: 'gf_room',   name: 'Tidy up my room',                        color: '#4ECDC4', order: 1 },
-  { id: 'gf_skin',   name: 'Take care of my skin',                   color: '#74B9FF', order: 2 },
-  { id: 'gf_walk',   name: 'Walk 10,000 steps',                      color: '#6BCB77', order: 3 },
-  { id: 'gf_water',  name: 'Drink water',                            color: '#45B7D1', order: 4 },
-  { id: 'gf_read',   name: 'Read a few pages or listen to a podcast',color: '#FFB347', order: 5 },
-  { id: 'gf_meals',  name: 'Prep meals for tomorrow',                color: '#DDA0DD', order: 6 },
-  { id: 'gf_screen', name: 'Limit screen time 30 min before bed',    color: '#F9E04B', order: 7 },
+  { id: 'gf_workout', name: '45-minute workout complete',            color: '#FF6B6B', order: 0  },
+  { id: 'gf_diet',    name: 'Eat clean / diet followed',             color: '#6BCB77', order: 1  },
+  { id: 'gf_photo',   name: 'Progress photo taken',                  color: '#74B9FF', order: 2  },
+  { id: 'gf_mental',  name: 'Mental training complete',              color: '#A78BFA', order: 3  },
+  { id: 'gf_bed',     name: 'Make my bed',                           color: '#FF8FAB', order: 4  },
+  { id: 'gf_room',    name: 'Tidy up my room',                       color: '#4ECDC4', order: 5  },
+  { id: 'gf_skin',    name: 'Take care of my skin',                  color: '#45B7D1', order: 6  },
+  { id: 'gf_walk',    name: 'Walk 10,000 steps',                     color: '#FFB347', order: 7  },
+  { id: 'gf_water',   name: 'Drink water',                           color: '#74B9FF', order: 8  },
+  { id: 'gf_read',    name: 'Read a few pages or listen to a podcast', color: '#DDA0DD', order: 9 },
+  { id: 'gf_meals',   name: 'Prep meals for tomorrow',               color: '#F9E04B', order: 10 },
+  { id: 'gf_screen',  name: 'Limit screen time 30 min before bed',   color: '#A8E6CF', order: 11 },
 ];
 
 function makeDefaultProfiles() {
@@ -81,11 +85,70 @@ function saveLS(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 
+/**
+ * Safe migration — never removes or overwrites user data.
+ * Runs once at startup. Only renames one old task name and adds
+ * missing required tasks to Girlfriend's list.
+ */
+function migrateProfiles(stored) {
+  const profiles = { ...stored };
+  let changed = false;
+
+  // Ensure both profile slots always exist
+  if (!profiles.me) { profiles.me = makeDefaultProfiles().me; changed = true; }
+  if (!profiles.girlfriend) { profiles.girlfriend = makeDefaultProfiles().girlfriend; changed = true; }
+
+  // Joey — rename old 'workout' task name (preserves ID so history is intact)
+  {
+    const tasks = profiles.me.tasks || [];
+    const w = tasks.find(t => t.id === 'workout');
+    if (w && w.name === 'Workout complete') {
+      profiles.me = {
+        ...profiles.me,
+        tasks: tasks.map(t =>
+          t.id === 'workout' ? { ...t, name: '45-minute workout complete' } : t
+        ),
+      };
+      changed = true;
+    }
+  }
+
+  // Girlfriend — add any missing required tasks (appended at end, stable IDs)
+  {
+    const tasks = profiles.girlfriend.tasks || [];
+    const required = [
+      { id: 'gf_workout', name: '45-minute workout complete', color: '#FF6B6B' },
+      { id: 'gf_diet',    name: 'Eat clean / diet followed',  color: '#6BCB77' },
+      { id: 'gf_photo',   name: 'Progress photo taken',       color: '#74B9FF' },
+      { id: 'gf_mental',  name: 'Mental training complete',   color: '#A78BFA' },
+    ];
+    let newTasks = [...tasks];
+    let maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order ?? 0)) : -1;
+    let addedAny = false;
+    for (const req of required) {
+      if (!tasks.find(t => t.id === req.id)) {
+        maxOrder++;
+        newTasks.push({ ...req, order: maxOrder });
+        addedAny = true;
+      }
+    }
+    if (addedAny) {
+      profiles.girlfriend = { ...profiles.girlfriend, tasks: newTasks };
+      changed = true;
+    }
+  }
+
+  if (changed) saveLS('profiles', profiles);
+  return profiles;
+}
+
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
   const [activeProfile, setActiveProfileState] = useState(() => loadLS('activeProfile', null));
-  const [profiles, setProfilesState] = useState(() => loadLS('profiles', makeDefaultProfiles()));
+  const [profiles, setProfilesState] = useState(() =>
+    migrateProfiles(loadLS('profiles', makeDefaultProfiles()))
+  );
   const [allDays, setAllDaysState] = useState(() => loadLS('allDays', { me: {}, girlfriend: {} }));
 
   const setActiveProfile = useCallback((id) => {

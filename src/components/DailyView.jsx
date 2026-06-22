@@ -13,10 +13,7 @@ function GfTaskCard({ task, checked, onToggle, index }) {
     <div className={`gf-task-card${checked ? ' done-card' : ''}`}>
       <div className="gf-task-top" style={{ background: color }} />
       <div className="gf-task-body">
-        <div
-          className="gf-task-num"
-          style={{ background: color + 'CC' }}
-        >
+        <div className="gf-task-num" style={{ background: color + 'CC' }}>
           {index + 1}
         </div>
         <span className={`gf-task-name${checked ? ' done' : ''}`}>{task.name}</span>
@@ -33,7 +30,7 @@ function GfTaskCard({ task, checked, onToggle, index }) {
   );
 }
 
-export default function DailyView({ editDayNum, onBack }) {
+export default function DailyView({ editDayNum, onBack, setView }) {
   const {
     activeProfile, profile,
     getDayNumber, getDayData, getTodayData,
@@ -49,13 +46,15 @@ export default function DailyView({ editDayNum, onBack }) {
 
   useEffect(() => {
     if (!dayNum) return;
-    const data = isEditing ? (getDayData(dayNum) || {
-      date: getDateForDayNumber(profile?.challengeStart, dayNum),
-      dayNumber: dayNum,
-      tasks: {}, mentalTraining: { selected: null, completed: false, notes: '' },
-      mood: 0, confidence: 0, sleep: 0, energy: 0,
-      notes: '', glucoseNotes: '', validated: false,
-    }) : getTodayData();
+    const data = isEditing
+      ? (getDayData(dayNum) || {
+          date: getDateForDayNumber(profile?.challengeStart, dayNum),
+          dayNumber: dayNum,
+          tasks: {}, mentalTraining: { selected: null, completed: false, notes: '' },
+          mood: 0, confidence: 0, sleep: 0, energy: 0,
+          notes: '', glucoseNotes: '', validated: false,
+        })
+      : getTodayData();
     setDayData(data);
     setPrevPct(calcPct(data));
   }, [dayNum, activeProfile]);
@@ -77,9 +76,7 @@ export default function DailyView({ editDayNum, onBack }) {
     updateDay(dayNum, merged);
 
     const newPct = calcPct(merged);
-    if (newPct === 100 && prevPct < 100) {
-      setShowCelebration(true);
-    }
+    if (newPct === 100 && prevPct < 100) setShowCelebration(true);
     setPrevPct(newPct);
   }
 
@@ -90,9 +87,7 @@ export default function DailyView({ editDayNum, onBack }) {
     toggleTask(dayNum, taskId);
 
     const newPct = calcPct(merged);
-    if (newPct === 100 && prevPct < 100) {
-      setShowCelebration(true);
-    }
+    if (newPct === 100 && prevPct < 100) setShowCelebration(true);
     setPrevPct(newPct);
   }
 
@@ -112,29 +107,38 @@ export default function DailyView({ editDayNum, onBack }) {
     );
   }
 
-  const pct       = calcPct(dayData);
-  const tasks     = [...(profile.tasks || [])].sort((a, b) => a.order - b.order);
-  const dateStr   = dayData?.date || getDateForDayNumber(profile?.challengeStart, dayNum);
-  const isMe      = activeProfile === 'me';
+  const pct     = calcPct(dayData);
+  const tasks   = [...(profile.tasks || [])].sort((a, b) => a.order - b.order);
+  const dateStr = dayData?.date || getDateForDayNumber(profile?.challengeStart, dayNum);
+  const isMe    = activeProfile === 'me';
+
+  // The task ID used by MentalTraining to auto-check when marking complete
+  const mentalTaskId = isMe ? 'mental' : 'gf_mental';
 
   return (
     <div className="daily-view">
       {isEditing && onBack && (
         <div className="edit-mode-banner">
           <span>✏️ Editing Day {dayNum}</span>
-          <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 13 }} onClick={onBack}>Done</button>
+          <button
+            className="btn btn-ghost"
+            style={{ padding: '4px 10px', fontSize: 13 }}
+            onClick={onBack}
+          >
+            Done
+          </button>
         </div>
       )}
 
       <div className="daily-header">
         <div className="daily-header-left">
           <h2>{formatDateLong(dateStr)}</h2>
-          <p>{isEditing ? `Editing past day` : `Log your day`}</p>
+          <p>{isEditing ? 'Editing past day' : 'Log your day'}</p>
         </div>
         <span className="daily-day-badge">Day {dayNum}</span>
       </div>
 
-      {/* Progress */}
+      {/* Progress bar */}
       <div className="section-card">
         <div className="prog-bar-wrap">
           <div className="prog-bar-label">
@@ -150,10 +154,20 @@ export default function DailyView({ editDayNum, onBack }) {
         </div>
       </div>
 
-      {/* My profile: standard checklist */}
+      {/* ── Joey: standard checklist ── */}
       {isMe && (
         <div className="section-card">
-          <div className="section-title">✅ Daily Tasks</div>
+          <div className="section-title" style={{ justifyContent: 'space-between' }}>
+            <span>✅ Daily Tasks</span>
+            {setView && (
+              <button
+                className="manage-tasks-link"
+                onClick={() => setView('settings')}
+              >
+                ✏️ Manage Tasks
+              </button>
+            )}
+          </div>
           {tasks.map(task => (
             <CheckItem
               key={task.id}
@@ -165,18 +179,30 @@ export default function DailyView({ editDayNum, onBack }) {
         </div>
       )}
 
-      {/* My profile: mental training */}
+      {/* ── Joey: mental training ── */}
       {isMe && (
         <MentalTraining
           dayNumber={dayNum}
           dayData={dayData}
           onUpdate={handleUpdate}
+          mentalTaskId={mentalTaskId}
         />
       )}
 
-      {/* Girlfriend: colored task cards */}
+      {/* ── Girlfriend: colored task cards ── */}
       {!isMe && (
         <>
+          {setView && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+              <button
+                className="manage-tasks-link"
+                onClick={() => setView('settings')}
+              >
+                ✏️ Manage Tasks
+              </button>
+            </div>
+          )}
+
           <div className="gf-tasks">
             {tasks.map((task, i) => (
               <GfTaskCard
@@ -188,6 +214,14 @@ export default function DailyView({ editDayNum, onBack }) {
               />
             ))}
           </div>
+
+          {/* Girlfriend mental training section */}
+          <MentalTraining
+            dayNumber={dayNum}
+            dayData={dayData}
+            onUpdate={handleUpdate}
+            mentalTaskId={mentalTaskId}
+          />
 
           {/* Validate Day */}
           <div className="validate-btn-wrap">
@@ -215,7 +249,7 @@ export default function DailyView({ editDayNum, onBack }) {
         </>
       )}
 
-      {/* Daily Log */}
+      {/* Daily Log — both profiles */}
       <div className="section-card">
         <div className="section-title">📓 Daily Log</div>
         <textarea
@@ -247,6 +281,7 @@ export default function DailyView({ editDayNum, onBack }) {
           onChange={v => handleUpdate({ energy: v })}
         />
 
+        {/* Glucose/Dexcom — Joey only */}
         {isMe && (
           <div style={{ marginTop: 8 }}>
             <div className="section-title" style={{ marginBottom: 8 }}>📊 Glucose / Dexcom Notes</div>

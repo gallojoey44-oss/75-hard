@@ -1001,6 +1001,27 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .mt-8 { margin-top: 8px; }
 .mt-12 { margin-top: 12px; }
 
+/* ─── Task edit panel (expanded inline editor) ───────────────── */
+.task-edit-panel {
+  background: var(--card2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  padding: 14px;
+  margin-bottom: 4px;
+}
+
+/* ─── Manage Tasks shortcut link ─────────────────────────────── */
+.manage-tasks-link {
+  background: none;
+  color: var(--accent2);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 0;
+  opacity: 0.8;
+  -webkit-tap-highlight-color: transparent;
+}
+.manage-tasks-link:active { opacity: 0.5; }
+
 /* ─── Edit indicator ─────────────────────────────────────────── */
 .edit-mode-banner {
   background: rgba(245,158,11,0.1);
