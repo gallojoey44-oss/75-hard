@@ -1,0 +1,18 @@
+{
+  "name": "75 Hard Tracker",
+  "short_name": "75 Hard",
+  "description": "75-day challenge and daily routine tracker",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D0D14",
+  "theme_color": "#0D0D14",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
