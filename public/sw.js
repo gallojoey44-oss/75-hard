@@ -1,22 +1,23 @@
 // Cache version — bump this string to invalidate ALL old caches on next deploy
-const CACHE_VER  = '75hard-v3';
+const CACHE_VER  = '75hard-v4';
 const ASSET_CACHE = `${CACHE_VER}-assets`;  // hashed JS/CSS — cache-first (immutable)
 const HTML_CACHE  = `${CACHE_VER}-html`;    // index.html — network-first (always fresh)
 const STATIC_CACHE = `${CACHE_VER}-static`; // icons, manifest — stale-while-revalidate
 
 const ALL_CACHES = [ASSET_CACHE, HTML_CACHE, STATIC_CACHE];
 
-// ── Install: precache static shell (do NOT skipWaiting — let the app control activation)
+// ── Install: skipWaiting immediately so this SW takes over from any old version
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then(c =>
       c.addAll(['/manifest.json', '/icon.svg', '/icon-apple.svg'])
     )
   );
-  // No self.skipWaiting() here — new SW waits so the app can show an update banner
+  self.skipWaiting();
 });
 
-// ── Activate: delete every cache that doesn't belong to this version
+// ── Activate: delete every cache that doesn't belong to this version,
+//    claim all clients, then notify them to reload so they get fresh HTML/assets
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -26,6 +27,10 @@ self.addEventListener('activate', event => {
           .map(k => caches.delete(k))
       )
     ).then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => {
+        clients.forEach(client => client.postMessage({ type: 'SW_UPDATED' }));
+      })
   );
 });
 

@@ -7,6 +7,18 @@ let isApplyingUpdate = false;
 export async function registerSW() {
   if (!('serviceWorker' in navigator)) return;
 
+  // Capture whether a SW was already controlling this page before registration.
+  // Used to avoid a reload loop on first install (no prior SW = no reload needed).
+  const hadController = !!navigator.serviceWorker.controller;
+
+  // When the new SW activates (v4+), it posts SW_UPDATED to all window clients.
+  // If a SW was already in control, reload to serve the freshly cached HTML/assets.
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data?.type === 'SW_UPDATED' && hadController && !isApplyingUpdate) {
+      window.location.reload();
+    }
+  });
+
   try {
     registration = await navigator.serviceWorker.register('/sw.js');
 

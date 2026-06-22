@@ -139,6 +139,15 @@ export default function SettingsView() {
         </div>
       </div>
 
+      {/* App version */}
+      <div className="settings-section">
+        <div className="section-title">📦 App Version</div>
+        <div className="settings-row">
+          <span className="settings-row-label">Version</span>
+          <span className="settings-row-value" style={{ fontFamily: 'monospace', fontSize: 13 }}>v2.0.0</span>
+        </div>
+      </div>
+
       {/* App updates */}
       <div className="settings-section">
         <div className="section-title">🔄 App Updates</div>
