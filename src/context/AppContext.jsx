@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
+import { SOURCES } from '../data/defaultQuotes';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -37,6 +38,12 @@ const DEFAULT_TASKS_GF = [
   { id: 'gf_screen',  name: 'Limit screen time 30 min before bed',   color: '#A8E6CF', order: 11 },
 ];
 
+const DEFAULT_QUOTE_SETTINGS = {
+  enabledSources: [...SOURCES],
+  favorites: [],
+  showReflectionTask: false,
+};
+
 function makeDefaultProfiles() {
   return {
     me: {
@@ -45,6 +52,8 @@ function makeDefaultProfiles() {
       emoji: '💪',
       challengeStart: null,
       tasks: DEFAULT_TASKS_ME,
+      quoteSettings: { ...DEFAULT_QUOTE_SETTINGS },
+      customQuotes: [],
     },
     girlfriend: {
       id: 'girlfriend',
@@ -52,6 +61,8 @@ function makeDefaultProfiles() {
       emoji: '🌸',
       challengeStart: null,
       tasks: DEFAULT_TASKS_GF,
+      quoteSettings: { ...DEFAULT_QUOTE_SETTINGS },
+      customQuotes: [],
     },
   };
 }
@@ -87,8 +98,7 @@ function saveLS(key, value) {
 
 /**
  * Safe migration — never removes or overwrites user data.
- * Runs once at startup. Only renames one old task name and adds
- * missing required tasks to Girlfriend's list.
+ * Runs once at startup.
  */
 function migrateProfiles(stored) {
   const profiles = { ...stored };
@@ -138,6 +148,27 @@ function migrateProfiles(stored) {
     }
   }
 
+  // Both profiles — add quoteSettings and customQuotes if missing
+  for (const profId of ['me', 'girlfriend']) {
+    if (!profiles[profId].quoteSettings) {
+      profiles[profId] = {
+        ...profiles[profId],
+        quoteSettings: { ...DEFAULT_QUOTE_SETTINGS },
+      };
+      changed = true;
+    } else if (!profiles[profId].quoteSettings.enabledSources) {
+      profiles[profId] = {
+        ...profiles[profId],
+        quoteSettings: { ...DEFAULT_QUOTE_SETTINGS, ...profiles[profId].quoteSettings },
+      };
+      changed = true;
+    }
+    if (!profiles[profId].customQuotes) {
+      profiles[profId] = { ...profiles[profId], customQuotes: [] };
+      changed = true;
+    }
+  }
+
   if (changed) saveLS('profiles', profiles);
   return profiles;
 }
@@ -150,6 +181,8 @@ export function AppProvider({ children }) {
     migrateProfiles(loadLS('profiles', makeDefaultProfiles()))
   );
   const [allDays, setAllDaysState] = useState(() => loadLS('allDays', { me: {}, girlfriend: {} }));
+  // Per-date quote data: { me: { '2024-01-15': { cycleOffset, reflectionNotes, reflectionComplete } }, girlfriend: {} }
+  const [quoteData, setQuoteDataState] = useState(() => loadLS('quoteData', { me: {}, girlfriend: {} }));
 
   const setActiveProfile = useCallback((id) => {
     setActiveProfileState(id);
@@ -168,6 +201,14 @@ export function AppProvider({ children }) {
     setAllDaysState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       saveLS('allDays', next);
+      return next;
+    });
+  }, []);
+
+  const setQuoteData = useCallback((updater) => {
+    setQuoteDataState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveLS('quoteData', next);
       return next;
     });
   }, []);
@@ -316,6 +357,71 @@ export function AppProvider({ children }) {
     updateProfile({ tasks: newTasks.map((t, i) => ({ ...t, order: i })) });
   }, [updateProfile]);
 
+  // ── Quote actions ──────────────────────────────────────────────────────
+
+  const updateQuoteSettings = useCallback((updates) => {
+    if (!activeProfile) return;
+    setProfiles(prev => ({
+      ...prev,
+      [activeProfile]: {
+        ...prev[activeProfile],
+        quoteSettings: { ...prev[activeProfile].quoteSettings, ...updates },
+      },
+    }));
+  }, [activeProfile, setProfiles]);
+
+  const addCustomQuote = useCallback((quoteData) => {
+    if (!activeProfile) return;
+    const quotes = profile?.customQuotes || [];
+    const newQ = { id: `q_custom_${Date.now()}`, isInspired: true, ...quoteData };
+    updateProfile({ customQuotes: [...quotes, newQ] });
+  }, [activeProfile, profile, updateProfile]);
+
+  const updateCustomQuote = useCallback((id, updates) => {
+    if (!activeProfile) return;
+    const quotes = profile?.customQuotes || [];
+    updateProfile({ customQuotes: quotes.map(q => q.id === id ? { ...q, ...updates } : q) });
+  }, [activeProfile, profile, updateProfile]);
+
+  const deleteCustomQuote = useCallback((id) => {
+    if (!activeProfile) return;
+    const quotes = profile?.customQuotes || [];
+    const qs = profile?.quoteSettings || {};
+    updateProfile({
+      customQuotes: quotes.filter(q => q.id !== id),
+      quoteSettings: { ...qs, favorites: (qs.favorites || []).filter(fid => fid !== id) },
+    });
+  }, [activeProfile, profile, updateProfile]);
+
+  const toggleFavoriteQuote = useCallback((quoteId) => {
+    if (!activeProfile) return;
+    const favs = profile?.quoteSettings?.favorites || [];
+    const next = favs.includes(quoteId)
+      ? favs.filter(id => id !== quoteId)
+      : [...favs, quoteId];
+    updateQuoteSettings({ favorites: next });
+  }, [activeProfile, profile, updateQuoteSettings]);
+
+  const getQuoteDataForDate = useCallback((dateStr) => {
+    if (!activeProfile) return null;
+    return (quoteData[activeProfile] || {})[dateStr] || null;
+  }, [activeProfile, quoteData]);
+
+  const updateQuoteDataForDate = useCallback((dateStr, updates) => {
+    if (!activeProfile) return;
+    setQuoteData(prev => {
+      const profData = prev[activeProfile] || {};
+      const existing = profData[dateStr] || { cycleOffset: 0, reflectionNotes: '', reflectionComplete: false };
+      return {
+        ...prev,
+        [activeProfile]: {
+          ...profData,
+          [dateStr]: { ...existing, ...updates },
+        },
+      };
+    });
+  }, [activeProfile, setQuoteData]);
+
   return (
     <AppContext.Provider value={{
       activeProfile, profile, profiles, days, allDays,
@@ -326,6 +432,12 @@ export function AppProvider({ children }) {
       startChallenge, resetChallenge, updateProfile,
       addTask, updateTask, deleteTask, reorderTasks,
       MENTAL_OPTIONS,
+      // Quote
+      quoteData,
+      updateQuoteSettings,
+      addCustomQuote, updateCustomQuote, deleteCustomQuote,
+      toggleFavoriteQuote,
+      getQuoteDataForDate, updateQuoteDataForDate,
     }}>
       {children}
     </AppContext.Provider>

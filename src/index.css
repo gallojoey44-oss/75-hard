@@ -1093,3 +1093,346 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   color: var(--warn);
   font-weight: 600;
 }
+
+/* ─── Quote of the Day card ──────────────────────────────────── */
+.quote-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-bottom: 14px;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+.quote-card.open {
+  border-color: rgba(139,92,246,0.3);
+}
+[data-profile="girlfriend"] .quote-card.open {
+  border-color: rgba(236,72,153,0.3);
+}
+
+.quote-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  width: 100%;
+  background: transparent;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.quote-card-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.quote-card-preview {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quote-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.quote-card-snippet {
+  font-size: 13px;
+  color: var(--text2);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.quote-done-badge {
+  background: var(--success);
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+/* Expanded body */
+.quote-card-body {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.quote-text-wrap {
+  background: linear-gradient(135deg, rgba(139,92,246,0.06), rgba(139,92,246,0.02));
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 12px 14px;
+}
+[data-profile="girlfriend"] .quote-text-wrap {
+  background: linear-gradient(135deg, rgba(236,72,153,0.06), rgba(236,72,153,0.02));
+}
+
+.quote-text {
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.65;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.quote-attribution {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.quote-source-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent2);
+}
+
+.quote-reference {
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.quote-meta-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quote-theme-pill {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 100px;
+  background: var(--accent-glow);
+  color: var(--accent2);
+}
+
+.quote-inspired-pill {
+  font-size: 11px;
+  color: var(--text3);
+  padding: 3px 8px;
+  border-radius: 100px;
+  background: var(--card2);
+}
+
+.quote-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.quote-fav-btn {
+  font-size: 18px;
+  color: var(--text3);
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+.quote-fav-btn.active { color: #EC4899; background: rgba(236,72,153,0.15); }
+
+.quote-cycle-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.quote-divider {
+  height: 1px;
+  background: var(--border);
+}
+
+.quote-prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.quote-prompt-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.quote-prompt-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  font-style: italic;
+}
+
+.quote-notes {
+  margin: 0;
+}
+
+/* ─── Quote Library (Settings) ───────────────────────────────── */
+.ql-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  margin-bottom: 10px;
+}
+
+.ql-source-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ql-source-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--card2);
+  border: 1.5px solid var(--border);
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.15s ease;
+}
+.ql-source-chip.on {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  color: var(--accent2);
+}
+
+/* Toggle button (on/off) */
+.toggle-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--card2);
+  border: 1.5px solid var(--border);
+  color: var(--text2);
+  transition: all 0.15s ease;
+}
+.toggle-btn.on {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent2);
+}
+
+.ql-quote-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ql-quote-row {
+  background: var(--card2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ql-quote-text {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.ql-quote-sub {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 600;
+}
+
+.ql-quote-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.ql-action-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+
+.ql-unfav-btn {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text3);
+  background: none;
+  padding: 2px 0;
+  align-self: flex-start;
+}
+.ql-unfav-btn.active { color: #EC4899; }
+
+/* Quote add/edit form */
+.quote-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--card2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  padding: 14px;
+}
+
+.quote-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quote-form-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.quote-form-row {
+  display: flex;
+  gap: 10px;
+}
+
+.quote-select {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 7px 10px;
+  outline: none;
+  width: 100%;
+  appearance: none;
+}
+.quote-select:focus { border-color: var(--accent); }
+
+.quote-form-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text2);
+  cursor: pointer;
+}
+.quote-form-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDateShort } from '../utils/dateUtils';
 import TaskManager from './TaskManager';
+import QuoteLibrary from './QuoteLibrary';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 
 export default function SettingsView() {
@@ -100,6 +101,11 @@ export default function SettingsView() {
       {/* Tasks */}
       <div className="settings-section">
         <TaskManager />
+      </div>
+
+      {/* Quote Library */}
+      <div className="settings-section">
+        <QuoteLibrary />
       </div>
 
       {/* Challenge management */}

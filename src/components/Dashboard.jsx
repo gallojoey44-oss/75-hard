@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDateShort, getDateForDayNumber } from '../utils/dateUtils';
+import QuoteOfTheDay from './QuoteOfTheDay';
 
 function CircleRing({ value, max, size = 120 }) {
   const r = (size - 16) / 2;
@@ -174,6 +175,9 @@ export default function Dashboard({ setView }) {
           📅 Calendar
         </button>
       </div>
+
+      {/* Quote of the Day */}
+      <QuoteOfTheDay />
     </div>
   );
 }
