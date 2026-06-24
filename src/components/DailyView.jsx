@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { formatDateLong, getDateForDayNumber } from '../utils/dateUtils';
 import CheckItem from './CheckItem';
 import MentalTraining from './MentalTraining';
+import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
 
 const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
@@ -63,15 +64,21 @@ export default function DailyView({ editDayNum, onBack, setView }) {
     if (!data || !profile) return 0;
     const tasks = profile.tasks || [];
     if (!tasks.length) return 0;
-    const done = tasks.filter(t => data.tasks?.[t.id]).length;
-    return Math.round((done / tasks.length) * 100);
+    const done        = tasks.filter(t => data.tasks?.[t.id]).length;
+    const faithEnabled  = profile?.faithEnabled;
+    const faithCounts   = profile?.faithCountsToward;
+    const faithComplete = data.faithReflection?.completed;
+    const extra     = (faithEnabled && faithCounts) ? 1 : 0;
+    const extraDone = (faithEnabled && faithCounts && faithComplete) ? 1 : 0;
+    return Math.round(((done + extraDone) / (tasks.length + extra)) * 100);
   }
 
   function handleUpdate(updates) {
     if (!dayNum) return;
     const merged = { ...dayData, ...updates };
-    if (updates.tasks) merged.tasks = { ...dayData?.tasks, ...updates.tasks };
+    if (updates.tasks)          merged.tasks          = { ...dayData?.tasks,          ...updates.tasks };
     if (updates.mentalTraining) merged.mentalTraining = { ...dayData?.mentalTraining, ...updates.mentalTraining };
+    if (updates.faithReflection) merged.faithReflection = { ...dayData?.faithReflection, ...updates.faithReflection };
     setDayData(merged);
     updateDay(dayNum, merged);
 
@@ -114,6 +121,9 @@ export default function DailyView({ editDayNum, onBack, setView }) {
 
   // The task ID used by MentalTraining to auto-check when marking complete
   const mentalTaskId = isMe ? 'mental' : 'gf_mental';
+
+  const faithEnabled   = profile?.faithEnabled || false;
+  const faithCounts    = profile?.faithCountsToward || false;
 
   return (
     <div className="daily-view">
@@ -189,6 +199,16 @@ export default function DailyView({ editDayNum, onBack, setView }) {
         />
       )}
 
+      {/* ── Joey: faith reflection (optional) ── */}
+      {isMe && faithEnabled && (
+        <FaithReflection
+          dayNumber={dayNum}
+          dayData={dayData}
+          onUpdate={handleUpdate}
+          countsToward={faithCounts}
+        />
+      )}
+
       {/* ── Girlfriend: colored task cards ── */}
       {!isMe && (
         <>
@@ -222,6 +242,16 @@ export default function DailyView({ editDayNum, onBack, setView }) {
             onUpdate={handleUpdate}
             mentalTaskId={mentalTaskId}
           />
+
+          {/* Girlfriend: faith reflection (optional) */}
+          {faithEnabled && (
+            <FaithReflection
+              dayNumber={dayNum}
+              dayData={dayData}
+              onUpdate={handleUpdate}
+              countsToward={faithCounts}
+            />
+          )}
 
           {/* Validate Day */}
           <div className="validate-btn-wrap">

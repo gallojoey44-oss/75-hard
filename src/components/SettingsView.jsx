@@ -103,6 +103,41 @@ export default function SettingsView() {
         <TaskManager />
       </div>
 
+      {/* Faith & Reflection */}
+      <div className="settings-section">
+        <div className="section-title">✝️ Faith &amp; Reflection</div>
+        <div className="settings-row">
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Enable Faith / Reflection</div>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+              Adds a Bible verse, virtue tracker, and journal inside Mental Training
+            </div>
+          </div>
+          <button
+            className={`toggle-btn${profile?.faithEnabled ? ' on' : ''}`}
+            onClick={() => updateProfile({ faithEnabled: !profile?.faithEnabled })}
+          >
+            {profile?.faithEnabled ? 'On' : 'Off'}
+          </button>
+        </div>
+        {profile?.faithEnabled && (
+          <div className="settings-row" style={{ marginTop: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>Count toward daily completion</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                Adds 1 task slot; completing faith reflection raises the % bar
+              </div>
+            </div>
+            <button
+              className={`toggle-btn${profile?.faithCountsToward ? ' on' : ''}`}
+              onClick={() => updateProfile({ faithCountsToward: !profile?.faithCountsToward })}
+            >
+              {profile?.faithCountsToward ? 'On' : 'Off'}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Quote Library */}
       <div className="settings-section">
         <QuoteLibrary />

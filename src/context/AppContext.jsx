@@ -148,7 +148,7 @@ function migrateProfiles(stored) {
     }
   }
 
-  // Both profiles — add quoteSettings and customQuotes if missing
+  // Both profiles — add quoteSettings, customQuotes, and faith flags if missing
   for (const profId of ['me', 'girlfriend']) {
     if (!profiles[profId].quoteSettings) {
       profiles[profId] = {
@@ -165,6 +165,14 @@ function migrateProfiles(stored) {
     }
     if (!profiles[profId].customQuotes) {
       profiles[profId] = { ...profiles[profId], customQuotes: [] };
+      changed = true;
+    }
+    if (profiles[profId].faithEnabled === undefined) {
+      profiles[profId] = { ...profiles[profId], faithEnabled: false };
+      changed = true;
+    }
+    if (profiles[profId].faithCountsToward === undefined) {
+      profiles[profId] = { ...profiles[profId], faithCountsToward: false };
       changed = true;
     }
   }
@@ -274,7 +282,12 @@ export function AppProvider({ children }) {
     const dayData = (allDays[profId] || {})[dayNumber];
     if (!dayData) return 0;
     const done = tasks.filter(t => dayData.tasks[t.id]).length;
-    return Math.round((done / tasks.length) * 100);
+    const faithEnabled    = profiles[profId]?.faithEnabled;
+    const faithCounts     = profiles[profId]?.faithCountsToward;
+    const faithCompleted  = dayData.faithReflection?.completed;
+    const extra     = (faithEnabled && faithCounts) ? 1 : 0;
+    const extraDone = (faithEnabled && faithCounts && faithCompleted) ? 1 : 0;
+    return Math.round(((done + extraDone) / (tasks.length + extra)) * 100);
   }, [activeProfile, profiles, allDays]);
 
   const getStreak = useCallback((profId = activeProfile) => {

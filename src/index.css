@@ -1436,3 +1436,159 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   accent-color: var(--accent);
   cursor: pointer;
 }
+
+/* ─── Faith / Reflection Section ────────────────────────────── */
+.faith-section { margin-bottom: 14px; }
+
+.faith-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.faith-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 16px;
+  background: transparent;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.faith-toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.faith-toggle-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.faith-toggle-sub {
+  font-size: 12px;
+  color: var(--text2);
+  margin-top: 2px;
+}
+
+.faith-body {
+  border-top: 1px solid var(--border);
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Daily verse card */
+.faith-verse-card {
+  background: linear-gradient(135deg, rgba(251,191,36,0.08), rgba(245,158,11,0.04));
+  border-left: 3px solid rgba(251,191,36,0.6);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.faith-verse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.faith-verse-ref {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(251,191,36,0.9);
+}
+
+.faith-virtue-chip {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(251,191,36,0.12);
+  color: rgba(251,191,36,0.9);
+  border-radius: 100px;
+  padding: 2px 8px;
+}
+
+.faith-verse-text {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.faith-verse-theme {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Pill selectors */
+.faith-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.faith-pill {
+  padding: 5px 11px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--card2);
+  border: 1.5px solid var(--border);
+  color: var(--text2);
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.15s ease;
+}
+
+.faith-pill.selected {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent2);
+}
+
+/* Battle pills — slightly warm tint when selected */
+.faith-pill.battle.selected {
+  background: rgba(239,68,68,0.12);
+  border-color: rgba(239,68,68,0.5);
+  color: #FCA5A5;
+}
+/* "None" battle stays accent-colored */
+.faith-pill.battle:last-child.selected {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent2);
+}
+
+/* Reflection prompt label */
+.faith-prompt-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+/* "Counts toward" info note */
+.faith-counts-note {
+  font-size: 12px;
+  color: var(--text3);
+  padding: 6px 10px;
+  background: var(--card2);
+  border-radius: 8px;
+  text-align: center;
+}
