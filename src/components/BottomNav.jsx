@@ -2,6 +2,7 @@ const TABS = [
   { id: 'home',     label: 'Home',     icon: '🏠' },
   { id: 'today',    label: 'Today',    icon: '✅' },
   { id: 'calendar', label: 'Calendar', icon: '📅' },
+  { id: 'insights', label: 'Insights', icon: '🔍' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
 ];
 

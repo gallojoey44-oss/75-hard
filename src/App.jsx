@@ -4,6 +4,7 @@ import ProfileSelector from './components/ProfileSelector';
 import Dashboard from './components/Dashboard';
 import DailyView from './components/DailyView';
 import CalendarView from './components/CalendarView';
+import InsightsView from './components/InsightsView';
 import SettingsView from './components/SettingsView';
 import BottomNav from './components/BottomNav';
 import { applyUpdate } from './utils/swUtils.js';
@@ -65,6 +66,7 @@ function AppContent() {
           />
         )}
         {view === 'calendar' && <CalendarView onEditDay={handleEditDay} />}
+        {view === 'insights' && <InsightsView />}
         {view === 'settings' && <SettingsView />}
       </main>
       <BottomNav

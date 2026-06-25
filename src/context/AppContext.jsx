@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
 import { SOURCES } from '../data/defaultQuotes';
+import { computeAverages } from '../utils/insightsUtils';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -191,6 +192,10 @@ export function AppProvider({ children }) {
   const [allDays, setAllDaysState] = useState(() => loadLS('allDays', { me: {}, girlfriend: {} }));
   // Per-date quote data: { me: { '2024-01-15': { cycleOffset, reflectionNotes, reflectionComplete } }, girlfriend: {} }
   const [quoteData, setQuoteDataState] = useState(() => loadLS('quoteData', { me: {}, girlfriend: {} }));
+  // Experiments: { me: [...], girlfriend: [...] }
+  const [experiments, setExperimentsState] = useState(() => loadLS('experiments', { me: [], girlfriend: [] }));
+  // Dismissed hints: { me: { habitId: expiryDateStr }, girlfriend: {} }
+  const [dismissedHints, setDismissedHintsState] = useState(() => loadLS('dismissedHints', { me: {}, girlfriend: {} }));
 
   const setActiveProfile = useCallback((id) => {
     setActiveProfileState(id);
@@ -217,6 +222,22 @@ export function AppProvider({ children }) {
     setQuoteDataState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       saveLS('quoteData', next);
+      return next;
+    });
+  }, []);
+
+  const setExperiments = useCallback((updater) => {
+    setExperimentsState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveLS('experiments', next);
+      return next;
+    });
+  }, []);
+
+  const setDismissedHints = useCallback((updater) => {
+    setDismissedHintsState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveLS('dismissedHints', next);
       return next;
     });
   }, []);
@@ -435,6 +456,56 @@ export function AppProvider({ children }) {
     });
   }, [activeProfile, setQuoteData]);
 
+  // ── Insights / Experiment actions ──────────────────────────────────────
+
+  const startExperiment = useCallback((habitId, habitName, baselineDayNums, startDayNum) => {
+    if (!activeProfile) return;
+    const tasks = profiles[activeProfile]?.tasks || [];
+    const profDays = allDays[activeProfile] || {};
+    const baseline = computeAverages(baselineDayNums, profDays, tasks);
+    const exp = {
+      id: `exp_${Date.now()}`,
+      habitId,
+      habitName,
+      startDayNum,
+      endDayNum: startDayNum + 6,
+      status: 'active',
+      baseline,
+      result: null,
+      startedAt: getTodayStr(),
+    };
+    setExperiments(prev => ({
+      ...prev,
+      [activeProfile]: [...(prev[activeProfile] || []), exp],
+    }));
+  }, [activeProfile, profiles, allDays, setExperiments]);
+
+  const updateExperiment = useCallback((expId, updates) => {
+    if (!activeProfile) return;
+    setExperiments(prev => ({
+      ...prev,
+      [activeProfile]: (prev[activeProfile] || []).map(e =>
+        e.id === expId ? { ...e, ...updates } : e
+      ),
+    }));
+  }, [activeProfile, setExperiments]);
+
+  const dismissHint = useCallback((habitId) => {
+    if (!activeProfile) return;
+    // Expires 7 days from today
+    const today = getTodayStr();
+    const expiry = new Date(today);
+    expiry.setDate(expiry.getDate() + 7);
+    const expiryStr = expiry.toISOString().slice(0, 10);
+    setDismissedHints(prev => ({
+      ...prev,
+      [activeProfile]: {
+        ...(prev[activeProfile] || {}),
+        [habitId]: expiryStr,
+      },
+    }));
+  }, [activeProfile, setDismissedHints]);
+
   return (
     <AppContext.Provider value={{
       activeProfile, profile, profiles, days, allDays,
@@ -451,6 +522,9 @@ export function AppProvider({ children }) {
       addCustomQuote, updateCustomQuote, deleteCustomQuote,
       toggleFavoriteQuote,
       getQuoteDataForDate, updateQuoteDataForDate,
+      // Insights
+      experiments, dismissedHints,
+      startExperiment, updateExperiment, dismissHint,
     }}>
       {children}
     </AppContext.Provider>
