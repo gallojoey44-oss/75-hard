@@ -1,9 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDateShort } from '../utils/dateUtils';
 import TaskManager from './TaskManager';
 import QuoteLibrary from './QuoteLibrary';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
+
+const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints'];
+
+function exportData() {
+  const data = {};
+  for (const key of LS_KEYS) {
+    const val = localStorage.getItem(key);
+    if (val != null) data[key] = JSON.parse(val);
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `75hard-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function SettingsView() {
   const {
@@ -15,6 +32,8 @@ export default function SettingsView() {
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(profile?.name || '');
   const [showReset, setShowReset] = useState(false);
+  const [importStatus, setImportStatus] = useState('idle'); // 'idle'|'success'|'error'
+  const importRef = useRef(null);
 
   // Update check state
   // 'idle' | 'checking' | 'up-to-date' | 'update-available' | 'unavailable' | 'error'
@@ -41,6 +60,27 @@ export default function SettingsView() {
   function handleReset() {
     resetChallenge();
     setShowReset(false);
+  }
+
+  function handleImport(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        for (const key of LS_KEYS) {
+          if (data[key] !== undefined) localStorage.setItem(key, JSON.stringify(data[key]));
+        }
+        setImportStatus('success');
+        setTimeout(() => window.location.reload(), 1200);
+      } catch {
+        setImportStatus('error');
+        setTimeout(() => setImportStatus('idle'), 3000);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   }
 
   const otherProfile = activeProfile === 'me' ? 'girlfriend' : 'me';
@@ -180,12 +220,45 @@ export default function SettingsView() {
         </div>
       </div>
 
+      {/* Backup & Restore */}
+      <div className="settings-section">
+        <div className="section-title">💾 Backup &amp; Restore</div>
+        <p className="text-muted" style={{ marginBottom: 12, lineHeight: 1.6 }}>
+          Export saves all your progress to a file. Import restores it — the app will reload after importing.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button className="btn btn-ghost btn-full" onClick={exportData}>
+            ⬇️ Export / Backup Data
+          </button>
+          <button className="btn btn-ghost btn-full" onClick={() => importRef.current?.click()}>
+            ⬆️ Import / Restore Data
+          </button>
+          <input
+            ref={importRef}
+            type="file"
+            accept=".json,application/json"
+            style={{ display: 'none' }}
+            onChange={handleImport}
+          />
+          {importStatus === 'success' && (
+            <div className="update-status-row success">
+              <span>✅</span><span>Restored! Reloading…</span>
+            </div>
+          )}
+          {importStatus === 'error' && (
+            <div className="update-status-row warn">
+              <span>⚠️</span><span>Invalid file — use a backup exported from this app.</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* App version */}
       <div className="settings-section">
         <div className="section-title">📦 App Version</div>
         <div className="settings-row">
           <span className="settings-row-label">Version</span>
-          <span className="settings-row-value" style={{ fontFamily: 'monospace', fontSize: 13 }}>v2.1.0</span>
+          <span className="settings-row-value" style={{ fontFamily: 'monospace', fontSize: 13 }}>v2.2.0</span>
         </div>
       </div>
 
