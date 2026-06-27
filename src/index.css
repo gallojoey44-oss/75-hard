@@ -349,6 +349,67 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   font-weight: 700;
 }
 
+/* ─── Day Selector ─────────────────────────────────────────────── */
+.day-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 4px 6px;
+  gap: 8px;
+}
+
+.day-sel-btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  font-size: 24px;
+  color: var(--text2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+.day-sel-btn:disabled { opacity: 0.25; cursor: default; }
+.day-sel-btn:not(:disabled):active { background: var(--card2); color: var(--accent2); }
+
+.day-sel-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.day-sel-num {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+.day-sel-of {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text2);
+}
+
+.day-sel-today-link {
+  background: var(--accent-glow);
+  border: none;
+  color: var(--accent2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.day-sel-today-link:active { opacity: 0.7; }
+
+.edit-other-label { color: var(--warn) !important; }
+
 .section-card {
   background: var(--card);
   border-radius: var(--radius);

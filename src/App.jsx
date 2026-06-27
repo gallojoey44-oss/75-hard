@@ -50,10 +50,6 @@ function AppContent() {
     setView('today');
   }
 
-  function handleBackFromEdit() {
-    setEditDayNum(null);
-  }
-
   return (
     <div className="app" data-profile={activeProfile}>
       <main className="main-content">
@@ -61,7 +57,6 @@ function AppContent() {
         {view === 'today'    && (
           <DailyView
             editDayNum={editDayNum}
-            onBack={editDayNum ? handleBackFromEdit : undefined}
             setView={setView}
           />
         )}

@@ -32,57 +32,102 @@ function GfTaskCard({ task, checked, onToggle, index }) {
   );
 }
 
-export default function DailyView({ editDayNum, onBack, setView }) {
+function DaySelector({ selected, current, onChange }) {
+  const isOtherDay = current && selected !== current;
+  return (
+    <div className="day-selector">
+      <button
+        className="day-sel-btn"
+        onClick={() => onChange(Math.max(1, selected - 1))}
+        disabled={selected <= 1}
+        aria-label="Previous day"
+      >‹</button>
+      <div className="day-sel-center">
+        <span className="day-sel-num">
+          Day {selected} <span className="day-sel-of">of 75</span>
+        </span>
+        {isOtherDay && (
+          <button className="day-sel-today-link" onClick={() => onChange(current)}>
+            → Back to Day {current}
+          </button>
+        )}
+      </div>
+      <button
+        className="day-sel-btn"
+        onClick={() => onChange(Math.min(75, selected + 1))}
+        disabled={selected >= 75}
+        aria-label="Next day"
+      >›</button>
+    </div>
+  );
+}
+
+export default function DailyView({ editDayNum, setView }) {
   const {
     activeProfile, profile,
-    getDayNumber, getDayData, getTodayData,
+    getDayNumber, getDayData,
     updateDay, toggleTask,
   } = useApp();
 
-  const isEditing = editDayNum != null;
-  const dayNum = isEditing ? editDayNum : getDayNumber();
+  const currentDayNum = getDayNumber();
 
+  const [selectedDayNum, setSelectedDayNum] = useState(
+    editDayNum != null ? editDayNum : (currentDayNum || 1)
+  );
   const [dayData, setDayData] = useState(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [prevPct, setPrevPct] = useState(0);
 
+  // Sync when Calendar passes a specific day to edit
   useEffect(() => {
-    if (!dayNum) return;
-    const data = isEditing
-      ? (getDayData(dayNum) || {
-          date: getDateForDayNumber(profile?.challengeStart, dayNum),
-          dayNumber: dayNum,
-          tasks: {}, mentalTraining: { selected: null, completed: false, notes: '' },
-          mood: 0, confidence: 0, sleep: 0, energy: 0,
-          recovery: 0, workoutEffort: 0, stress: 0,
-          notes: '', glucoseNotes: '', validated: false,
-        })
-      : getTodayData();
+    if (editDayNum != null) setSelectedDayNum(editDayNum);
+  }, [editDayNum]);
+
+  // Reset to current day when active profile changes
+  useEffect(() => {
+    const n = editDayNum != null ? editDayNum : (getDayNumber() || 1);
+    setSelectedDayNum(n);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProfile]);
+
+  // Load day data whenever selected day or profile changes
+  useEffect(() => {
+    if (!selectedDayNum) return;
+    const data = getDayData(selectedDayNum) || {
+      date: getDateForDayNumber(profile?.challengeStart, selectedDayNum),
+      dayNumber: selectedDayNum,
+      tasks: {},
+      mentalTraining: { selected: null, completed: false, notes: '' },
+      mood: 0, confidence: 0, sleep: 0, energy: 0,
+      recovery: 0, workoutEffort: 0, stress: 0,
+      notes: '', glucoseNotes: '', validated: false,
+    };
     setDayData(data);
     setPrevPct(calcPct(data));
-  }, [dayNum, activeProfile]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDayNum, activeProfile]);
 
   function calcPct(data) {
     if (!data || !profile) return 0;
     const tasks = profile.tasks || [];
     if (!tasks.length) return 0;
-    const done        = tasks.filter(t => data.tasks?.[t.id]).length;
-    const faithEnabled  = profile?.faithEnabled;
-    const faithCounts   = profile?.faithCountsToward;
-    const faithComplete = data.faithReflection?.completed;
+    const done           = tasks.filter(t => data.tasks?.[t.id]).length;
+    const faithEnabled   = profile?.faithEnabled;
+    const faithCounts    = profile?.faithCountsToward;
+    const faithComplete  = data.faithReflection?.completed;
     const extra     = (faithEnabled && faithCounts) ? 1 : 0;
     const extraDone = (faithEnabled && faithCounts && faithComplete) ? 1 : 0;
     return Math.round(((done + extraDone) / (tasks.length + extra)) * 100);
   }
 
   function handleUpdate(updates) {
-    if (!dayNum) return;
+    if (!selectedDayNum) return;
     const merged = { ...dayData, ...updates };
-    if (updates.tasks)          merged.tasks          = { ...dayData?.tasks,          ...updates.tasks };
-    if (updates.mentalTraining) merged.mentalTraining = { ...dayData?.mentalTraining, ...updates.mentalTraining };
+    if (updates.tasks)           merged.tasks           = { ...dayData?.tasks,           ...updates.tasks };
+    if (updates.mentalTraining)  merged.mentalTraining  = { ...dayData?.mentalTraining,  ...updates.mentalTraining };
     if (updates.faithReflection) merged.faithReflection = { ...dayData?.faithReflection, ...updates.faithReflection };
     setDayData(merged);
-    updateDay(dayNum, merged);
+    updateDay(selectedDayNum, merged);
 
     const newPct = calcPct(merged);
     if (newPct === 100 && prevPct < 100) setShowCelebration(true);
@@ -93,7 +138,7 @@ export default function DailyView({ editDayNum, onBack, setView }) {
     const newTasks = { ...dayData?.tasks, [taskId]: !dayData?.tasks?.[taskId] };
     const merged = { ...dayData, tasks: newTasks };
     setDayData(merged);
-    toggleTask(dayNum, taskId);
+    toggleTask(selectedDayNum, taskId);
 
     const newPct = calcPct(merged);
     if (newPct === 100 && prevPct < 100) setShowCelebration(true);
@@ -104,9 +149,10 @@ export default function DailyView({ editDayNum, onBack, setView }) {
     handleUpdate({ validated: !dayData?.validated });
   }
 
-  if (!dayNum || !profile) {
+  if (!profile?.challengeStart) {
     return (
       <div className="daily-view">
+        <BuildBanner />
         <div className="start-challenge" style={{ paddingTop: 60 }}>
           <div className="start-challenge-emoji">📅</div>
           <h2>No Active Challenge</h2>
@@ -116,39 +162,34 @@ export default function DailyView({ editDayNum, onBack, setView }) {
     );
   }
 
+  const isEditingOtherDay = currentDayNum && selectedDayNum !== currentDayNum;
   const pct     = calcPct(dayData);
   const tasks   = [...(profile.tasks || [])].sort((a, b) => a.order - b.order);
-  const dateStr = dayData?.date || getDateForDayNumber(profile?.challengeStart, dayNum);
+  const dateStr = dayData?.date || getDateForDayNumber(profile?.challengeStart, selectedDayNum);
   const isMe    = activeProfile === 'me';
 
-  // The task ID used by MentalTraining to auto-check when marking complete
   const mentalTaskId = isMe ? 'mental' : 'gf_mental';
-
-  const faithEnabled   = profile?.faithEnabled || false;
-  const faithCounts    = profile?.faithCountsToward || false;
+  const faithEnabled = profile?.faithEnabled || false;
+  const faithCounts  = profile?.faithCountsToward || false;
 
   return (
     <div className="daily-view">
       <BuildBanner />
-      {isEditing && onBack && (
-        <div className="edit-mode-banner">
-          <span>✏️ Editing Day {dayNum}</span>
-          <button
-            className="btn btn-ghost"
-            style={{ padding: '4px 10px', fontSize: 13 }}
-            onClick={onBack}
-          >
-            Done
-          </button>
-        </div>
-      )}
+
+      {/* Day Selector */}
+      <DaySelector
+        selected={selectedDayNum}
+        current={currentDayNum}
+        onChange={setSelectedDayNum}
+      />
 
       <div className="daily-header">
         <div className="daily-header-left">
           <h2>{formatDateLong(dateStr)}</h2>
-          <p>{isEditing ? 'Editing past day' : 'Log your day'}</p>
+          <p className={isEditingOtherDay ? 'edit-other-label' : ''}>
+            {isEditingOtherDay ? `✏️ Editing Day ${selectedDayNum}` : 'Log your day'}
+          </p>
         </div>
-        <span className="daily-day-badge">Day {dayNum}</span>
       </div>
 
       {/* Progress bar */}
@@ -195,7 +236,7 @@ export default function DailyView({ editDayNum, onBack, setView }) {
       {/* ── Joey: mental training ── */}
       {isMe && (
         <MentalTraining
-          dayNumber={dayNum}
+          dayNumber={selectedDayNum}
           dayData={dayData}
           onUpdate={handleUpdate}
           mentalTaskId={mentalTaskId}
@@ -205,7 +246,7 @@ export default function DailyView({ editDayNum, onBack, setView }) {
       {/* ── Joey: faith reflection (optional) ── */}
       {isMe && faithEnabled && (
         <FaithReflection
-          dayNumber={dayNum}
+          dayNumber={selectedDayNum}
           dayData={dayData}
           onUpdate={handleUpdate}
           countsToward={faithCounts}
@@ -240,7 +281,7 @@ export default function DailyView({ editDayNum, onBack, setView }) {
 
           {/* Girlfriend mental training section */}
           <MentalTraining
-            dayNumber={dayNum}
+            dayNumber={selectedDayNum}
             dayData={dayData}
             onUpdate={handleUpdate}
             mentalTaskId={mentalTaskId}
@@ -249,7 +290,7 @@ export default function DailyView({ editDayNum, onBack, setView }) {
           {/* Girlfriend: faith reflection (optional) */}
           {faithEnabled && (
             <FaithReflection
-              dayNumber={dayNum}
+              dayNumber={selectedDayNum}
               dayData={dayData}
               onUpdate={handleUpdate}
               countsToward={faithCounts}
@@ -260,7 +301,7 @@ export default function DailyView({ editDayNum, onBack, setView }) {
           <div className="validate-btn-wrap">
             {dayData?.validated ? (
               <div className="validated-badge">
-                🎉 Day {dayNum} Validated!
+                🎉 Day {selectedDayNum} Validated!
                 <button
                   className="btn btn-ghost"
                   style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: 13 }}
@@ -353,7 +394,7 @@ export default function DailyView({ editDayNum, onBack, setView }) {
         <div className="celebration-overlay" onClick={() => setShowCelebration(false)}>
           <div className="celebration-card" onClick={e => e.stopPropagation()}>
             <div className="celebration-emoji">🎉</div>
-            <h2>Day {dayNum} Complete!</h2>
+            <h2>Day {selectedDayNum} Complete!</h2>
             <p>Every task done. You're building something real — keep going!</p>
             <button className="btn btn-primary btn-full" onClick={() => setShowCelebration(false)}>
               Let's go! 💪

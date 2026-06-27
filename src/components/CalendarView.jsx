@@ -51,7 +51,6 @@ export default function CalendarView({ onEditDay }) {
 
   function handleDayPress(dateStr) {
     if (!dateStr) return;
-    if (isFuture(dateStr)) return;
     const n = getDayNumForDate(dateStr);
     if (n === null) return;
     onEditDay(n);
