@@ -5,6 +5,7 @@ import CheckItem from './CheckItem';
 import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
+import BuildBanner from './BuildBanner';
 
 const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
 
@@ -128,6 +129,7 @@ export default function DailyView({ editDayNum, onBack, setView }) {
 
   return (
     <div className="daily-view">
+      <BuildBanner />
       {isEditing && onBack && (
         <div className="edit-mode-banner">
           <span>✏️ Editing Day {dayNum}</span>

@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { getTodayStr } from '../utils/dateUtils';
 import { HABIT_LIBRARY, getHabit } from '../data/habitLibrary';
 import { computeAverages, generateSuggestions, assessExperiment, getCoachMessage } from '../utils/insightsUtils';
+import BuildBanner, { BUILD_VERSION, BUILD_LABEL, PRODUCTION_URL } from './BuildBanner';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Sub-components
@@ -379,6 +380,7 @@ export default function InsightsView() {
   if (!profile?.challengeStart) {
     return (
       <div className="insights-view">
+        <BuildBanner />
         <div className="page-header"><h2>🔍 Insights</h2></div>
         <div className="ins-empty">
           <div className="ins-empty-icon">📊</div>
@@ -392,6 +394,7 @@ export default function InsightsView() {
   if (avg7.daysLogged < 3) {
     return (
       <div className="insights-view">
+        <BuildBanner />
         <div className="page-header"><h2>🔍 Insights</h2></div>
         <div className="ins-empty">
           <div className="ins-empty-icon">📈</div>
@@ -407,6 +410,7 @@ export default function InsightsView() {
 
   return (
     <div className="insights-view" key={recalcKey}>
+      <BuildBanner />
       <div className="page-header">
         <h2>🔍 Insights</h2>
         <button
@@ -418,6 +422,11 @@ export default function InsightsView() {
       </div>
 
       <div className="ins-content">
+
+        {/* Deployment verification */}
+        <div className="ins-deploy-verify">
+          If you can see this, the recommendation update reached production.
+        </div>
 
         {/* 1. Coach message */}
         <CoachMessage msg={coachMsg} />

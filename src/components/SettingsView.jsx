@@ -4,6 +4,7 @@ import { formatDateShort } from '../utils/dateUtils';
 import TaskManager from './TaskManager';
 import QuoteLibrary from './QuoteLibrary';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
+import BuildBanner, { BUILD_VERSION, BUILD_LABEL, BUILD_DATE, PRODUCTION_URL } from './BuildBanner';
 
 const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints'];
 
@@ -87,6 +88,7 @@ export default function SettingsView() {
 
   return (
     <div className="settings-view">
+      <BuildBanner />
       <div className="page-header">
         <h2>⚙️ Settings</h2>
       </div>
@@ -258,7 +260,28 @@ export default function SettingsView() {
         <div className="section-title">📦 App Version</div>
         <div className="settings-row">
           <span className="settings-row-label">Version</span>
-          <span className="settings-row-value" style={{ fontFamily: 'monospace', fontSize: 13 }}>v2.3.0</span>
+          <span className="settings-row-value" style={{ fontFamily: 'monospace', fontSize: 13 }}>{BUILD_VERSION}</span>
+        </div>
+      </div>
+
+      {/* Deployment Debug */}
+      <div className="settings-section">
+        <div className="section-title">🛠 Deployment Debug</div>
+        <div className="settings-row">
+          <span className="settings-row-label">App Version</span>
+          <span className="settings-row-value" style={{ fontFamily: 'monospace', fontSize: 13 }}>{BUILD_VERSION}</span>
+        </div>
+        <div className="settings-row">
+          <span className="settings-row-label">Build Label</span>
+          <span className="settings-row-value" style={{ fontFamily: 'monospace', fontSize: 13 }}>{BUILD_LABEL}</span>
+        </div>
+        <div className="settings-row">
+          <span className="settings-row-label">Production URL</span>
+          <span className="settings-row-value" style={{ fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all' }}>{PRODUCTION_URL}</span>
+        </div>
+        <div className="settings-row">
+          <span className="settings-row-label">Last Updated</span>
+          <span className="settings-row-value" style={{ fontFamily: 'monospace', fontSize: 13 }}>{BUILD_DATE}</span>
         </div>
       </div>
 

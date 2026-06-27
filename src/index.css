@@ -1002,6 +1002,19 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .mt-8 { margin-top: 8px; }
 .mt-12 { margin-top: 12px; }
 
+/* ─── Build test banner ─────────────────────────────────────── */
+.build-banner {
+  background: #EF4444;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  padding: 7px 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
 /* ─── Update banner (fixed top, appears on sw-update-available) ── */
 .update-banner {
   position: fixed;
@@ -2176,6 +2189,19 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   text-align: center;
+}
+
+/* Deployment verification strip */
+.ins-deploy-verify {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #EF4444;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 4px;
 }
 
 /* Coach message */

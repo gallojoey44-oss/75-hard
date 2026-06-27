@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDateShort, getDateForDayNumber } from '../utils/dateUtils';
 import QuoteOfTheDay from './QuoteOfTheDay';
+import BuildBanner from './BuildBanner';
 
 function CircleRing({ value, max, size = 120 }) {
   const r = (size - 16) / 2;
@@ -46,6 +47,7 @@ export default function Dashboard({ setView }) {
   if (!profile?.challengeStart) {
     return (
       <div className="dashboard">
+        <BuildBanner />
         <div className="dash-top">
           <div className="dash-profile-info">
             <span className="dash-emoji">{profile?.emoji}</span>
@@ -80,6 +82,7 @@ export default function Dashboard({ setView }) {
 
   return (
     <div className="dashboard">
+      <BuildBanner />
       <div className="dash-top">
         <div className="dash-profile-info">
           <span className="dash-emoji">{profile.emoji}</span>
