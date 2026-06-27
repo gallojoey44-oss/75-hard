@@ -186,9 +186,18 @@ export default function DailyView({ editDayNum, setView }) {
       <div className="daily-header">
         <div className="daily-header-left">
           <h2>{formatDateLong(dateStr)}</h2>
-          <p className={isEditingOtherDay ? 'edit-other-label' : ''}>
-            {isEditingOtherDay ? `✏️ Editing Day ${selectedDayNum}` : 'Log your day'}
-          </p>
+          <div className="daily-header-meta">
+            {currentDayNum && selectedDayNum < currentDayNum ? (
+              <>
+                <span className="edit-other-label">✏️ Editing past day</span>
+                <span className="logged-late-badge">Logged late</span>
+              </>
+            ) : selectedDayNum > (currentDayNum || 0) ? (
+              <span className="edit-other-label">📋 Planning ahead</span>
+            ) : (
+              <span className="text-muted-sm">Log your day</span>
+            )}
+          </div>
         </div>
       </div>
 

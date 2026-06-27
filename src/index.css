@@ -410,6 +410,85 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 
 .edit-other-label { color: var(--warn) !important; }
 
+.daily-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--text2);
+}
+.text-muted-sm { font-size: 13px; color: var(--text2); }
+
+.logged-late-badge {
+  background: rgba(245,158,11,0.12);
+  color: var(--warn);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid rgba(245,158,11,0.25);
+  white-space: nowrap;
+}
+
+/* ─── Challenge Start Date controls ───────────────────────────── */
+.start-date-box {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 4px;
+}
+.start-date-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.start-date-hint {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.start-date-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.start-date-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+}
+.start-date-divider {
+  font-size: 11px;
+  color: var(--text3);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 10px 0;
+  position: relative;
+}
+.start-date-divider::before,
+.start-date-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 42%;
+  height: 1px;
+  background: var(--border);
+}
+.start-date-divider::before { left: 0; }
+.start-date-divider::after  { right: 0; }
+.start-date-preview {
+  font-size: 12px;
+  color: var(--accent2);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
 .section-card {
   background: var(--card);
   border-radius: var(--radius);

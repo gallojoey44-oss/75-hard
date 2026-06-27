@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatDateShort } from '../utils/dateUtils';
+import { formatDateShort, getTodayStr } from '../utils/dateUtils';
 import TaskManager from './TaskManager';
 import QuoteLibrary from './QuoteLibrary';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
@@ -26,7 +26,8 @@ function exportData() {
 export default function SettingsView() {
   const {
     activeProfile, profile, profiles,
-    updateProfile, startChallenge, resetChallenge,
+    updateProfile, startChallenge, resetChallenge, setChallengeStart,
+    getDayNumber,
     setActiveProfile,
   } = useApp();
 
@@ -35,6 +36,11 @@ export default function SettingsView() {
   const [showReset, setShowReset] = useState(false);
   const [importStatus, setImportStatus] = useState('idle'); // 'idle'|'success'|'error'
   const importRef = useRef(null);
+
+  // Challenge start date controls
+  const [startDateInput, setStartDateInput] = useState('');
+  const [todayAsDayInput, setTodayAsDayInput] = useState('');
+  const [startMsg, setStartMsg] = useState(null); // { ok: bool, text: string }
 
   // Update check state
   // 'idle' | 'checking' | 'up-to-date' | 'update-available' | 'unavailable' | 'error'
@@ -82,6 +88,34 @@ export default function SettingsView() {
     };
     reader.readAsText(file);
     e.target.value = '';
+  }
+
+  function dayNumToStartDate(n) {
+    const d = new Date(getTodayStr() + 'T00:00:00');
+    d.setDate(d.getDate() - n + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function flash(ok, text) {
+    setStartMsg({ ok, text });
+    setTimeout(() => setStartMsg(null), 3500);
+  }
+
+  function handleSetStartDate() {
+    if (!startDateInput) return;
+    if (startDateInput > getTodayStr()) { flash(false, 'Start date cannot be in the future.'); return; }
+    setChallengeStart(startDateInput);
+    flash(true, `Start date set to ${formatDateShort(startDateInput)}.`);
+    setStartDateInput('');
+  }
+
+  function handleSetTodayAsDay() {
+    const n = parseInt(todayAsDayInput, 10);
+    if (!n || n < 1 || n > 75) { flash(false, 'Enter a number from 1 to 75.'); return; }
+    const startStr = dayNumToStartDate(n);
+    setChallengeStart(startStr);
+    flash(true, `Today is now Day ${n}. Day 1 = ${formatDateShort(startStr)}.`);
+    setTodayAsDayInput('');
   }
 
   const otherProfile = activeProfile === 'me' ? 'girlfriend' : 'me';
@@ -185,18 +219,107 @@ export default function SettingsView() {
         <QuoteLibrary />
       </div>
 
-      {/* Challenge management */}
+      {/* Challenge management + start date */}
       <div className="settings-section">
         <div className="section-title">🎯 Challenge</div>
-        {!profile?.challengeStart ? (
-          <button className="btn btn-primary btn-full" onClick={() => startChallenge()}>
-            Start Challenge Today
-          </button>
-        ) : (
-          <button className="btn btn-danger btn-full" onClick={() => setShowReset(true)}>
-            🔄 Reset Challenge
-          </button>
-        )}
+
+        {/* Current state row */}
+        {profile?.challengeStart ? (
+          <div className="settings-row" style={{ marginBottom: 4 }}>
+            <span className="settings-row-label">Day 1 was</span>
+            <span className="settings-row-value">{formatDateShort(profile.challengeStart)}</span>
+          </div>
+        ) : null}
+        {profile?.challengeStart && getDayNumber() ? (
+          <div className="settings-row" style={{ marginBottom: 12 }}>
+            <span className="settings-row-label">Today is</span>
+            <span className="settings-row-value" style={{ color: 'var(--accent2)', fontWeight: 700 }}>
+              Day {getDayNumber()} of 75
+            </span>
+          </div>
+        ) : null}
+
+        {/* Challenge Start Date controls */}
+        <div className="start-date-box">
+          <div className="start-date-title">📅 Challenge Start Date</div>
+          <p className="start-date-hint">
+            Use this if you started before today and need to backfill earlier days. Your saved day data is preserved.
+          </p>
+
+          {/* Set by exact date */}
+          <div className="start-date-row">
+            <label className="start-date-label">Set start date</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="date"
+                className="inline-input"
+                value={startDateInput}
+                max={getTodayStr()}
+                onChange={e => setStartDateInput(e.target.value)}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <button
+                className="btn btn-primary"
+                style={{ padding: '6px 12px', fontSize: 13, flexShrink: 0 }}
+                onClick={handleSetStartDate}
+                disabled={!startDateInput}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
+          {/* Set by current day number */}
+          <div className="start-date-divider">or</div>
+          <div className="start-date-row">
+            <label className="start-date-label">Set today as Day</label>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="number"
+                className="inline-input"
+                value={todayAsDayInput}
+                min="1"
+                max="75"
+                placeholder="1–75"
+                onChange={e => setTodayAsDayInput(e.target.value)}
+                style={{ width: 70 }}
+              />
+              <button
+                className="btn btn-primary"
+                style={{ padding: '6px 12px', fontSize: 13, flexShrink: 0 }}
+                onClick={handleSetTodayAsDay}
+                disabled={!todayAsDayInput}
+              >
+                Set
+              </button>
+            </div>
+            {todayAsDayInput && +todayAsDayInput >= 1 && +todayAsDayInput <= 75 && (
+              <div className="start-date-preview">
+                → Day 1 = {formatDateShort(dayNumToStartDate(+todayAsDayInput))}
+              </div>
+            )}
+          </div>
+
+          {startMsg && (
+            <div className={`update-status-row${startMsg.ok ? ' success' : ' warn'}`} style={{ marginTop: 10 }}>
+              <span>{startMsg.ok ? '✅' : '⚠️'}</span>
+              <span>{startMsg.text}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Start fresh / Reset */}
+        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {!profile?.challengeStart ? (
+            <button className="btn btn-primary btn-full" onClick={() => startChallenge()}>
+              Start Challenge Today
+            </button>
+          ) : (
+            <button className="btn btn-danger btn-full" onClick={() => setShowReset(true)}>
+              🔄 Reset Challenge &amp; Wipe Data
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Install instructions */}

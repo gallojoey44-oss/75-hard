@@ -355,6 +355,15 @@ export function AppProvider({ children }) {
     setAllDays(prev => ({ ...prev, [profId]: {} }));
   }, [activeProfile, setProfiles, setAllDays]);
 
+  // Update start date without wiping saved day data — used for backfilling
+  const setChallengeStart = useCallback((dateStr, profId = activeProfile) => {
+    if (!dateStr) return;
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: { ...prev[profId], challengeStart: dateStr },
+    }));
+  }, [activeProfile, setProfiles]);
+
   const resetChallenge = useCallback((profId = activeProfile) => {
     setProfiles(prev => ({
       ...prev,
@@ -516,7 +525,7 @@ export function AppProvider({ children }) {
       getDayNumber, getDayData, getTodayData,
       getDayCompletion, getStreak, getLongestStreak,
       updateDay, toggleTask,
-      startChallenge, resetChallenge, updateProfile,
+      startChallenge, resetChallenge, setChallengeStart, updateProfile,
       addTask, updateTask, deleteTask, reorderTasks,
       MENTAL_OPTIONS,
       // Quote
