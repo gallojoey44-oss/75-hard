@@ -2176,3 +2176,88 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   border-radius: var(--radius-sm);
   text-align: center;
 }
+
+/* Coach message */
+.ins-coach-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.ins-coach-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+.ins-coach-text {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Recalculate button in header */
+.ins-recalc-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+
+.ins-recalc-btn.flash {
+  color: var(--success);
+}
+
+/* Pattern label inside suggestion card */
+.ins-suggest-pattern-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent2);
+  margin-bottom: 3px;
+}
+
+/* Coach message line on suggestion card */
+.ins-suggest-message {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.5;
+  padding: 10px 12px;
+  background: var(--card2);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* "Why am I seeing this?" toggle */
+.ins-reason-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  background: none;
+  border: none;
+  padding: 6px 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.ins-reason-toggle:hover { color: var(--text); }
+
+.ins-reason-toggle-arrow {
+  font-size: 9px;
+  color: var(--text3);
+}
+
+.ins-reason-body {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.6;
+  padding: 10px 12px;
+  background: var(--card2);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--border);
+}

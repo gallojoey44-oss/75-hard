@@ -1,12 +1,27 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { getTodayStr } from '../utils/dateUtils';
 import { HABIT_LIBRARY, getHabit } from '../data/habitLibrary';
-import { computeAverages, generateSuggestions, assessExperiment } from '../utils/insightsUtils';
+import { computeAverages, generateSuggestions, assessExperiment, getCoachMessage } from '../utils/insightsUtils';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Sub-components
 // ────────────────────────────────────────────────────────────────────────────
+
+function CoachMessage({ msg }) {
+  const style = {
+    success: { bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.2)', icon: '✅', color: '#10B981' },
+    warn:    { bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.2)', icon: '⚡', color: '#F59E0B' },
+    info:    { bg: 'var(--card2)',          border: 'var(--border)',         icon: 'ℹ️', color: 'var(--text2)' },
+  }[msg.type] || {};
+
+  return (
+    <div className="ins-coach-card" style={{ background: style.bg, border: `1px solid ${style.border}` }}>
+      <span className="ins-coach-icon">{style.icon}</span>
+      <span className="ins-coach-text" style={{ color: style.color }}>{msg.text}</span>
+    </div>
+  );
+}
 
 function MetricCell({ label, value, hasData, warn }) {
   return (
@@ -22,14 +37,11 @@ function MetricCell({ label, value, hasData, warn }) {
 
 function RatingBar({ value, max = 10 }) {
   if (!value) return null;
-  const pct = Math.round((value / max) * 100);
+  const pct  = Math.round((value / max) * 100);
   const warn = value < 6;
   return (
     <div className="ins-bar-track">
-      <div
-        className={`ins-bar-fill${warn ? ' warn' : ''}`}
-        style={{ width: `${pct}%` }}
-      />
+      <div className={`ins-bar-fill${warn ? ' warn' : ''}`} style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -87,23 +99,30 @@ const DIFF_COLOR     = { easy: '#10B981',   medium: '#F59E0B',   hard: '#EF4444'
 
 function SuggestionCard({ suggestion, isJoey, onStart, onAddTask, onDismiss }) {
   const habit = getHabit(suggestion.habitId);
+  const [showReason, setShowReason] = useState(false);
   if (!habit) return null;
 
   return (
     <div className="ins-suggest-card">
+      {/* Pattern row */}
       <div className="ins-suggest-pattern">
         <span className="ins-suggest-pattern-icon">💡</span>
-        <span>{suggestion.pattern}</span>
+        <div>
+          <div className="ins-suggest-pattern-label">PATTERN NOTICED</div>
+          <div>{suggestion.pattern}</div>
+        </div>
       </div>
 
+      {/* Coach message */}
+      <div className="ins-suggest-message">{suggestion.message}</div>
+
+      {/* Habit block */}
       <div className="ins-suggest-habit">
         <div className="ins-suggest-habit-header">
           <span className="ins-suggest-habit-emoji">{habit.emoji}</span>
           <div>
-            <div className="ins-suggest-habit-name">{habit.name}</div>
-            <div className="ins-suggest-habit-tags">
-              {habit.tags.map(t => <span key={t} className="ins-tag">{t}</span>)}
-            </div>
+            <div className="ins-suggest-habit-name">Try: {habit.name}</div>
+            <div className="ins-suggest-source">Source: {habit.source}</div>
           </div>
         </div>
 
@@ -111,28 +130,37 @@ function SuggestionCard({ suggestion, isJoey, onStart, onAddTask, onDismiss }) {
           <span className="ins-meta-chip" style={{ color: EVIDENCE_COLOR[habit.evidenceLevel] }}>
             📊 {habit.evidenceLevel}
           </span>
-          <span className="ins-meta-chip">
-            🛡 {habit.riskLevel} risk
-          </span>
+          <span className="ins-meta-chip">🛡 {habit.riskLevel} risk</span>
           <span className="ins-meta-chip" style={{ color: DIFF_COLOR[habit.difficulty] }}>
             ⚡ {habit.difficulty}
           </span>
-          <span className="ins-meta-chip">
-            📅 {habit.trialDays} days
-          </span>
+          <span className="ins-meta-chip">📅 {habit.trialDays} days</span>
         </div>
 
+        {/* Daily task */}
         <div className="ins-suggest-task">
           <span className="ins-suggest-task-label">DAILY TASK</span>
           <span>{habit.task}</span>
         </div>
 
+        {/* Why this habit helps */}
         <div className="ins-suggest-why">
-          <span className="ins-suggest-why-label">WHY</span>
+          <span className="ins-suggest-why-label">WHY THIS HELPS</span>
           <span>{habit.why}</span>
         </div>
 
-        <div className="ins-suggest-source">Source: {habit.source}</div>
+        {/* Why am I seeing this? (data-driven, collapsible) */}
+        <button
+          className="ins-reason-toggle"
+          onClick={() => setShowReason(v => !v)}
+          aria-expanded={showReason}
+        >
+          <span className="ins-reason-toggle-arrow">{showReason ? '▲' : '▼'}</span>
+          Why am I seeing this?
+        </button>
+        {showReason && (
+          <div className="ins-reason-body">{suggestion.reason}</div>
+        )}
 
         {isJoey && habit.diabetesNote && (
           <div className="ins-diabetes-note">
@@ -140,17 +168,14 @@ function SuggestionCard({ suggestion, isJoey, onStart, onAddTask, onDismiss }) {
           </div>
         )}
         {isJoey && habit.joeyNote && (
-          <div className="ins-safety-note">
-            ℹ️ {habit.joeyNote}
-          </div>
+          <div className="ins-safety-note">ℹ️ {habit.joeyNote}</div>
         )}
         {habit.safetyNote && (
-          <div className="ins-safety-note">
-            ℹ️ {habit.safetyNote}
-          </div>
+          <div className="ins-safety-note">ℹ️ {habit.safetyNote}</div>
         )}
       </div>
 
+      {/* Action buttons */}
       <div className="ins-suggest-actions">
         <button className="btn btn-primary ins-action-btn" onClick={onStart}>
           Start 7-Day Experiment
@@ -168,7 +193,7 @@ function SuggestionCard({ suggestion, isJoey, onStart, onAddTask, onDismiss }) {
   );
 }
 
-function ExperimentCard({ experiment, currentDayNum, days, tasks, isJoey, onRemove }) {
+function ExperimentCard({ experiment, currentDayNum, isJoey, onRemove }) {
   const habit = getHabit(experiment.habitId);
   if (!habit) return null;
 
@@ -186,7 +211,7 @@ function ExperimentCard({ experiment, currentDayNum, days, tasks, isJoey, onRemo
             <div className="ins-exp-name">{habit.name}</div>
             <div className="ins-exp-day">Day {Math.min(elapsed, 7)} of 7</div>
           </div>
-          <button className="btn btn-ghost ins-exp-remove" onClick={onRemove}>✕</button>
+          <button className="btn btn-ghost ins-exp-remove" onClick={onRemove} title="Remove experiment">✕</button>
         </div>
         <div className="ins-exp-bar-wrap">
           <div className="ins-exp-bar-track">
@@ -195,15 +220,12 @@ function ExperimentCard({ experiment, currentDayNum, days, tasks, isJoey, onRemo
           <span className="ins-exp-pct">{pct}%</span>
         </div>
         {isJoey && habit.diabetesNote && (
-          <div className="ins-diabetes-note" style={{ marginTop: 8 }}>
-            ⚠️ {habit.diabetesNote}
-          </div>
+          <div className="ins-diabetes-note" style={{ marginTop: 8 }}>⚠️ {habit.diabetesNote}</div>
         )}
       </div>
     );
   }
 
-  // Completed experiment
   if (status === 'completed' && result) {
     const assessment = assessExperiment(baseline, result);
     if (!assessment) return null;
@@ -224,7 +246,6 @@ function ExperimentCard({ experiment, currentDayNum, days, tasks, isJoey, onRemo
             <div className="ins-exp-day">Days {startDayNum}–{endDayNum} · Complete</div>
           </div>
         </div>
-
         <div className="ins-result-table">
           {assessment.deltas.map(d => (
             <div key={d.key} className="ins-result-row">
@@ -238,10 +259,7 @@ function ExperimentCard({ experiment, currentDayNum, days, tasks, isJoey, onRemo
             </div>
           ))}
         </div>
-
-        <div className={`ins-verdict ${verdictClass}`}>
-          {assessment.verdictText}
-        </div>
+        <div className={`ins-verdict ${verdictClass}`}>{assessment.verdictText}</div>
       </div>
     );
   }
@@ -261,31 +279,36 @@ export default function InsightsView() {
     dismissHint, dismissedHints,
   } = useApp();
 
-  const dayNum     = getDayNumber();
-  const days       = allDays[activeProfile] || {};
-  const tasks      = profile?.tasks || [];
-  const isJoey     = activeProfile === 'me';
-  const today      = getTodayStr();
+  const [recalcKey, setRecalcKey] = useState(0);
+  const [recalcFlash, setRecalcFlash] = useState(false);
+
+  const dayNum  = getDayNumber();
+  const days    = allDays[activeProfile] || {};
+  const tasks   = profile?.tasks || [];
+  const isJoey  = activeProfile === 'me';
+  const today   = getTodayStr();
 
   const last7  = dayNum ? Array.from({ length: 7  }, (_, i) => dayNum - i).filter(n => n >= 1) : [];
   const last14 = dayNum ? Array.from({ length: 14 }, (_, i) => dayNum - i).filter(n => n >= 1) : [];
 
+  // recalcKey forces recompute when the button is pressed
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const avg7  = computeAverages(last7,  days, tasks);
   const avg14 = computeAverages(last14, days, tasks);
 
-  const profileExps   = experiments[activeProfile]  || [];
-  const profileDism   = dismissedHints[activeProfile] || {};
+  const profileExps = experiments[activeProfile] || [];
+  const profileDism = dismissedHints[activeProfile] || {};
 
   const activeExps    = profileExps.filter(e => e.status === 'active');
   const completedExps = profileExps.filter(e => e.status === 'completed');
   const activeHabits  = activeExps.map(e => e.habitId);
 
-  // Filter dismissed hints (expire after 7 days)
-  const dismissedIds  = Object.entries(profileDism)
+  const dismissedIds = Object.entries(profileDism)
     .filter(([, expiry]) => expiry >= today)
     .map(([id]) => id);
 
   const suggestions = generateSuggestions(avg7, isJoey, activeHabits, dismissedIds);
+  const coachMsg    = getCoachMessage(avg7);
 
   // Auto-complete experiments that have passed their endDayNum
   useEffect(() => {
@@ -298,6 +321,12 @@ export default function InsightsView() {
       }
     }
   }, [dayNum]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleRecalc() {
+    setRecalcKey(k => k + 1);
+    setRecalcFlash(true);
+    setTimeout(() => setRecalcFlash(false), 1000);
+  }
 
   function handleStartExperiment(habitId) {
     if (!dayNum) return;
@@ -337,9 +366,7 @@ export default function InsightsView() {
           <div className="ins-empty-icon">📈</div>
           <h3>Building your baseline</h3>
           <p>Keep logging your daily ratings for at least 3 days — insights will appear once there's enough data to spot patterns.</p>
-          <div className="ins-progress-hint">
-            {avg7.daysLogged} / 3 days with data
-          </div>
+          <div className="ins-progress-hint">{avg7.daysLogged} / 3 days with data</div>
         </div>
       </div>
     );
@@ -348,29 +375,40 @@ export default function InsightsView() {
   // ── Main view ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="insights-view">
+    <div className="insights-view" key={recalcKey}>
       <div className="page-header">
         <h2>🔍 Insights</h2>
-        <span className="page-header-sub">Creator-informed experiments</span>
+        <button
+          className={`btn btn-ghost ins-recalc-btn${recalcFlash ? ' flash' : ''}`}
+          onClick={handleRecalc}
+        >
+          {recalcFlash ? '✓ Updated' : '↻ Recalculate'}
+        </button>
       </div>
 
       <div className="ins-content">
-        {/* Weekly summary */}
-        <SummaryCard avg={avg7}  label="📊 Last 7 Days" />
+
+        {/* 1. Coach message */}
+        <CoachMessage msg={coachMsg} />
+
+        {/* 2. Weekly summary */}
+        <SummaryCard avg={avg7} label="📊 Last 7 Days" />
 
         {avg14.daysLogged >= 10 && (
           <details className="ins-details">
-            <summary className="ins-details-summary">Last 14 Days</summary>
-            <SummaryCard avg={avg14} label="📊 Last 14 Days" />
+            <summary className="ins-details-summary">📊 Last 14 Days</summary>
+            <div style={{ padding: '0 0 12px' }}>
+              <SummaryCard avg={avg14} label="Last 14 Days" />
+            </div>
           </details>
         )}
 
-        {/* Suggestions */}
+        {/* 3. Personalized Recommendations */}
         {suggestions.length > 0 && (
           <div className="ins-section">
-            <div className="ins-section-title">💡 Suggested Experiments</div>
+            <div className="ins-section-title">💡 Personalized Recommendations</div>
             <p className="ins-section-sub">
-              One small experiment may help. Try for 7 days, then check back here.
+              Based on your last 7 days. Try one experiment for 7 days, then come back to compare.
             </p>
             {suggestions.map(s => (
               <SuggestionCard
@@ -388,11 +426,11 @@ export default function InsightsView() {
         {suggestions.length === 0 && avg7.daysLogged >= 5 && (
           <div className="ins-all-good">
             <div className="ins-all-good-icon">✅</div>
-            <p>Looking solid. No patterns to flag right now. Keep logging daily ratings for ongoing tracking.</p>
+            <p>No patterns to flag right now. Keep logging daily ratings for ongoing tracking.</p>
           </div>
         )}
 
-        {/* Active experiments */}
+        {/* 4. Currently Testing */}
         {activeExps.length > 0 && (
           <div className="ins-section">
             <div className="ins-section-title">🧪 Currently Testing</div>
@@ -410,7 +448,7 @@ export default function InsightsView() {
           </div>
         )}
 
-        {/* Completed experiments */}
+        {/* Past experiments */}
         {completedExps.length > 0 && (
           <div className="ins-section">
             <div className="ins-section-title">📋 Past Experiments</div>
@@ -428,8 +466,8 @@ export default function InsightsView() {
           </div>
         )}
 
-        {/* Habit library browser */}
-        <details className="ins-details" style={{ marginTop: 8 }}>
+        {/* 5. Full Habit Library */}
+        <details className="ins-details">
           <summary className="ins-details-summary">📚 Full Habit Library ({HABIT_LIBRARY.length} habits)</summary>
           <div className="ins-library">
             {HABIT_LIBRARY.map(h => (
