@@ -35,10 +35,11 @@ function MetricCell({ label, value, hasData, warn }) {
   );
 }
 
-function RatingBar({ value, max = 10 }) {
+function RatingBar({ value, max = 10, invertWarn = false }) {
   if (!value) return null;
   const pct  = Math.round((value / max) * 100);
-  const warn = value < 6;
+  // Normal: warn if low (< 6). Inverted (stress): warn if high (≥ 7)
+  const warn = invertWarn ? value >= 7 : value < 6;
   return (
     <div className="ins-bar-track">
       <div className={`ins-bar-fill${warn ? ' warn' : ''}`} style={{ width: `${pct}%` }} />
@@ -88,6 +89,27 @@ function SummaryCard({ avg, label }) {
           <span className="ins-bar-label">Confidence</span>
           <RatingBar value={avg.confidence} />
           <span className="ins-bar-val">{avg.confidence}</span>
+        </div>
+      )}
+      {avg.hasRecoveryData && (
+        <div className="ins-bar-row">
+          <span className="ins-bar-label">Recovery</span>
+          <RatingBar value={avg.recovery} />
+          <span className="ins-bar-val">{avg.recovery}</span>
+        </div>
+      )}
+      {avg.hasEffortData && (
+        <div className="ins-bar-row">
+          <span className="ins-bar-label">Wkt Effort</span>
+          <RatingBar value={avg.workoutEffort} warn={false} />
+          <span className="ins-bar-val">{avg.workoutEffort}</span>
+        </div>
+      )}
+      {avg.hasStressData && (
+        <div className="ins-bar-row">
+          <span className="ins-bar-label">Stress</span>
+          <RatingBar value={avg.stress} invertWarn />
+          <span className="ins-bar-val">{avg.stress}</span>
         </div>
       )}
     </div>
@@ -247,17 +269,26 @@ function ExperimentCard({ experiment, currentDayNum, isJoey, onRemove }) {
           </div>
         </div>
         <div className="ins-result-table">
-          {assessment.deltas.map(d => (
-            <div key={d.key} className="ins-result-row">
-              <span className="ins-result-label">{d.label}</span>
-              <span className="ins-result-before">{d.before}</span>
-              <span className="ins-result-arrow">→</span>
-              <span className="ins-result-after">{d.after}</span>
-              <span className={`ins-result-delta ${d.delta > 0.3 ? 'up' : d.delta < -0.3 ? 'down' : 'flat'}`}>
-                {d.delta > 0 ? '+' : ''}{d.delta}
-              </span>
-            </div>
-          ))}
+          {assessment.deltas.map(d => {
+            // For stress, lower is better — flip color coding
+            const invert = d.key === 'stress';
+            const deltaClass = d.delta > 0.3
+              ? (invert ? 'down' : 'up')
+              : d.delta < -0.3
+                ? (invert ? 'up' : 'down')
+                : 'flat';
+            return (
+              <div key={d.key} className="ins-result-row">
+                <span className="ins-result-label">{d.label}</span>
+                <span className="ins-result-before">{d.before}</span>
+                <span className="ins-result-arrow">→</span>
+                <span className="ins-result-after">{d.after}</span>
+                <span className={`ins-result-delta ${deltaClass}`}>
+                  {d.delta > 0 ? '+' : ''}{d.delta}
+                </span>
+              </div>
+            );
+          })}
         </div>
         <div className={`ins-verdict ${verdictClass}`}>{assessment.verdictText}</div>
       </div>

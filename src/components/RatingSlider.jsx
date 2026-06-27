@@ -1,4 +1,4 @@
-export default function RatingSlider({ label, emoji, value, onChange }) {
+export default function RatingSlider({ label, emoji, value, onChange, hint }) {
   return (
     <div className="rating-row">
       <div className="rating-label-row">
@@ -8,6 +8,7 @@ export default function RatingSlider({ label, emoji, value, onChange }) {
         </span>
         {value > 0 && <span className="rating-val">{value}/10</span>}
       </div>
+      {hint && <div className="rating-hint">{hint}</div>}
       <div className="rating-bubbles">
         {[1,2,3,4,5,6,7,8,9,10].map(n => (
           <button

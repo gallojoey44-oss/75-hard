@@ -664,7 +664,8 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   margin-bottom: 8px;
 }
 .rating-label-left { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
-.rating-val { font-size: 13px; font-weight: 700; color: var(--accent2); }
+.rating-val  { font-size: 13px; font-weight: 700; color: var(--accent2); }
+.rating-hint { font-size: 11px; color: var(--text3); margin-top: 2px; margin-bottom: 4px; }
 
 .rating-bubbles {
   display: flex;

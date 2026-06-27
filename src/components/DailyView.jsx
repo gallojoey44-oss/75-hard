@@ -53,6 +53,7 @@ export default function DailyView({ editDayNum, onBack, setView }) {
           dayNumber: dayNum,
           tasks: {}, mentalTraining: { selected: null, completed: false, notes: '' },
           mood: 0, confidence: 0, sleep: 0, energy: 0,
+          recovery: 0, workoutEffort: 0, stress: 0,
           notes: '', glucoseNotes: '', validated: false,
         })
       : getTodayData();
@@ -309,6 +310,24 @@ export default function DailyView({ editDayNum, onBack, setView }) {
           label="Energy" emoji="⚡"
           value={dayData?.energy || 0}
           onChange={v => handleUpdate({ energy: v })}
+        />
+        <RatingSlider
+          label="Recovery / Soreness" emoji="🔋"
+          value={dayData?.recovery || 0}
+          onChange={v => handleUpdate({ recovery: v })}
+          hint="1 = very sore · 10 = fully recovered"
+        />
+        <RatingSlider
+          label="Workout Effort" emoji="🏋️"
+          value={dayData?.workoutEffort || 0}
+          onChange={v => handleUpdate({ workoutEffort: v })}
+          hint="1 = very easy · 10 = extremely hard"
+        />
+        <RatingSlider
+          label="Stress" emoji="🌡️"
+          value={dayData?.stress || 0}
+          onChange={v => handleUpdate({ stress: v })}
+          hint="1 = very calm · 10 = very stressed"
         />
 
         {/* Glucose/Dexcom — Joey only */}
