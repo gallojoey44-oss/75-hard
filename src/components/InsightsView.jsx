@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { getTodayStr } from '../utils/dateUtils';
 import { HABIT_LIBRARY, getHabit } from '../data/habitLibrary';
-import { computeAverages, generateSuggestions, assessExperiment, getCoachMessage } from '../utils/insightsUtils';
+import { computeAverages, generateSuggestions, assessExperiment, getCoachMessage, getPriorityBottleneck } from '../utils/insightsUtils';
 import BuildBanner, { BUILD_VERSION, BUILD_LABEL, PRODUCTION_URL } from './BuildBanner';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -20,6 +20,45 @@ function CoachMessage({ msg }) {
     <div className="ins-coach-card" style={{ background: style.bg, border: `1px solid ${style.border}` }}>
       <span className="ins-coach-icon">{style.icon}</span>
       <span className="ins-coach-text" style={{ color: style.color }}>{msg.text}</span>
+    </div>
+  );
+}
+
+function PriorityBottleneckCard({ bottleneck }) {
+  if (!bottleneck?.bottleneck) return null;
+  const isSleep = bottleneck.bottleneck === 'sleep_duration' || bottleneck.bottleneck === 'sleep_quality';
+  return (
+    <div className={`bottleneck-card${isSleep ? ' sleep' : ''}`}>
+      <div className="bottleneck-header">
+        <span className="bottleneck-emoji">{bottleneck.emoji}</span>
+        <div>
+          <div className="bottleneck-title">Priority Bottleneck</div>
+          <div className="bottleneck-label">{bottleneck.label}</div>
+        </div>
+      </div>
+      <div className="bottleneck-msg">{bottleneck.coachMsg}</div>
+      {bottleneck.primary.length > 0 && (
+        <div>
+          <div className="bottleneck-habits-label">Start with</div>
+          <div className="bottleneck-chips">
+            {bottleneck.primary.map(id => {
+              const h = getHabit(id);
+              return h ? <span key={id} className="bottleneck-chip">{h.emoji} {h.name}</span> : null;
+            })}
+          </div>
+        </div>
+      )}
+      {bottleneck.secondary.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div className="bottleneck-habits-label">Also consider</div>
+          <div className="bottleneck-chips">
+            {bottleneck.secondary.map(id => {
+              const h = getHabit(id);
+              return h ? <span key={id} className="bottleneck-chip secondary">{h.emoji} {h.name}</span> : null;
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -314,11 +353,12 @@ export default function InsightsView() {
   const [recalcKey, setRecalcKey] = useState(0);
   const [recalcFlash, setRecalcFlash] = useState(false);
 
-  const dayNum  = getDayNumber();
-  const days    = allDays[activeProfile] || {};
-  const tasks   = profile?.tasks || [];
-  const isJoey  = activeProfile === 'me';
-  const today   = getTodayStr();
+  const dayNum     = getDayNumber();
+  const days       = allDays[activeProfile] || {};
+  const tasks      = profile?.tasks || [];
+  const isJoey     = activeProfile === 'me';
+  const today      = getTodayStr();
+  const sleepTarget = profile?.sleepTarget ?? 8;
 
   const last7  = dayNum ? Array.from({ length: 7  }, (_, i) => dayNum - i).filter(n => n >= 1) : [];
   const last14 = dayNum ? Array.from({ length: 14 }, (_, i) => dayNum - i).filter(n => n >= 1) : [];
@@ -339,8 +379,9 @@ export default function InsightsView() {
     .filter(([, expiry]) => expiry >= today)
     .map(([id]) => id);
 
-  const suggestions = generateSuggestions(avg7, isJoey, activeHabits, dismissedIds);
-  const coachMsg    = getCoachMessage(avg7);
+  const suggestions  = generateSuggestions(avg7, isJoey, activeHabits, dismissedIds, sleepTarget);
+  const coachMsg     = getCoachMessage(avg7, sleepTarget);
+  const bottleneck   = getPriorityBottleneck(avg7, sleepTarget, isJoey);
 
   // Auto-complete experiments that have passed their endDayNum
   useEffect(() => {
@@ -428,7 +469,10 @@ export default function InsightsView() {
           If you can see this, the recommendation update reached production.
         </div>
 
-        {/* 1. Coach message */}
+        {/* 1. Priority bottleneck */}
+        <PriorityBottleneckCard bottleneck={bottleneck} />
+
+        {/* 2. Coach message */}
         <CoachMessage msg={coachMsg} />
 
         {/* 2. Weekly summary */}

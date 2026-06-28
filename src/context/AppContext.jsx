@@ -83,6 +83,7 @@ function emptyDay(date, dayNumber) {
     stress: 0,
     notes: '',
     glucoseNotes: '',
+    hoursSlept: 0,
     validated: false,
   };
 }
@@ -177,6 +178,40 @@ function migrateProfiles(stored) {
     }
     if (profiles[profId].faithCountsToward === undefined) {
       profiles[profId] = { ...profiles[profId], faithCountsToward: false };
+      changed = true;
+    }
+    if (profiles[profId].sleepTarget === undefined) {
+      profiles[profId] = { ...profiles[profId], sleepTarget: 8 };
+      changed = true;
+    }
+    if (profiles[profId].sleepAutoComplete === undefined) {
+      profiles[profId] = { ...profiles[profId], sleepAutoComplete: true };
+      changed = true;
+    }
+  }
+
+  // Joey — add sleep_target task if missing
+  {
+    const tasks = profiles.me.tasks || [];
+    if (!tasks.find(t => t.id === 'sleep_target')) {
+      const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order ?? 0)) : -1;
+      profiles.me = {
+        ...profiles.me,
+        tasks: [...tasks, { id: 'sleep_target', name: 'Sleep target met', icon: '😴', order: maxOrder + 1 }],
+      };
+      changed = true;
+    }
+  }
+
+  // Girlfriend — add gf_sleep_target task if missing
+  {
+    const tasks = profiles.girlfriend.tasks || [];
+    if (!tasks.find(t => t.id === 'gf_sleep_target')) {
+      const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order ?? 0)) : -1;
+      profiles.girlfriend = {
+        ...profiles.girlfriend,
+        tasks: [...tasks, { id: 'gf_sleep_target', name: 'Sleep target met', color: '#DDA0DD', order: maxOrder + 1 }],
+      };
       changed = true;
     }
   }

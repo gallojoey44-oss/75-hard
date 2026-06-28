@@ -214,6 +214,42 @@ export default function SettingsView() {
         )}
       </div>
 
+      {/* Sleep Settings */}
+      <div className="settings-section">
+        <div className="section-title">😴 Sleep Settings</div>
+        <div className="settings-row" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Nightly sleep target</div>
+          <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: -4 }}>
+            Used to determine when sleep is a bottleneck in Insights
+          </div>
+          <div className="sleep-target-btns">
+            {[7, 7.5, 8, 8.5].map(h => (
+              <button
+                key={h}
+                className={`sleep-target-btn${(profile?.sleepTarget ?? 8) === h ? ' active' : ''}`}
+                onClick={() => updateProfile({ sleepTarget: h })}
+              >
+                {h}h
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="settings-row" style={{ marginTop: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Auto-complete sleep task</div>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+              Marks "Sleep target met" when hours logged ≥ target
+            </div>
+          </div>
+          <button
+            className={`toggle-btn${profile?.sleepAutoComplete !== false ? ' on' : ''}`}
+            onClick={() => updateProfile({ sleepAutoComplete: profile?.sleepAutoComplete === false ? true : false })}
+          >
+            {profile?.sleepAutoComplete !== false ? 'On' : 'Off'}
+          </button>
+        </div>
+      </div>
+
       {/* Quote Library */}
       <div className="settings-section">
         <QuoteLibrary />

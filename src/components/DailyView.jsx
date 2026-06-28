@@ -353,8 +353,37 @@ export default function DailyView({ editDayNum, setView }) {
           value={dayData?.confidence || 0}
           onChange={v => handleUpdate({ confidence: v })}
         />
+        <div className="sleep-hours-row">
+          <div style={{ flex: 1 }}>
+            <div className="sleep-hours-label">😴 Hours Slept</div>
+            {profile?.sleepAutoComplete !== false && (
+              <div className="sleep-target-hint">≥ {profile?.sleepTarget ?? 8}h auto-completes sleep task</div>
+            )}
+          </div>
+          <input
+            type="number"
+            className="sleep-hours-input"
+            value={dayData?.hoursSlept || ''}
+            min={0}
+            max={16}
+            step={0.5}
+            placeholder="0"
+            onChange={e => {
+              const hrs = parseFloat(e.target.value) || 0;
+              const updates = { hoursSlept: hrs };
+              const target = profile?.sleepTarget ?? 8;
+              const autoComplete = profile?.sleepAutoComplete !== false;
+              const sleepTaskId = activeProfile === 'me' ? 'sleep_target' : 'gf_sleep_target';
+              if (autoComplete) {
+                updates.tasks = { ...dayData?.tasks, [sleepTaskId]: hrs >= target };
+              }
+              handleUpdate(updates);
+            }}
+          />
+          <span className="sleep-hours-unit">hrs</span>
+        </div>
         <RatingSlider
-          label="Sleep Quality" emoji="😴"
+          label="Sleep Quality" emoji="⭐"
           value={dayData?.sleep || 0}
           onChange={v => handleUpdate({ sleep: v })}
         />
