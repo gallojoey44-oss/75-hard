@@ -2396,6 +2396,16 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
+.ins-suggest-task-trial {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 7px;
+}
+
 /* "Why am I seeing this?" toggle */
 .ins-reason-toggle {
   display: flex;

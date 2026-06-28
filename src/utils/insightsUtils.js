@@ -122,19 +122,24 @@ export function getCoachMessage(avg, sleepTarget = 8) {
     return { type: 'warn', text: `Sleep is the first bottleneck. You're averaging ${avg.hoursSlept}h vs your ${sleepTarget}h target — training and habits build on sleep.` };
   }
 
-  // Sleep quality poor (when hours not tracked)
+  // Sleep quality poor
   if (avg.hasSleepData && avg.sleep < THRESHOLD_LOW && !avg.hasHoursSleptData) {
     return { type: 'warn', text: "Sleep quality is low. Address sleep before layering on new habits — it's the foundation everything else builds on." };
   }
 
   // Stress elevated
   if (avg.hasStressData && avg.stress >= 7) {
-    return { type: 'warn', text: "Stress is elevated. Add a nervous system downshift habit." };
+    return { type: 'warn', text: `Stress averaged ${avg.stress}/10 this week. Your nervous system needs a downshift habit before you add more.` };
+  }
+
+  // Low recovery
+  if (avg.hasRecoveryData && avg.recovery < THRESHOLD_LOW) {
+    return { type: 'warn', text: `Recovery averaged ${avg.recovery}/10 this week. The body may need direct recovery support, not just more training.` };
   }
 
   // Hard training but poor recovery
   if (avg.hasEffortData && avg.hasRecoveryData && avg.workoutEffort >= 8 && avg.recovery < 6) {
-    return { type: 'warn', text: "You're training hard, but recovery is lagging." };
+    return { type: 'warn', text: "You're training hard, but recovery is lagging. Output is exceeding input." };
   }
 
   const hasLow =
@@ -143,7 +148,6 @@ export function getCoachMessage(avg, sleepTarget = 8) {
     (avg.hasMoodData      && avg.mood       < THRESHOLD_LOW) ||
     (avg.hasConfData      && avg.confidence < THRESHOLD_LOW);
 
-  // Recovery high + no low metrics → positive
   if (avg.hasRecoveryData && avg.recovery >= 7 && !hasLow && avg.daysLogged >= 5) {
     return { type: 'success', text: "Your routine appears to be supporting recovery. Keep going before adding more." };
   }
@@ -159,7 +163,10 @@ export function getCoachMessage(avg, sleepTarget = 8) {
 
 /**
  * Identify the single highest-priority bottleneck and surface it with
- * recommended habits. Returns null bottleneck when data is insufficient.
+ * recommended habits.
+ *
+ * Priority order: sleep duration → sleep quality → consistency →
+ *   stress → recovery/training load → energy → mood → confidence
  */
 export function getPriorityBottleneck(avg, sleepTarget = 8, isJoey = false) {
   const none = { bottleneck: null, label: '', emoji: '', coachMsg: '', primary: [], secondary: [] };
@@ -202,27 +209,27 @@ export function getPriorityBottleneck(avg, sleepTarget = 8, isJoey = false) {
     };
   }
 
-  // 4. Training load vs recovery
-  if (avg.hasEffortData && avg.hasRecoveryData && avg.workoutEffort >= 8 && avg.recovery < THRESHOLD_LOW) {
-    return {
-      bottleneck: 'training_load',
-      label: `Training load — effort ${avg.workoutEffort}/10, recovery ${avg.recovery}/10`,
-      emoji: '🏋️',
-      coachMsg: `Workout effort is consistently high (${avg.workoutEffort}/10) while recovery is lagging (${avg.recovery}/10). Training load is outpacing adaptation. Recovery needs direct support, not just rest days.`,
-      primary: ['nsdr', 'zone2_cardio'],
-      secondary: ['evening_light_dim'],
-    };
-  }
-
-  // 5. Stress elevated
+  // 4. Stress elevated — before recovery per user priority spec
   if (avg.hasStressData && avg.stress >= 7) {
     return {
       bottleneck: 'stress',
       label: `Stress — ${avg.stress}/10 avg`,
       emoji: '🌡️',
-      coachMsg: `Stress is averaging ${avg.stress}/10. Chronically elevated cortisol compresses sleep quality, raises appetite, and undermines training adaptation. A real-time downshift tool helps most here.`,
-      primary: ['physiological_sigh', 'nsdr'],
-      secondary: ['morning_sunlight'],
+      coachMsg: `Stress averaged ${avg.stress}/10 this week. Chronically elevated cortisol compresses sleep quality, raises appetite, and undermines training adaptation. A real-time downshift tool helps most at this level.`,
+      primary: ['physiological_sigh', 'recovery_walk'],
+      secondary: ['nsdr', 'no_phone_winddown'],
+    };
+  }
+
+  // 5. Recovery low (including training overload case)
+  if (avg.hasRecoveryData && avg.recovery < THRESHOLD_LOW) {
+    return {
+      bottleneck: 'recovery',
+      label: `Recovery — ${avg.recovery}/10 avg`,
+      emoji: '🔋',
+      coachMsg: `Recovery averaged ${avg.recovery}/10 this week. The body is accumulating fatigue faster than it can clear. Direct recovery inputs — not just extra rest — are needed here.`,
+      primary: ['nsdr', 'mobility_session'],
+      secondary: ['earlier_bedtime', 'zone2_cardio'],
     };
   }
 
@@ -232,9 +239,9 @@ export function getPriorityBottleneck(avg, sleepTarget = 8, isJoey = false) {
       bottleneck: 'energy',
       label: `Energy — ${avg.energy}/10 avg`,
       emoji: '⚡',
-      coachMsg: `Energy is averaging ${avg.energy}/10 despite a consistent routine. This typically points to a recovery deficit — sleep quality, circadian timing, or training load not matching recovery.`,
-      primary: ['morning_sunlight', 'nsdr'],
-      secondary: isJoey ? ['post_meal_walk'] : ['zone2_cardio'],
+      coachMsg: `Energy averaged ${avg.energy}/10 this week despite a consistent routine. This typically points to a recovery deficit — sleep quality, circadian timing, hydration, or training load.`,
+      primary: ['morning_sunlight', 'hydration_check'],
+      secondary: isJoey ? ['post_meal_walk', 'nsdr'] : ['nsdr', 'earlier_bedtime'],
     };
   }
 
@@ -244,9 +251,9 @@ export function getPriorityBottleneck(avg, sleepTarget = 8, isJoey = false) {
       bottleneck: 'mood',
       label: `Mood — ${avg.mood}/10 avg`,
       emoji: '😊',
-      coachMsg: `Mood is averaging ${avg.mood}/10. In the context of a consistent routine, low mood usually points to missing recovery inputs — sleep, sunlight, or an overstimulated nervous system.`,
-      primary: ['zone2_cardio', 'morning_sunlight'],
-      secondary: ['physiological_sigh'],
+      coachMsg: `Mood averaged ${avg.mood}/10 this week. In the context of a consistent routine, low mood usually points to missing recovery inputs — sleep, sunlight, movement, or an overstimulated nervous system.`,
+      primary: ['zone2_cardio', 'gratitude_journal'],
+      secondary: ['recovery_walk', 'morning_sunlight'],
     };
   }
 
@@ -256,9 +263,9 @@ export function getPriorityBottleneck(avg, sleepTarget = 8, isJoey = false) {
       bottleneck: 'confidence',
       label: `Confidence — ${avg.confidence}/10 avg`,
       emoji: '💪',
-      coachMsg: `Confidence is averaging ${avg.confidence}/10. Confidence is downstream of consistent small wins — it follows behavior, not motivation. One kept promise per day compounds faster than trying to do more.`,
-      primary: ['micro_commitment', 'phone_free_focus'],
-      secondary: [],
+      coachMsg: `Confidence averaged ${avg.confidence}/10 this week. Confidence is downstream of consistent small wins — it follows behavior, not motivation. One kept promise per day compounds faster than trying to do more.`,
+      primary: ['daily_win_journal', 'micro_commitment'],
+      secondary: ['phone_free_focus'],
     };
   }
 
@@ -268,11 +275,13 @@ export function getPriorityBottleneck(avg, sleepTarget = 8, isJoey = false) {
 /**
  * Generate up to 2 personalized habit suggestions based on 7-day averages.
  *
- * Priority order: sleep duration → sleep quality → training gap →
- *   stress → energy → mood → confidence → consistency
+ * Priority order (per spec):
+ *   sleep duration (0–2) → sleep quality (3–5) → stress (6–7) →
+ *   recovery (8–9) → energy (10–11) → mood (12–13) → confidence (14–15) →
+ *   glucose / joey-only (16) → consistency fallback (17–18)
  *
- * Morning sunlight is deferred when sleep hours are low (circadian anchor
- * helps, but fixing duration is the root cause).
+ * Morning sunlight is deferred when sleep hours are below target
+ * (fixing duration is the root cause; sunlight helps but doesn't fix it).
  *
  * Each suggestion: { habitId, pattern, message, reason, priority }
  */
@@ -291,202 +300,226 @@ export function generateSuggestions(avg, isJoey, activeHabitIds = [], dismissedH
 
   const { completion: comp, energy, sleep, mood, confidence: conf } = avg;
 
-  // ── Rule 1: Low completion → consistency habits first ─────────────────────
-  if (comp < 60) {
-    add('min_floor_habit',
-      `Average task completion is ${comp}% over the last 7 days.`,
-      'Consistency is the first bottleneck. Start with a smaller floor target before adding more habits.',
-      `When completion drops below 60%, the routine is likely too demanding for the current season. A "floor target" — the minimum viable version of your hardest habit — keeps the identity intact on hard days without letting zero-days accumulate.`,
+  // ── Sleep duration (priority tier 0) ─────────────────────────────────────
+  if (sleepDurationLow) {
+    const deficit = Math.round((sleepTarget - avg.hoursSlept) * 10) / 10;
+    add('earlier_bedtime',
+      `Sleep averaged ${avg.hoursSlept}h this week vs your ${sleepTarget}h target — a ${deficit}h nightly deficit.`,
+      `Sleep duration is the first bottleneck. Try going to bed ${deficit}h earlier for 7 days to close the gap.`,
+      `Sleep debt accumulates additively. A ${deficit}h nightly deficit means losing ~${Math.round(deficit * 7 * 10) / 10}h of recovery per week. Bedtime determines duration more than wake time for most people — it's the primary lever.`,
+      0);
+    add('no_phone_winddown',
+      `Sleep averaged ${avg.hoursSlept}h vs your ${sleepTarget}h target. Phone use near bed is a common bedtime-delay mechanism.`,
+      `Sleep duration is the first bottleneck. A 30-minute phone-free wind down before bed can help you fall asleep earlier.`,
+      `Phone use delays bedtime through two mechanisms: blue light pushes melatonin onset later, and psychological engagement raises alertness. Removing both for 30 minutes before bed is often the easiest way to implement an earlier bedtime without willpower.`,
+      0);
+    add('cool_dark_room',
+      `Sleep averaged ${avg.hoursSlept}h vs your ${sleepTarget}h target.`,
+      `Sleep duration is the first bottleneck. A cooler, darker room helps you fall asleep faster and stay asleep longer.`,
+      `Core body temperature must drop ~2°F to initiate and sustain sleep. A room set to 65–68°F with blackout curtains speeds this drop and reduces early-morning waking — two common causes of short sleep duration.`,
+      1);
+  }
+
+  // ── Sleep quality (priority tier 1) ──────────────────────────────────────
+  if (avg.hasSleepData && sleep < THRESHOLD_LOW) {
+    add('evening_light_dim',
+      `Sleep quality averaged ${sleep}/10 this week.`,
+      `Sleep quality is low. Try dimming overhead lights 2–3 hours before bed for 7 days — it's the lowest-friction sleep input to change.`,
+      `Bright overhead lighting in the evening suppresses melatonin production, pushing sleep onset later and reducing sleep depth. Switching to lamps or floor lights 2–3 hours before bed costs nothing and has strong evidence behind it.`,
+      sleepDurationLow ? 3 : 2);
+    add('cool_dark_room',
+      `Sleep quality averaged ${sleep}/10 this week. Room environment directly affects sleep depth.`,
+      `Sleep quality is low. A cooler, darker room is one of the most evidence-backed sleep quality improvements you can make.`,
+      `Core body temperature must drop ~2°F to initiate deep sleep. A cool (65–68°F), dark room makes this easier and increases time in slow-wave sleep — the most physically restorative phase.`,
+      sleepDurationLow ? 3 : 2);
+    add('nsdr',
+      `Sleep quality averaged ${sleep}/10 this week. NSDR can partially offset the cost of poor nights while you address the root cause.`,
+      `Sleep quality is low. A 10–20 min NSDR session in the afternoon can recover some of what poor sleep takes away.`,
+      `Non-sleep deep rest (NSDR / Yoga Nidra) triggers the same parasympathetic restoration as early sleep stages. When sleep quality is low, an afternoon NSDR session reduces some of the cognitive and hormonal debt accumulated overnight.`,
+      sleepDurationLow ? 4 : 3);
+  }
+
+  // ── Stress elevated (priority tier 2 — per spec, above recovery) ─────────
+  if (avg.hasStressData && avg.stress >= 7) {
+    add('physiological_sigh',
+      `Stress averaged ${avg.stress}/10 this week.`,
+      `Stress is elevated. Try adding physiological sigh breathing for 7 days — it's the fastest-acting real-time cortisol tool there is.`,
+      `When average stress stays at or above 7/10 across a week, cortisol is likely elevated chronically. Physiological sighs (double inhale, long exhale) are the fastest-acting autonomic intervention: used reactively, they prevent cortisol spikes from compounding. 30 seconds, no setup.`,
+      6);
+    add('recovery_walk',
+      `Stress averaged ${avg.stress}/10 this week. Low-intensity outdoor movement is one of the most underused cortisol tools.`,
+      `Stress is elevated. A short daily walk — outside if possible — can lower cortisol without adding any training load.`,
+      `Walking at an easy pace outdoors lowers cortisol, improves mood through rhythmic movement and sunlight, and resets the nervous system without any recovery cost. When stress is chronically elevated, adding a walk is often more effective than adding more structured activity.`,
+      6);
+    // Morning sunlight helps stress regulation, but only if sleep is not the root cause
+    if (!sleepDurationLow) {
+      add('no_phone_winddown',
+        `Stress averaged ${avg.stress}/10 this week. Evening screen use can keep cortisol elevated into the night.`,
+        `Stress is elevated. A 30-minute phone-free wind down before bed can help your nervous system fully downshift before sleep.`,
+        `Evening phone use maintains sympathetic (alert) nervous system activation and delays the natural cortisol decline that begins ~2 hours before sleep. A phone-free wind down lets that decline happen earlier and more completely.`,
+        7);
+    }
+  }
+
+  // ── Recovery low (priority tier 3 — per spec, above energy) ──────────────
+  // Case A: Low recovery score regardless of training load
+  if (avg.hasRecoveryData && avg.recovery < THRESHOLD_LOW) {
+    add('nsdr',
+      `Recovery averaged ${avg.recovery}/10 this week.`,
+      `Recovery is low. Try a 10–20 min NSDR or Yoga Nidra session for 7 days — it directly targets nervous system recovery.`,
+      `NSDR (Non-Sleep Deep Rest) triggers parasympathetic restoration equivalent to early sleep stages — restoring dopamine and shifting the autonomic state toward repair. When recovery scores are consistently low, adding a direct recovery stimulus (not just more sleep time) often produces the fastest improvement.`,
+      8);
+    add('mobility_session',
+      `Recovery averaged ${avg.recovery}/10 this week.`,
+      `Recovery is low. Try a daily 10–15 min mobility or stretching session for 7 days to actively support the recovery process.`,
+      `Soreness and poor recovery are often compounded by restricted movement and accumulated tension. Regular mobility work drives blood flow, reduces perceived soreness, and signals the nervous system that the body is actively managing fatigue rather than just waiting it out.`,
+      8);
+    add('earlier_bedtime',
+      `Recovery averaged ${avg.recovery}/10 this week. Sleep is the primary recovery input — bedtime is the easiest lever.`,
+      `Recovery is low. Try going to bed 30 minutes earlier for 7 days and see if recovery scores improve.`,
+      `The majority of physical repair and hormonal recovery occurs in the final sleep hours before waking. Getting to bed earlier — even by 30 minutes — increases time in those critical late sleep phases, which directly drives the recovery metric.`,
+      9);
+  }
+
+  // Case B: High effort + poor recovery (training overload)
+  if (avg.hasEffortData && avg.hasRecoveryData && avg.workoutEffort >= 8 && avg.recovery < THRESHOLD_LOW) {
+    add('zone2_cardio',
+      `Workout effort averaged ${avg.workoutEffort}/10, but recovery is ${avg.recovery}/10 — output may be outpacing adaptation.`,
+      `You're training hard, but recovery is lagging. Try swapping one session per week for easy zone 2 cardio.`,
+      `When high-intensity training is the norm, a separate low-intensity zone 2 session on recovery days accelerates clearance of metabolic byproducts without adding stress. It also improves aerobic base, which directly raises recovery capacity over weeks.`,
+      9);
+  }
+
+  // Case C: High effort + sleep or energy dropping
+  if (avg.hasEffortData && avg.workoutEffort >= 7.5) {
+    if ((avg.hasSleepData && sleep < THRESHOLD_LOW) || (avg.hasEnergyData && energy < THRESHOLD_LOW)) {
+      add('nsdr',
+        `Workout effort averaged ${avg.workoutEffort}/10 and ${avg.hasSleepData && sleep < THRESHOLD_LOW ? `sleep quality is ${sleep}/10` : `energy is ${energy}/10`}.`,
+        `Training intensity may be outpacing recovery. A 10–20 min NSDR session can help bridge the recovery gap.`,
+        `High training intensity compresses recovery windows. When effort stays above 7.5/10 and sleep quality or energy drops, the body is signaling that output is exceeding input. NSDR provides a direct recovery stimulus that sleep alone may not supply.`,
+        9);
+    }
+  }
+
+  // ── Energy low (priority tier 4) ─────────────────────────────────────────
+  if (avg.hasEnergyData && energy < THRESHOLD_LOW) {
+    if (!sleepDurationLow) {
+      add('morning_sunlight',
+        `Energy averaged ${energy}/10 this week.`,
+        `Energy is low. Try getting 5–10 minutes of morning sunlight within 60 minutes of waking for 7 days.`,
+        `Morning sunlight suppresses residual melatonin and triggers the cortisol awakening response — the body's built-in alertness signal. Without it, energy tends to plateau lower through the day, especially with a demanding training routine.`,
+        10);
+    }
+    add('hydration_check',
+      `Energy averaged ${energy}/10 this week. Dehydration is a commonly overlooked energy drain.`,
+      `Energy is low. Try tracking your water intake and hitting 2.5–3L/day for 7 days — especially on training days.`,
+      `Even mild dehydration (1–2% of body weight) measurably reduces energy, cognitive function, and mood. Most people in a demanding training routine underestimate daily fluid needs. Adding electrolytes on hard training days helps maintain performance.`,
       10);
-    add('micro_commitment',
-      `Average task completion is ${comp}% — the habit reflex needs rebuilding before adding more.`,
-      'Consistency is the first bottleneck. A single daily promise that always happens re-anchors the identity.',
-      `A micro-commitment that always happens (no exceptions) rebuilds self-trust faster than trying to do more. Identity follows behavior — this is the fastest re-anchor when momentum has broken down.`,
+    if (isJoey && avg.glucoseWarnings >= 1) {
+      add('post_meal_walk',
+        `Energy averaged ${energy}/10 this week, and glucose notes suggest post-meal patterns worth monitoring.`,
+        `Energy is low and glucose notes flag a pattern. A short walk after your largest meal may reduce post-meal crashes.`,
+        `Post-meal muscle activity drives glucose into cells via a non-insulin pathway (GLUT4 translocation), reducing the amplitude of glucose peaks. Smaller peaks mean fewer 1–2 hour post-meal energy crashes. This is a lifestyle intervention — not a substitute for medical guidance.`,
+        10);
+    }
+    add('nsdr',
+      `Energy averaged ${energy}/10 this week despite a solid routine.`,
+      `Energy is low. Try a 10–20 min NSDR session in the afternoon for 7 days to support recovery without requiring more sleep time.`,
+      `Cumulative fatigue builds even when sleep looks adequate. NSDR replenishes dopamine stores and directly targets nervous system recovery — one of the few tools that works even when you can't sleep more hours.`,
       11);
   }
 
-  if (comp >= THRESHOLD_COMP) {
-
-    // ── Sleep duration (priority tier 0) ─────────────────────────────────────
-    if (sleepDurationLow) {
-      const deficit = Math.round((sleepTarget - avg.hoursSlept) * 10) / 10;
-      add('earlier_bedtime',
-        `Averaging ${avg.hoursSlept}h vs your ${sleepTarget}h sleep target (${deficit}h deficit per night).`,
-        'Sleep duration is the first bottleneck. The most direct fix is going to bed earlier.',
-        `Sleep debt is additive. A ${deficit}h nightly deficit means losing ~${Math.round(deficit * 7 * 10) / 10}h of recovery per week. Bedtime determines sleep duration more than wake time for most people — it's the primary lever.`,
-        0);
-      add('no_phone_winddown',
-        `Averaging ${avg.hoursSlept}h vs ${sleepTarget}h target. Phone use near bed is a common bedtime-delay mechanism.`,
-        'Sleep duration is the first bottleneck. Removing the last barrier to bed may be the fastest fix.',
-        `Phone use delays bedtime through two mechanisms: blue light pushes melatonin onset later, and psychological engagement raises alertness. A 30-minute phone-free wind-down removes both.`,
-        0);
-      add('bedtime_routine',
-        `Averaging ${avg.hoursSlept}h vs ${sleepTarget}h target. A consistent pre-sleep routine anchors earlier bedtimes.`,
-        'Sleep duration is the first bottleneck. A routine makes an earlier bedtime self-reinforcing.',
-        `Without a predictable pre-sleep routine, bedtime drifts later whenever willpower runs low. A 10–15 minute wind-down sequence (same time, same cues each night) creates a conditioned sleep response — the body begins shifting toward sleep before you're in bed.`,
-        1);
-    }
-
-    // ── Sleep quality (priority tier 1) ──────────────────────────────────────
-    if (avg.hasSleepData && sleep < THRESHOLD_LOW) {
-      add('evening_light_dim',
-        `Completion is ${comp}%, but sleep quality is averaging ${sleep}/10.`,
-        'Discipline is strong, but sleep quality is limiting adaptation.',
-        `Bright overhead lighting in the evening blocks melatonin production, pushing sleep onset later. Dimming or switching to low floor lights 2–3 hours before bed is the lowest-friction first step — no supplements, no gadgets.`,
-        sleepDurationLow ? 2 : 1);
-      add('cool_dark_room',
-        `Sleep quality is ${sleep}/10. Room temperature and darkness are directly linked to deep sleep time.`,
-        'Discipline is strong, but sleep quality is limiting adaptation.',
-        `Core body temperature must drop ~2°F to initiate sleep. A cool (65–68°F), dark room facilitates this drop and increases time spent in deep slow-wave sleep — the most physically restorative phase.`,
-        sleepDurationLow ? 2 : 1);
-      add('nsdr',
-        `Completion is ${comp}%, but sleep quality is ${sleep}/10. NSDR can partially offset the cost of poor nights.`,
-        'Discipline is strong, but sleep quality is limiting adaptation.',
-        `Non-sleep deep rest (NSDR / Yoga Nidra) triggers parasympathetic restoration similar to early sleep stages. A 10–20 min afternoon session offsets some of the cognitive and hormonal cost of poor sleep nights.`,
-        sleepDurationLow ? 3 : 2);
-    }
-
-    // ── Training load vs recovery (priority tier 2) ───────────────────────
-    if (avg.hasEffortData && avg.hasRecoveryData && avg.workoutEffort >= 8 && avg.recovery < THRESHOLD_LOW) {
-      add('nsdr',
-        `Workout effort is averaging ${avg.workoutEffort}/10, but recovery is ${avg.recovery}/10 — training load may be outpacing adaptation.`,
-        "You're training hard, but recovery is lagging.",
-        `When effort is consistently high (8+/10) but recovery stays below 6/10, the body is accumulating fatigue faster than it can adapt. NSDR directly targets nervous system recovery — it restores dopamine and shifts the autonomic state toward repair.`,
-        3);
-      add('zone2_cardio',
-        `Effort is averaging ${avg.workoutEffort}/10 but recovery is ${avg.recovery}/10. Lower-intensity active recovery may help.`,
-        "You're training hard, but recovery is lagging.",
-        `When high-intensity training is the norm, adding a low-intensity zone 2 session on recovery days accelerates clearance of metabolic byproducts without adding significant stress. It also improves aerobic base, which directly supports recovery capacity.`,
-        4);
-    }
-
-    // High effort + sleep or energy dropping
-    if (avg.hasEffortData && avg.workoutEffort >= 7.5) {
-      if ((avg.hasSleepData && sleep < THRESHOLD_LOW) || (avg.hasEnergyData && energy < THRESHOLD_LOW)) {
-        add('nsdr',
-          `Workout effort is ${avg.workoutEffort}/10, and ${avg.hasSleepData && sleep < THRESHOLD_LOW ? `sleep is ${sleep}/10` : `energy is ${energy}/10`}.`,
-          'Training intensity may be outpacing recovery.',
-          `High training intensity compresses recovery windows. When effort stays above 7.5/10 and either sleep quality or energy starts dropping, the body is signaling that output is exceeding input. NSDR provides a direct recovery stimulus that sleep alone may not fully supply.`,
-          4);
-        add('evening_light_dim',
-          `Workout effort is ${avg.workoutEffort}/10 and sleep quality is ${sleep}/10 — high training intensity may be disrupting sleep architecture.`,
-          'Training intensity may be outpacing recovery.',
-          `Evening workouts or unmanaged evening light exposure can delay melatonin onset and reduce slow-wave sleep — the most restorative phase. Dimming overhead lights 2–3 hours before bed is the lowest-cost first step to protect sleep quality when training load is high.`,
-          5);
-      }
-    }
-
-    // ── Stress elevated (priority tier 2.5) ──────────────────────────────
-    if (avg.hasStressData && avg.stress >= 7) {
+  // ── Mood low (priority tier 5) ────────────────────────────────────────────
+  if (avg.hasMoodData && mood < THRESHOLD_LOW) {
+    add('zone2_cardio',
+      `Mood averaged ${mood}/10 this week.`,
+      `Mood is low. Try adding 20–30 minutes of easy zone 2 cardio per day for 7 days — it's one of the most consistent mood tools available.`,
+      `Zone 2 cardio raises BDNF (brain-derived neurotrophic factor), normalizes cortisol, and provides a sense of accomplishment without taxing recovery. If you're already training hard, a separate easy session often does more for mood than adding intensity.`,
+      12);
+    add('gratitude_journal',
+      `Mood averaged ${mood}/10 this week.`,
+      `Mood is low. Try writing down 3 specific things you're grateful for each day for 7 days — it's one of the highest-evidence mood interventions available.`,
+      `Gratitude journaling has one of the strongest effect sizes for mood among low-cost daily practices in positive psychology research. It trains the brain's attention toward positive input rather than the default threat-scanning that low mood reinforces.`,
+      12);
+    add('recovery_walk',
+      `Mood averaged ${mood}/10 this week. Low-intensity outdoor movement directly affects mood through multiple pathways.`,
+      `Mood is low. A short daily walk outside — even 15 minutes — can meaningfully shift mood through sunlight, rhythmic movement, and lower cortisol.`,
+      `Outdoor walking combines sunlight exposure (serotonin and vitamin D), rhythmic bilateral movement (a natural stress regulator), and reduced cortisol — three direct mood inputs in one low-effort habit.`,
+      13);
+    if (avg.stressInNotes || (avg.hasStressData && avg.stress >= 6)) {
       add('physiological_sigh',
-        `Stress is averaging ${avg.stress}/10 over the last 7 days.`,
-        'Stress is elevated. Add a nervous system downshift habit.',
-        `When average stress stays at or above 7/10 across a week, cortisol baseline is elevated chronically. Physiological sighs are the fastest-acting autonomic intervention: used reactively (in moments of stress), they prevent cortisol spikes from compounding across the day. 30 seconds, no setup required.`,
-        5);
-      // Morning sunlight for stress regulation — only if sleep is not the primary issue
-      if (!sleepDurationLow) {
-        add('morning_sunlight',
-          `Stress is averaging ${avg.stress}/10. Morning light helps regulate the cortisol awakening response.`,
-          'Stress is elevated. Add a nervous system downshift habit.',
-          `The cortisol awakening response (CAR) in the first 30–45 minutes after waking is the body's primary daily stress regulation mechanism. Morning sunlight syncs this response to a predictable rhythm, reducing erratic cortisol fluctuations that amplify perceived stress throughout the day.`,
-          6);
-      }
+        `Mood averaged ${mood}/10 and ${avg.hasStressData ? `stress averaged ${avg.stress}/10` : 'notes suggest stress is accumulating'} this week.`,
+        `Mood is low and stress is present. Try physiological sigh breathing when you notice stress rising — it can prevent acute cortisol spikes from compounding into mood suppression.`,
+        `When stress and low mood co-occur, cortisol is likely elevated chronically. Physiological sighs used reactively prevent acute spikes from compounding across the day — distinct from a meditation practice. Works in 30 seconds, anywhere.`,
+        13);
     }
+  }
 
-    // ── Energy (priority tier 3) ──────────────────────────────────────────
-    if (avg.hasEnergyData && energy < THRESHOLD_LOW) {
-      // Morning sunlight deferred when sleep hours are low (fixing duration is root cause)
-      if (!sleepDurationLow) {
-        add('morning_sunlight',
-          `Completion is ${comp}%, but energy is averaging ${energy}/10.`,
-          "You're doing the tasks, but energy is lagging. Recovery, light exposure, or food timing may need attention.",
-          `Morning sunlight suppresses residual melatonin and triggers the cortisol awakening response — the body's built-in alertness signal. Without it, energy tends to plateau lower through the day, particularly when workouts and a demanding routine are involved.`,
-          6);
-      }
-      if (isJoey && avg.glucoseWarnings >= 1) {
-        add('post_meal_walk',
-          `Completion is ${comp}%, energy is ${energy}/10, and glucose notes suggest post-meal patterns.`,
-          "Post-meal energy crashes may be linked to glucose response. A short walk after meals may help.",
-          `Post-meal muscle activity drives glucose into cells via a non-insulin pathway (GLUT4 translocation), reducing the amplitude of glucose peaks. Smaller peaks mean fewer 1–2 hour post-meal energy crashes.`,
-          6);
-      }
-      add('nsdr',
-        `Completion is ${comp}%, energy is ${energy}/10 despite a solid routine.`,
-        "You're doing the tasks, but energy is lagging. Recovery may need direct support.",
-        `Cumulative fatigue builds even when sleep nights look adequate. NSDR replenishes dopamine stores and directly targets nervous system recovery — one of the few tools that works even when you can't sleep more.`,
-        7);
-    }
+  // ── Confidence low (priority tier 6) ─────────────────────────────────────
+  if (avg.hasConfData && conf < THRESHOLD_LOW) {
+    add('daily_win_journal',
+      `Confidence averaged ${conf}/10 this week.`,
+      `Confidence is low. Try writing down 1–3 specific wins each evening for 7 days — confidence follows a concrete record of kept promises.`,
+      `Confidence builds bottom-up from a documented record of competence, not top-down from motivation or positive thinking. A daily win journal gives the brain concrete evidence to draw from — faster than trying to do more or feel more motivated.`,
+      14);
+    add('micro_commitment',
+      `Confidence averaged ${conf}/10 this week.`,
+      `Confidence is low. Pick one small daily promise and keep it without exception for 7 days — self-trust is rebuilt one kept commitment at a time.`,
+      `Confidence is downstream of consistent small wins. A micro-commitment that always happens (no exceptions) builds the neural record of reliability that genuine confidence is built on. Identity follows behavior — this is the fastest re-anchor.`,
+      14);
+    add('phone_free_focus',
+      `Confidence averaged ${conf}/10 this week.`,
+      `Confidence is low. A daily 90-minute phone-free focus block creates direct proof of being capable and in control of your attention.`,
+      `A 90-minute uninterrupted focus block produces direct evidence of competence and self-control. Repeated daily, it accumulates into confidence through demonstrated capability — not motivation, but proof.`,
+      15);
+  }
 
-    // ── Mood (priority tier 4) ────────────────────────────────────────────
-    if (avg.hasMoodData && mood < THRESHOLD_LOW) {
-      add('zone2_cardio',
-        `Completion is ${comp}%, but mood is averaging ${mood}/10.`,
-        'Your routine is consistent, but mood is lagging. Add a low-intensity nervous system/mood support habit.',
-        `Zone 2 cardio raises BDNF (brain-derived neurotrophic factor), normalizes cortisol, and provides accomplishment without taxing recovery. If you're already training hard, a separate easy session may do more for mood than adding intensity.`,
-        8);
-      if (!sleepDurationLow) {
-        add('morning_sunlight',
-          `Completion is ${comp}%, but mood is ${mood}/10. Morning light directly influences serotonin availability.`,
-          'Your routine is consistent, but mood is lagging. A circadian anchor may help stabilize the baseline.',
-          `Morning sunlight drives serotonin synthesis and stabilizes mood through circadian rhythm regulation. Low serotonin baseline is a common contributor to low mood even in people with a strong exercise and sleep routine.`,
-          9);
-      }
-      if (avg.stressInNotes || (avg.hasStressData && avg.stress >= 6)) {
-        add('physiological_sigh',
-          `Completion is ${comp}%, mood is ${mood}/10, and ${avg.hasStressData ? `stress is averaging ${avg.stress}/10` : 'notes suggest stress is accumulating'}.`,
-          'Your routine is consistent, but mood is lagging. A real-time stress tool may lower the baseline.',
-          `When stress and low mood co-occur, cortisol is likely elevated chronically. Physiological sighs used reactively prevent acute cortisol spikes from compounding — distinct from a meditation practice. Works in 30 seconds anywhere.`,
-          9);
-      }
-    }
+  // ── Joey — glucose note patterns (priority tier 7) ────────────────────────
+  if (isJoey && avg.glucoseWarnings >= 2) {
+    add('post_meal_walk',
+      `Glucose notes over the last 7 days show repeated patterns worth monitoring (${avg.glucoseWarnings} flags).`,
+      `Your Dexcom notes flag repeated patterns. A short walk after meals is one of the most accessible tools for smoothing post-meal glucose response.`,
+      `Post-meal walking increases muscle glucose uptake via GLUT4 translocation — a non-insulin pathway — reducing the amplitude of post-meal glucose peaks. This is a lifestyle intervention. Watch Dexcom trends before, during, and after. Carry fast-acting carbs during workouts. Discuss repeated patterns with a clinician.`,
+      16);
+  }
 
-    // ── Confidence (priority tier 5) ──────────────────────────────────────
-    if (avg.hasConfData && conf < THRESHOLD_LOW) {
-      add('micro_commitment',
-        `Completion is ${comp}%, but confidence is averaging ${conf}/10.`,
-        'Confidence may need proof-building, not motivation. Choose one promise and keep it daily.',
-        `Confidence is downstream of consistent small wins. A micro-commitment that always happens creates the neural record of reliability that genuine confidence is built on — faster than trying to do more.`,
-        10);
-      add('phone_free_focus',
-        `Completion is ${comp}%, but confidence is ${conf}/10.`,
-        'Confidence may need proof-building, not motivation. Demonstrated competence compounds.',
-        `A 90-minute uninterrupted focus block creates direct evidence of being capable and in control of attention. Repeated daily, it accumulates into confidence through demonstrated competence — not motivation, but proof.`,
-        11);
-    }
+  // ── Consistency fallback (for < 60% completion with no priority hit above) ─
+  if (comp < 60 && candidates.length === 0) {
+    add('min_floor_habit',
+      `Task completion averaged ${comp}% this week.`,
+      `Consistency is the first bottleneck. Try defining a minimum "floor" version of your hardest habit and hitting just that for 7 days.`,
+      `When completion drops below 60%, the routine is likely too demanding for the current season. A floor target — the minimum viable version of your hardest habit — keeps the identity intact on hard days without letting zero-days accumulate.`,
+      17);
+    add('micro_commitment',
+      `Task completion averaged ${comp}% this week.`,
+      `Consistency is the first bottleneck. Pick one small daily promise you can keep every single day without exception, and rebuild from there.`,
+      `A single micro-commitment that always happens rebuilds self-trust faster than trying to do more. Identity follows behavior — this is the fastest re-anchor when momentum has broken down.`,
+      18);
   }
 
   // ── High workout rate but very low energy ─────────────────────────────────
   if (avg.workoutRate >= 75 && avg.hasEnergyData && energy < THRESHOLD_VERY_LOW) {
     add('nsdr',
-      `Workout rate is ${avg.workoutRate}%, but energy is ${energy}/10 — training load may be outpacing recovery.`,
-      'Training is happening, but recovery may be behind.',
-      `High training frequency without matching recovery creates cumulative fatigue that compounds over 7–14 days. NSDR targets nervous system recovery directly rather than waiting for sleep to compensate.`,
-      7);
+      `Workout rate is ${avg.workoutRate}%, but energy averaged ${energy}/10 — training load may be outpacing recovery.`,
+      `You're training frequently but energy is very low. A daily NSDR session can help the nervous system catch up on recovery.`,
+      `High training frequency without matching recovery creates cumulative fatigue that compounds over 7–14 days. NSDR targets nervous system recovery directly — it's often the missing input when training volume is high but energy stays low.`,
+      11);
   }
 
   // ── High diet completion but hunger in notes ──────────────────────────────
   if (avg.hungerInNotes && avg.dietRate >= 70) {
     add('protein_baseline',
       `Diet adherence is ${avg.dietRate}%, but notes suggest hunger or cravings are present.`,
-      'Diet adherence is good, but hunger may threaten consistency. Protein and meal structure may help.',
+      `Diet adherence is solid, but hunger keeps showing up. Try tracking daily protein for 7 days — it's often the missing lever.`,
       `Protein is the most satiating macronutrient per calorie. If diet adherence is high but hunger is still elevated, protein adequacy is the most likely lever — before willpower, timing, or restriction.`,
-      8);
+      15);
   }
 
-  // ── Joey — glucose note patterns ──────────────────────────────────────────
-  if (isJoey && avg.glucoseWarnings >= 2) {
-    add('post_meal_walk',
-      `Glucose notes over the last 7 days show repeated patterns worth monitoring.`,
-      'Watch Dexcom trends, carry fast-acting carbs during workouts, and discuss repeated patterns with a clinician.',
-      `Post-meal walking increases muscle glucose uptake via a non-insulin pathway (GLUT4 translocation), reducing post-meal glucose amplitude. This is a lifestyle intervention — not a substitute for medical guidance.`,
-      3);
-  }
-
-  // ── Fallback ──────────────────────────────────────────────────────────────
+  // ── Fallback when nothing specific flagged ────────────────────────────────
   if (candidates.length === 0 && avg.daysLogged >= 5) {
     add('physiological_sigh',
       `No clear patterns to flag right now. Things look solid.`,
-      'Your current routine seems to be working. Keep going before adding more.',
+      `Your current routine seems to be working. This is a good "insurance" habit to have in your toolkit anyway.`,
       `Even when everything looks solid, a real-time stress tool is worth having. Physiological sighs take 30 seconds and are one of the fastest-acting autonomic interventions known.`,
       99);
   }

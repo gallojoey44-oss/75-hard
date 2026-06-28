@@ -166,16 +166,16 @@ function SuggestionCard({ suggestion, isJoey, onStart, onAddTask, onDismiss }) {
 
   return (
     <div className="ins-suggest-card">
-      {/* Pattern row */}
+      {/* Metric noticed */}
       <div className="ins-suggest-pattern">
-        <span className="ins-suggest-pattern-icon">💡</span>
+        <span className="ins-suggest-pattern-icon">📊</span>
         <div>
-          <div className="ins-suggest-pattern-label">PATTERN NOTICED</div>
+          <div className="ins-suggest-pattern-label">METRIC NOTICED</div>
           <div>{suggestion.pattern}</div>
         </div>
       </div>
 
-      {/* Coach message */}
+      {/* Coach recommendation */}
       <div className="ins-suggest-message">{suggestion.message}</div>
 
       {/* Habit block */}
@@ -199,15 +199,18 @@ function SuggestionCard({ suggestion, isJoey, onStart, onAddTask, onDismiss }) {
           <span className="ins-meta-chip">📅 {habit.trialDays} days</span>
         </div>
 
-        {/* Daily task */}
+        {/* Daily task + trial length */}
         <div className="ins-suggest-task">
-          <span className="ins-suggest-task-label">DAILY TASK</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span className="ins-suggest-task-label">DAILY TASK</span>
+            <span className="ins-suggest-task-trial">📅 {habit.trialDays}-day trial</span>
+          </div>
           <span>{habit.task}</span>
         </div>
 
         {/* Why this habit helps */}
         <div className="ins-suggest-why">
-          <span className="ins-suggest-why-label">WHY THIS HELPS</span>
+          <span className="ins-suggest-why-label">WHY IT MAY HELP</span>
           <span>{habit.why}</span>
         </div>
 
@@ -487,12 +490,12 @@ export default function InsightsView() {
           </details>
         )}
 
-        {/* 3. Personalized Recommendations */}
+        {/* 3. Recommended Tasks */}
         {suggestions.length > 0 && (
           <div className="ins-section">
-            <div className="ins-section-title">💡 Personalized Recommendations</div>
+            <div className="ins-section-title">💡 Recommended Tasks</div>
             <p className="ins-section-sub">
-              Based on your last 7 days. Try one experiment for 7 days, then come back to compare.
+              Based on your last 7 days. Add to your daily checklist or run a 7-day experiment, then come back to compare.
             </p>
             {suggestions.map(s => (
               <SuggestionCard
