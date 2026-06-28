@@ -411,20 +411,7 @@ export default function DailyView({ editDayNum, setView }) {
           hint="1 = very calm · 10 = very stressed"
         />
 
-        {/* Glucose/Dexcom — Joey only */}
-        {isMe && (
-          <div style={{ marginTop: 8 }}>
-            <div className="section-title" style={{ marginBottom: 8 }}>📊 Glucose / Dexcom Notes</div>
-            <textarea
-              className="log-textarea"
-              rows={2}
-              style={{ marginBottom: 0 }}
-              placeholder="Blood sugar readings, Dexcom trends…"
-              value={dayData?.glucoseNotes || ''}
-              onChange={e => handleUpdate({ glucoseNotes: e.target.value })}
-            />
-          </div>
-        )}
+
       </div>
 
       {/* Celebration modal */}

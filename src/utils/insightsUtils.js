@@ -1,4 +1,3 @@
-const GLUCOSE_KEYWORDS = ['low', 'high', 'spike', 'crash', 'weird', 'unstable', 'drop', 'rise', 'bad'];
 const STRESS_KEYWORDS  = ['stress', 'anxious', 'anxiety', 'overwhelm', 'overwhelmed', 'tired', 'exhausted', 'irritable', 'frustrated', 'angry'];
 const HUNGER_KEYWORDS  = ['hungry', 'hunger', 'craving', 'cravings', 'snacked', 'overate', 'binge', 'starving'];
 
@@ -17,7 +16,6 @@ export function computeAverages(dayNums, days, tasks) {
     recovery: 0, workoutEffort: 0, stress: 0,
     hoursSlept: 0,
     workoutRate: 0, dietRate: 0, mentalRate: 0,
-    glucoseWarnings: 0,
     stressInNotes: false, hungerInNotes: false,
     hasEnergyData: false, hasSleepData: false,
     hasMoodData: false,   hasConfData: false,
@@ -38,7 +36,6 @@ export function computeAverages(dayNums, days, tasks) {
   let workoutDone = 0, workoutTotal = 0;
   let dietDone    = 0, dietTotal    = 0;
   let mentalDone  = 0, mentalTotal  = 0;
-  let glucoseWarnings = 0;
   let stressNoteCount = 0, hungerNoteCount = 0;
 
   const workoutTask = tasks.find(t => t.id === 'workout'  || t.id === 'gf_workout');
@@ -67,10 +64,6 @@ export function computeAverages(dayNums, days, tasks) {
     if (dietTask)    { dietTotal++;    if (data.tasks?.[dietTask.id])    dietDone++;    }
     if (mentalTask)  { mentalTotal++;  if (data.tasks?.[mentalTask.id])  mentalDone++;  }
 
-    if (data.glucoseNotes) {
-      const g = data.glucoseNotes.toLowerCase();
-      if (GLUCOSE_KEYWORDS.some(kw => g.includes(kw))) glucoseWarnings++;
-    }
     if (data.notes) {
       const nText = data.notes.toLowerCase();
       if (STRESS_KEYWORDS.some(kw => nText.includes(kw))) stressNoteCount++;
@@ -90,7 +83,6 @@ export function computeAverages(dayNums, days, tasks) {
   base.workoutRate   = workoutTotal    ? Math.round((workoutDone   / workoutTotal)    * 100)      : 0;
   base.dietRate      = dietTotal       ? Math.round((dietDone      / dietTotal)       * 100)      : 0;
   base.mentalRate    = mentalTotal     ? Math.round((mentalDone    / mentalTotal)     * 100)      : 0;
-  base.glucoseWarnings   = glucoseWarnings;
   base.stressInNotes     = stressNoteCount  >= 2;
   base.hungerInNotes     = hungerNoteCount  >= 2;
   base.hasEnergyData     = energyCount      >= 2;
@@ -168,7 +160,7 @@ export function getCoachMessage(avg, sleepTarget = 8) {
  * Priority order: sleep duration → sleep quality → consistency →
  *   stress → recovery/training load → energy → mood → confidence
  */
-export function getPriorityBottleneck(avg, sleepTarget = 8, isJoey = false) {
+export function getPriorityBottleneck(avg, sleepTarget = 8) {
   const none = { bottleneck: null, label: '', emoji: '', coachMsg: '', primary: [], secondary: [] };
   if (avg.daysLogged < 3) return none;
 
@@ -241,7 +233,7 @@ export function getPriorityBottleneck(avg, sleepTarget = 8, isJoey = false) {
       emoji: '⚡',
       coachMsg: `Energy averaged ${avg.energy}/10 this week despite a consistent routine. This typically points to a recovery deficit — sleep quality, circadian timing, hydration, or training load.`,
       primary: ['morning_sunlight', 'hydration_check'],
-      secondary: isJoey ? ['post_meal_walk', 'nsdr'] : ['nsdr', 'earlier_bedtime'],
+      secondary: ['nsdr', 'earlier_bedtime'],
     };
   }
 
@@ -285,7 +277,7 @@ export function getPriorityBottleneck(avg, sleepTarget = 8, isJoey = false) {
  *
  * Each suggestion: { habitId, pattern, message, reason, priority }
  */
-export function generateSuggestions(avg, isJoey, activeHabitIds = [], dismissedHabitIds = [], sleepTarget = 8) {
+export function generateSuggestions(avg, activeHabitIds = [], dismissedHabitIds = [], sleepTarget = 8) {
   if (avg.daysLogged < 3) return [];
 
   const excluded   = new Set([...activeHabitIds, ...dismissedHabitIds]);
@@ -415,13 +407,6 @@ export function generateSuggestions(avg, isJoey, activeHabitIds = [], dismissedH
       `Energy is low. Try tracking your water intake and hitting 2.5–3L/day for 7 days — especially on training days.`,
       `Even mild dehydration (1–2% of body weight) measurably reduces energy, cognitive function, and mood. Most people in a demanding training routine underestimate daily fluid needs. Adding electrolytes on hard training days helps maintain performance.`,
       10);
-    if (isJoey && avg.glucoseWarnings >= 1) {
-      add('post_meal_walk',
-        `Energy averaged ${energy}/10 this week, and glucose notes suggest post-meal patterns worth monitoring.`,
-        `Energy is low and glucose notes flag a pattern. A short walk after your largest meal may reduce post-meal crashes.`,
-        `Post-meal muscle activity drives glucose into cells via a non-insulin pathway (GLUT4 translocation), reducing the amplitude of glucose peaks. Smaller peaks mean fewer 1–2 hour post-meal energy crashes. This is a lifestyle intervention — not a substitute for medical guidance.`,
-        10);
-    }
     add('nsdr',
       `Energy averaged ${energy}/10 this week despite a solid routine.`,
       `Energy is low. Try a 10–20 min NSDR session in the afternoon for 7 days to support recovery without requiring more sleep time.`,
@@ -472,15 +457,6 @@ export function generateSuggestions(avg, isJoey, activeHabitIds = [], dismissedH
       `Confidence is low. A daily 90-minute phone-free focus block creates direct proof of being capable and in control of your attention.`,
       `A 90-minute uninterrupted focus block produces direct evidence of competence and self-control. Repeated daily, it accumulates into confidence through demonstrated capability — not motivation, but proof.`,
       15);
-  }
-
-  // ── Joey — glucose note patterns (priority tier 7) ────────────────────────
-  if (isJoey && avg.glucoseWarnings >= 2) {
-    add('post_meal_walk',
-      `Glucose notes over the last 7 days show repeated patterns worth monitoring (${avg.glucoseWarnings} flags).`,
-      `Your Dexcom notes flag repeated patterns. A short walk after meals is one of the most accessible tools for smoothing post-meal glucose response.`,
-      `Post-meal walking increases muscle glucose uptake via GLUT4 translocation — a non-insulin pathway — reducing the amplitude of post-meal glucose peaks. This is a lifestyle intervention. Watch Dexcom trends before, during, and after. Carry fast-acting carbs during workouts. Discuss repeated patterns with a clinician.`,
-      16);
   }
 
   // ── Consistency fallback (for < 60% completion with no priority hit above) ─

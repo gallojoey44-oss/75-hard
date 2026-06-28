@@ -1877,6 +1877,13 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   background: var(--warn);
 }
 
+.ins-no-data {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text3, #888);
+  font-style: italic;
+}
+
 /* Section headers */
 .ins-section {
   display: flex;

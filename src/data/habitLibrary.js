@@ -56,7 +56,6 @@ export const HABIT_LIBRARY = [
     task: 'Put your phone in another room (or on Do Not Disturb) 30 minutes before your target bedtime.',
     trialDays: 7,
     why: 'Phone use near bedtime elevates alertness through both blue light and psychological engagement, delaying sleep onset.',
-    joeyNote: 'Keep Dexcom critical alerts enabled — use Do Not Disturb with critical alerts bypassing the mute.',
     tags: ['sleep', 'wind-down', 'phone'],
   },
   {
@@ -142,7 +141,6 @@ export const HABIT_LIBRARY = [
     task: 'Do 20–30 min of easy/moderate cardio where you can still speak in full sentences.',
     trialDays: 7,
     why: 'Supports mood, aerobic fitness, recovery, and metabolic health. One of the most consistently effective mood tools.',
-    diabetesNote: 'Watch Dexcom trends during and after. Keep fast-acting carbs nearby. Discuss repeated glucose patterns with a clinician.',
     tags: ['mood', 'cardio', 'endurance'],
   },
   {
@@ -200,7 +198,6 @@ export const HABIT_LIBRARY = [
     task: 'Walk 10–15 min within 30 min of your largest or highest-carb meal.',
     trialDays: 7,
     why: 'Muscle activity after meals can help smooth post-meal glucose response and reduce energy crashes.',
-    diabetesNote: 'Watch Dexcom trends before, during, and after. Keep fast-acting carbs nearby. Discuss repeated glucose patterns with a clinician. This is not a substitute for medical guidance.',
     tags: ['glucose', 'digestion', 'metabolism'],
   },
   {
@@ -230,7 +227,6 @@ export const HABIT_LIBRARY = [
     task: 'Put your phone out of sight and complete one focused 90-minute work or creative block each day.',
     trialDays: 7,
     why: 'Reduces distraction load and builds deep-work capacity. Consistent focus blocks tend to increase confidence through accomplishment.',
-    joeyNote: 'Make sure Dexcom critical alerts remain audible and visible while your phone is put away.',
     tags: ['focus', 'productivity', 'deep work'],
   },
   {

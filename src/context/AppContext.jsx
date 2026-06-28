@@ -20,8 +20,7 @@ const DEFAULT_TASKS_ME = [
   { id: 'reading',   name: '10 pages read',              icon: '📚',  order: 3 },
   { id: 'photo',     name: 'Progress photo taken',       icon: '📸',  order: 4 },
   { id: 'sleep_log', name: 'Sleep/energy logged',        icon: '😴',  order: 5 },
-  { id: 'glucose',   name: 'Glucose/Dexcom notes',       icon: '📊',  order: 6 },
-  { id: 'mental',    name: 'Mental training complete',   icon: '🧠',  order: 7 },
+  { id: 'mental',    name: 'Mental training complete',   icon: '🧠',  order: 6 },
 ];
 
 const DEFAULT_TASKS_GF = [

@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { getTodayStr } from '../utils/dateUtils';
 import { HABIT_LIBRARY, getHabit } from '../data/habitLibrary';
 import { computeAverages, generateSuggestions, assessExperiment, getCoachMessage, getPriorityBottleneck } from '../utils/insightsUtils';
-import BuildBanner, { BUILD_VERSION, BUILD_LABEL, PRODUCTION_URL } from './BuildBanner';
+import BuildBanner from './BuildBanner';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Sub-components
@@ -78,11 +78,26 @@ function MetricCell({ label, value, hasData, warn }) {
 function RatingBar({ value, max = 10, invertWarn = false }) {
   if (!value) return null;
   const pct  = Math.round((value / max) * 100);
-  // Normal: warn if low (< 6). Inverted (stress): warn if high (≥ 7)
   const warn = invertWarn ? value >= 7 : value < 6;
   return (
     <div className="ins-bar-track">
       <div className={`ins-bar-fill${warn ? ' warn' : ''}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function MetricBarRow({ label, value, hasData, invertWarn = false }) {
+  return (
+    <div className="ins-bar-row">
+      <span className="ins-bar-label">{label}</span>
+      {hasData ? (
+        <>
+          <RatingBar value={value} invertWarn={invertWarn} />
+          <span className="ins-bar-val">{value}</span>
+        </>
+      ) : (
+        <span className="ins-no-data">No data yet</span>
+      )}
     </div>
   );
 }
@@ -97,61 +112,23 @@ function SummaryCard({ avg, label }) {
       </div>
 
       <div className="ins-metric-grid">
-        <MetricCell label="Completion" value={`${avg.completion}%`} hasData={avg.daysLogged > 0} warn={avg.completion < 60} />
-        <MetricCell label="Energy"     value={avg.energy}     hasData={avg.hasEnergyData} warn={avg.hasEnergyData && avg.energy < 6} />
-        <MetricCell label="Sleep"      value={avg.sleep}      hasData={avg.hasSleepData}  warn={avg.hasSleepData  && avg.sleep  < 6} />
-        <MetricCell label="Mood"       value={avg.mood}       hasData={avg.hasMoodData}   warn={avg.hasMoodData   && avg.mood   < 6} />
+        <MetricCell label="Completion"  value={`${avg.completion}%`}  hasData={avg.daysLogged > 0}   warn={avg.completion < 60} />
+        <MetricCell label="Energy"      value={avg.energy}            hasData={avg.hasEnergyData}    warn={avg.hasEnergyData   && avg.energy     < 6} />
+        <MetricCell label="Sleep"       value={avg.sleep}             hasData={avg.hasSleepData}     warn={avg.hasSleepData    && avg.sleep      < 6} />
+        <MetricCell label="Mood"        value={avg.mood}              hasData={avg.hasMoodData}      warn={avg.hasMoodData     && avg.mood       < 6} />
+        <MetricCell label="Confidence"  value={avg.confidence}        hasData={avg.hasConfData}      warn={avg.hasConfData     && avg.confidence < 6} />
+        <MetricCell label="Recovery"    value={avg.recovery}          hasData={avg.hasRecoveryData}  warn={avg.hasRecoveryData && avg.recovery   < 6} />
+        <MetricCell label="Wkt Effort"  value={avg.workoutEffort}     hasData={avg.hasEffortData}    warn={false} />
+        <MetricCell label="Stress"      value={avg.stress}            hasData={avg.hasStressData}    warn={avg.hasStressData   && avg.stress    >= 7} />
       </div>
 
-      {avg.hasEnergyData && (
-        <div className="ins-bar-row">
-          <span className="ins-bar-label">Energy</span>
-          <RatingBar value={avg.energy} />
-          <span className="ins-bar-val">{avg.energy}</span>
-        </div>
-      )}
-      {avg.hasSleepData && (
-        <div className="ins-bar-row">
-          <span className="ins-bar-label">Sleep</span>
-          <RatingBar value={avg.sleep} />
-          <span className="ins-bar-val">{avg.sleep}</span>
-        </div>
-      )}
-      {avg.hasMoodData && (
-        <div className="ins-bar-row">
-          <span className="ins-bar-label">Mood</span>
-          <RatingBar value={avg.mood} />
-          <span className="ins-bar-val">{avg.mood}</span>
-        </div>
-      )}
-      {avg.hasConfData && (
-        <div className="ins-bar-row">
-          <span className="ins-bar-label">Confidence</span>
-          <RatingBar value={avg.confidence} />
-          <span className="ins-bar-val">{avg.confidence}</span>
-        </div>
-      )}
-      {avg.hasRecoveryData && (
-        <div className="ins-bar-row">
-          <span className="ins-bar-label">Recovery</span>
-          <RatingBar value={avg.recovery} />
-          <span className="ins-bar-val">{avg.recovery}</span>
-        </div>
-      )}
-      {avg.hasEffortData && (
-        <div className="ins-bar-row">
-          <span className="ins-bar-label">Wkt Effort</span>
-          <RatingBar value={avg.workoutEffort} warn={false} />
-          <span className="ins-bar-val">{avg.workoutEffort}</span>
-        </div>
-      )}
-      {avg.hasStressData && (
-        <div className="ins-bar-row">
-          <span className="ins-bar-label">Stress</span>
-          <RatingBar value={avg.stress} invertWarn />
-          <span className="ins-bar-val">{avg.stress}</span>
-        </div>
-      )}
+      <MetricBarRow label="Energy"      value={avg.energy}        hasData={avg.hasEnergyData} />
+      <MetricBarRow label="Sleep"       value={avg.sleep}         hasData={avg.hasSleepData} />
+      <MetricBarRow label="Mood"        value={avg.mood}          hasData={avg.hasMoodData} />
+      <MetricBarRow label="Confidence"  value={avg.confidence}    hasData={avg.hasConfData} />
+      <MetricBarRow label="Recovery"    value={avg.recovery}      hasData={avg.hasRecoveryData} />
+      <MetricBarRow label="Wkt Effort"  value={avg.workoutEffort} hasData={avg.hasEffortData} />
+      <MetricBarRow label="Stress"      value={avg.stress}        hasData={avg.hasStressData} invertWarn />
     </div>
   );
 }
@@ -159,7 +136,7 @@ function SummaryCard({ avg, label }) {
 const EVIDENCE_COLOR = { strong: '#10B981', moderate: '#F59E0B', anecdotal: '#9090B8' };
 const DIFF_COLOR     = { easy: '#10B981',   medium: '#F59E0B',   hard: '#EF4444' };
 
-function SuggestionCard({ suggestion, isJoey, onStart, onAddTask, onDismiss }) {
+function SuggestionCard({ suggestion, onStart, onAddTask, onDismiss }) {
   const habit = getHabit(suggestion.habitId);
   const [showReason, setShowReason] = useState(false);
   if (!habit) return null;
@@ -227,14 +204,6 @@ function SuggestionCard({ suggestion, isJoey, onStart, onAddTask, onDismiss }) {
           <div className="ins-reason-body">{suggestion.reason}</div>
         )}
 
-        {isJoey && habit.diabetesNote && (
-          <div className="ins-diabetes-note">
-            ⚠️ <strong>Glucose note:</strong> {habit.diabetesNote}
-          </div>
-        )}
-        {isJoey && habit.joeyNote && (
-          <div className="ins-safety-note">ℹ️ {habit.joeyNote}</div>
-        )}
         {habit.safetyNote && (
           <div className="ins-safety-note">ℹ️ {habit.safetyNote}</div>
         )}
@@ -258,7 +227,7 @@ function SuggestionCard({ suggestion, isJoey, onStart, onAddTask, onDismiss }) {
   );
 }
 
-function ExperimentCard({ experiment, currentDayNum, isJoey, onRemove }) {
+function ExperimentCard({ experiment, currentDayNum, onRemove }) {
   const habit = getHabit(experiment.habitId);
   if (!habit) return null;
 
@@ -284,9 +253,6 @@ function ExperimentCard({ experiment, currentDayNum, isJoey, onRemove }) {
           </div>
           <span className="ins-exp-pct">{pct}%</span>
         </div>
-        {isJoey && habit.diabetesNote && (
-          <div className="ins-diabetes-note" style={{ marginTop: 8 }}>⚠️ {habit.diabetesNote}</div>
-        )}
       </div>
     );
   }
@@ -382,9 +348,9 @@ export default function InsightsView() {
     .filter(([, expiry]) => expiry >= today)
     .map(([id]) => id);
 
-  const suggestions  = generateSuggestions(avg7, isJoey, activeHabits, dismissedIds, sleepTarget);
+  const suggestions  = generateSuggestions(avg7, activeHabits, dismissedIds, sleepTarget);
   const coachMsg     = getCoachMessage(avg7, sleepTarget);
-  const bottleneck   = getPriorityBottleneck(avg7, sleepTarget, isJoey);
+  const bottleneck   = getPriorityBottleneck(avg7, sleepTarget);
 
   // Auto-complete experiments that have passed their endDayNum
   useEffect(() => {
@@ -467,11 +433,6 @@ export default function InsightsView() {
 
       <div className="ins-content">
 
-        {/* Deployment verification */}
-        <div className="ins-deploy-verify">
-          If you can see this, the recommendation update reached production.
-        </div>
-
         {/* 1. Priority bottleneck */}
         <PriorityBottleneckCard bottleneck={bottleneck} />
 
@@ -501,7 +462,6 @@ export default function InsightsView() {
               <SuggestionCard
                 key={s.habitId}
                 suggestion={s}
-                isJoey={isJoey}
                 onStart={() => handleStartExperiment(s.habitId)}
                 onAddTask={() => handleAddTask(s.habitId)}
                 onDismiss={() => dismissHint(s.habitId)}
@@ -528,7 +488,6 @@ export default function InsightsView() {
                 currentDayNum={dayNum}
                 days={days}
                 tasks={tasks}
-                isJoey={isJoey}
                 onRemove={() => updateExperiment(exp.id, { status: 'dismissed' })}
               />
             ))}
@@ -546,7 +505,6 @@ export default function InsightsView() {
                 currentDayNum={dayNum}
                 days={days}
                 tasks={tasks}
-                isJoey={isJoey}
                 onRemove={() => {}}
               />
             ))}
@@ -580,7 +538,7 @@ export default function InsightsView() {
 
         {/* Disclaimer */}
         <div className="ins-disclaimer">
-          These are creator-informed experiments, not medical advice. Do not change medications or insulin doses based on app suggestions. Discuss repeated glucose patterns with a clinician.
+          These are creator-informed experiments, not medical advice. Always consult a qualified health professional before making significant changes to your diet, exercise, or health routine.
         </div>
       </div>
     </div>
