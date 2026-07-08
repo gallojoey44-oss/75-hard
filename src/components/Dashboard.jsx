@@ -4,7 +4,7 @@ import { formatDateShort } from '../utils/dateUtils';
 import QuoteOfTheDay from './QuoteOfTheDay';
 import BuildBanner from './BuildBanner';
 import {
-  computeTotalXP, computeTodayXP, getRankInfo,
+  computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
   computeBadges, detectSetback, BADGE_DEFS,
 } from '../utils/gamification';
 
@@ -28,7 +28,7 @@ function CircleRing({ value, max, size = 120 }) {
   );
 }
 
-function XPWidget({ rankInfo, todayXP, onToggleDetails, showDetails }) {
+function XPWidget({ rankInfo, challengeXP, todayXP, onToggleDetails, showDetails }) {
   return (
     <div className="xp-widget">
       <div className="xp-widget-top">
@@ -38,6 +38,10 @@ function XPWidget({ rankInfo, todayXP, onToggleDetails, showDetails }) {
         <button className="xp-details-btn" onClick={onToggleDetails}>
           {showDetails ? '▲' : '▼ Details'}
         </button>
+      </div>
+      <div className="xp-split-row">
+        <span className="xp-split-item">🔥 Challenge: <strong>{challengeXP.toLocaleString()}</strong></span>
+        <span className="xp-split-item">🏛 Lifetime: <strong>{rankInfo.xp.toLocaleString()}</strong></span>
       </div>
       <div className="xp-bar-wrap">
         <div className="xp-bar-track">
@@ -60,7 +64,7 @@ function XPWidget({ rankInfo, todayXP, onToggleDetails, showDetails }) {
   );
 }
 
-function RankDetailsCard({ rankInfo, longest, totalDone, comebackCompletions }) {
+function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, totalDone, comebackCompletions }) {
   return (
     <div className="rank-details-card">
       <div className="rank-details-title">Rank Details</div>
@@ -76,9 +80,19 @@ function RankDetailsCard({ rankInfo, longest, totalDone, comebackCompletions }) 
           </div>
         )}
         <div className="rank-detail-row">
-          <span className="rank-detail-label">Total XP</span>
+          <span className="rank-detail-label">Lifetime XP</span>
           <span className="rank-detail-value">{rankInfo.xp.toLocaleString()}</span>
         </div>
+        <div className="rank-detail-row">
+          <span className="rank-detail-label">Challenge XP</span>
+          <span className="rank-detail-value">{challengeXP.toLocaleString()}</span>
+        </div>
+        {archivedChallenges > 0 && (
+          <div className="rank-detail-row">
+            <span className="rank-detail-label">Past Challenges</span>
+            <span className="rank-detail-value">{archivedChallenges}</span>
+          </div>
+        )}
         {rankInfo.next && (
           <div className="rank-detail-row">
             <span className="rank-detail-label">XP to Next</span>
@@ -189,7 +203,7 @@ function ComebackCard({ dayNum, comebackMode, setback, onStart, onDismiss, onCom
 
 export default function Dashboard({ setView }) {
   const {
-    activeProfile, profile, profiles, days, allDays,
+    activeProfile, profile, profiles, days, allDays, archives,
     getDayNumber, getDayCompletion, getStreak, getLongestStreak,
     startChallenge,
     setActiveProfile,
@@ -211,15 +225,19 @@ export default function Dashboard({ setView }) {
 
   const otherProfile = activeProfile === 'me' ? 'girlfriend' : 'me';
 
-  const xpData   = dayNum ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum) : { total: 0 };
-  const rankInfo = getRankInfo(xpData.total);
+  const profileArchives = archives[activeProfile] || [];
+  const xpData     = dayNum ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum) : { total: 0, rawTotal: 0 };
+  const lifetimeXP = computeLifetimeXP(profileArchives, xpData.rawTotal || 0);
+  // Rank is based on Lifetime XP — it survives starting a new challenge
+  const rankInfo = getRankInfo(lifetimeXP);
   const todayXP  = dayNum ? computeTodayXP(allDays, profiles, activeProfile, getDayCompletion, dayNum) : { gained: 0, lost: 0, streakBonus: 0 };
 
-  // Compute badges and add true_warrior_rank if XP qualifies
-  const rawBadges   = dayNum ? computeBadges(allDays, profiles, activeProfile, getDayCompletion, dayNum) : [];
-  const badges = xpData.total >= 7500 && !rawBadges.find(b => b.id === 'true_warrior_rank')
-    ? [...rawBadges, BADGE_DEFS.find(b => b.id === 'true_warrior_rank')]
-    : rawBadges;
+  // Badges are lifetime achievements: current challenge + everything archived
+  const rawBadges = dayNum ? computeBadges(allDays, profiles, activeProfile, getDayCompletion, dayNum) : [];
+  const badgeIds  = new Set(rawBadges.map(b => b.id));
+  for (const arch of profileArchives) for (const id of arch.badges || []) badgeIds.add(id);
+  if (lifetimeXP >= 7500) badgeIds.add('true_warrior_rank');
+  const badges = BADGE_DEFS.filter(b => badgeIds.has(b.id));
 
   const setback     = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
   const comebackMode = profile?.comebackMode || { active: false, dayStart: null, dismissedAt: null };
@@ -233,12 +251,12 @@ export default function Dashboard({ setView }) {
 
   // XP float animation on gain
   useEffect(() => {
-    if (prevXpRef.current !== null && xpData.total > prevXpRef.current) {
-      const diff = xpData.total - prevXpRef.current;
+    if (prevXpRef.current !== null && lifetimeXP > prevXpRef.current) {
+      const diff = lifetimeXP - prevXpRef.current;
       setXpAnim({ key: Date.now(), text: `+${diff}` });
     }
-    prevXpRef.current = xpData.total;
-  }, [xpData.total]);
+    prevXpRef.current = lifetimeXP;
+  }, [lifetimeXP]);
 
   if (!profile?.challengeStart) {
     return (
@@ -301,6 +319,7 @@ export default function Dashboard({ setView }) {
       <div style={{ position: 'relative' }}>
         <XPWidget
           rankInfo={rankInfo}
+          challengeXP={xpData.total}
           todayXP={todayXP}
           onToggleDetails={() => setShowRankDetails(v => !v)}
           showDetails={showRankDetails}
@@ -314,6 +333,8 @@ export default function Dashboard({ setView }) {
       {showRankDetails && (
         <RankDetailsCard
           rankInfo={rankInfo}
+          challengeXP={xpData.total}
+          archivedChallenges={profileArchives.length}
           longest={longest}
           totalDone={totalDone}
           comebackCompletions={comebackCompletions}

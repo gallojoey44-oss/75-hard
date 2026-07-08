@@ -5,9 +5,9 @@ import TaskManager from './TaskManager';
 import QuoteLibrary from './QuoteLibrary';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 import BuildBanner, { BUILD_VERSION } from './BuildBanner';
-import { computeTotalXP, getRankInfo } from '../utils/gamification';
+import { computeTotalXP, computeLifetimeXP, getRankInfo, BADGE_DEFS } from '../utils/gamification';
 
-const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints'];
+const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints', 'archives'];
 
 function exportData() {
   const data = {};
@@ -27,16 +27,22 @@ function exportData() {
 export default function SettingsView({ setView }) {
   const {
     activeProfile, profile, profiles, allDays,
-    updateProfile, startChallenge, resetChallenge, setChallengeStart,
+    updateProfile, startChallenge, setChallengeStart,
     getDayNumber, getDayCompletion,
     setActiveProfile,
     resetXP,
+    archives, restoreArchive, deleteArchive, deleteAllProfileData,
   } = useApp();
 
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(profile?.name || '');
-  const [showReset, setShowReset] = useState(false);
+  const [showStartNew, setShowStartNew] = useState(false);
   const [showResetXP, setShowResetXP] = useState(false);
+  const [expandedArchive, setExpandedArchive] = useState(null);
+  const [restoreTarget, setRestoreTarget] = useState(null);   // archive entry pending restore
+  const [deleteArchTarget, setDeleteArchTarget] = useState(null); // archive entry pending delete
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
+  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
   const [importStatus, setImportStatus] = useState('idle'); // 'idle'|'success'|'error'
   const importRef = useRef(null);
 
@@ -67,9 +73,9 @@ export default function SettingsView({ setView }) {
     setEditingName(false);
   }
 
-  function handleReset() {
-    resetChallenge();
-    setShowReset(false);
+  function handleStartNew() {
+    startChallenge();
+    setShowStartNew(false);
   }
 
   function handleImport(e) {
@@ -347,18 +353,85 @@ export default function SettingsView({ setView }) {
           )}
         </div>
 
-        {/* Start fresh / Reset */}
+        {/* Start challenge / Start new challenge */}
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {!profile?.challengeStart ? (
             <button className="btn btn-primary btn-full" onClick={() => startChallenge()}>
               Start Challenge Today
             </button>
           ) : (
-            <button className="btn btn-danger btn-full" onClick={() => setShowReset(true)}>
-              🔄 Reset Challenge &amp; Wipe Data
-            </button>
+            <>
+              <button className="btn btn-primary btn-full" onClick={() => setShowStartNew(true)}>
+                🔄 Start New Challenge
+              </button>
+              <p style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center' }}>
+                Your current challenge is archived first — no data is deleted.
+              </p>
+            </>
           )}
         </div>
+      </div>
+
+      {/* Challenge Archives */}
+      <div className="settings-section">
+        <div className="section-title">🗂 Challenge Archives</div>
+        {(archives[activeProfile] || []).length === 0 ? (
+          <p className="text-muted" style={{ lineHeight: 1.6 }}>
+            No archived challenges yet. When you start a new challenge, the current one is saved here —
+            its data keeps powering lifetime trends and Insights.
+          </p>
+        ) : (
+          <div className="archive-list">
+            {[...(archives[activeProfile] || [])].reverse().map(arch => {
+              const daysLogged = Object.keys(arch.days || {}).length;
+              const isOpen = expandedArchive === arch.id;
+              return (
+                <div key={arch.id} className="archive-row">
+                  <button className="archive-row-header" onClick={() => setExpandedArchive(isOpen ? null : arch.id)}>
+                    <span className="archive-row-emoji">🔥</span>
+                    <div className="archive-row-info">
+                      <div className="archive-row-title">
+                        {formatDateShort(arch.challengeStart)} – {formatDateShort(arch.endDate || arch.archivedAt)}
+                      </div>
+                      <div className="archive-row-meta">
+                        Day {arch.endDayNum} of 75 · {daysLogged} days logged · {(arch.xpEarned || 0).toLocaleString()} XP
+                      </div>
+                    </div>
+                    <span className="archive-row-arrow">{isOpen ? '▲' : '▼'}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="archive-row-body">
+                      <div className="archive-detail-grid">
+                        <div className="archive-detail"><span>Started</span><strong>{formatDateShort(arch.challengeStart)}</strong></div>
+                        <div className="archive-detail"><span>Archived</span><strong>{formatDateShort(arch.archivedAt)}</strong></div>
+                        <div className="archive-detail"><span>Days logged</span><strong>{daysLogged}</strong></div>
+                        <div className="archive-detail"><span>XP earned</span><strong>{(arch.xpEarned || 0).toLocaleString()}</strong></div>
+                        <div className="archive-detail"><span>Tasks</span><strong>{(arch.tasks || []).length}</strong></div>
+                        <div className="archive-detail"><span>Badges</span><strong>{(arch.badges || []).length}</strong></div>
+                      </div>
+                      {(arch.badges || []).length > 0 && (
+                        <div className="archive-badges">
+                          {arch.badges.map(id => {
+                            const b = BADGE_DEFS.find(bd => bd.id === id);
+                            return b ? <span key={id} className="archive-badge-chip" title={b.label}>{b.emoji} {b.label}</span> : null;
+                          })}
+                        </div>
+                      )}
+                      <div className="archive-actions">
+                        <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setRestoreTarget(arch)}>
+                          ↩️ Restore
+                        </button>
+                        <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => setDeleteArchTarget(arch)}>
+                          Delete Archive
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* XP System */}
@@ -366,15 +439,26 @@ export default function SettingsView({ setView }) {
         <div className="section-title">⚡ XP System</div>
         {(() => {
           const dayNum = getDayNumber();
-          const xpData = dayNum ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum) : { total: 0 };
-          const rankInfo = getRankInfo(xpData.total);
+          const xpData = dayNum ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum) : { total: 0, rawTotal: 0 };
+          const lifetimeXP = computeLifetimeXP(archives[activeProfile], xpData.rawTotal || 0);
+          const rankInfo = getRankInfo(lifetimeXP);
           return (
-            <div className="settings-row" style={{ marginBottom: 12 }}>
-              <span className="settings-row-label">Current Rank</span>
-              <span className="settings-row-value" style={{ color: 'var(--accent2)', fontWeight: 700 }}>
-                {rankInfo.current.name} · {xpData.total.toLocaleString()} XP
-              </span>
-            </div>
+            <>
+              <div className="settings-row">
+                <span className="settings-row-label">Rank (Lifetime)</span>
+                <span className="settings-row-value" style={{ color: 'var(--accent2)', fontWeight: 700 }}>
+                  {rankInfo.current.name}
+                </span>
+              </div>
+              <div className="settings-row">
+                <span className="settings-row-label">Challenge XP</span>
+                <span className="settings-row-value">{xpData.total.toLocaleString()} XP</span>
+              </div>
+              <div className="settings-row" style={{ marginBottom: 12 }}>
+                <span className="settings-row-label">Lifetime XP</span>
+                <span className="settings-row-value">{lifetimeXP.toLocaleString()} XP</span>
+              </div>
+            </>
           );
         })()}
         <div className="settings-row">
@@ -396,10 +480,10 @@ export default function SettingsView({ setView }) {
             className="btn btn-danger btn-full"
             onClick={() => setShowResetXP(true)}
           >
-            Reset XP to Zero
+            Reset Challenge XP to Zero
           </button>
           <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, textAlign: 'center' }}>
-            Your challenge progress and day data are not affected.
+            Only affects the current challenge's XP. Lifetime XP, rank, progress, and day data are not affected.
           </p>
         </div>
       </div>
@@ -529,15 +613,102 @@ export default function SettingsView({ setView }) {
         )}
       </div>
 
-      {/* Reset challenge confirmation */}
-      {showReset && (
-        <div className="modal-overlay" onClick={() => setShowReset(false)}>
+      {/* Advanced Danger Zone (hidden behind a collapsed section) */}
+      <details className="settings-section danger-zone">
+        <summary className="danger-zone-summary">⚠️ Advanced Danger Zone</summary>
+        <div className="danger-zone-body">
+          <p className="text-muted" style={{ lineHeight: 1.6, marginBottom: 12 }}>
+            These actions permanently wipe data and cannot be undone. Export a backup first.
+            Only <strong>{profile?.name}</strong>'s data is affected — {profiles[otherProfile]?.name}'s data stays untouched.
+          </p>
+          <button className="btn btn-danger btn-full" onClick={() => { setDeleteAllConfirmText(''); setShowDeleteAll(true); }}>
+            🗑 Delete All Data for {profile?.name}
+          </button>
+          <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, textAlign: 'center' }}>
+            Wipes the active challenge, all archives, lifetime XP, badges, quotes, and experiments for this profile.
+          </p>
+        </div>
+      </details>
+
+      {/* Start New Challenge confirmation */}
+      {showStartNew && (
+        <div className="modal-overlay" onClick={() => setShowStartNew(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h3>Reset Challenge?</h3>
-            <p>This will delete all your progress for this profile and start fresh. This cannot be undone.</p>
+            <h3>Start New Challenge?</h3>
+            <p>Your current challenge will be archived before starting fresh. Your historical data will still be used for lifetime trends and Insights.</p>
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setShowReset(false)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleReset}>Yes, Reset</button>
+              <button className="btn btn-ghost" onClick={() => setShowStartNew(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleStartNew}>Archive &amp; Start Fresh</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restore archive confirmation */}
+      {restoreTarget && (
+        <div className="modal-overlay" onClick={() => setRestoreTarget(null)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h3>Restore This Challenge?</h3>
+            <p>
+              The challenge from {formatDateShort(restoreTarget.challengeStart)} will become your active challenge again.
+              {profile?.challengeStart ? ' Your current challenge will be archived first — nothing is lost.' : ''}
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setRestoreTarget(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { restoreArchive(restoreTarget.id); setRestoreTarget(null); setExpandedArchive(null); }}>
+                Yes, Restore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete archive confirmation */}
+      {deleteArchTarget && (
+        <div className="modal-overlay" onClick={() => setDeleteArchTarget(null)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h3>Delete This Archive?</h3>
+            <p>
+              The archived challenge from {formatDateShort(deleteArchTarget.challengeStart)} — including its
+              {' '}{(deleteArchTarget.xpEarned || 0).toLocaleString()} XP toward your lifetime total — will be permanently removed.
+              This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setDeleteArchTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" onClick={() => { deleteArchive(deleteArchTarget.id); setDeleteArchTarget(null); setExpandedArchive(null); }}>
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete-all-data confirmation (danger zone) */}
+      {showDeleteAll && (
+        <div className="modal-overlay" onClick={() => setShowDeleteAll(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h3>Wipe All Data for {profile?.name}?</h3>
+            <p>
+              This permanently deletes the active challenge, every archived challenge, lifetime XP, badges,
+              quotes, and experiments for this profile. This cannot be undone. Type <strong>DELETE</strong> to confirm.
+            </p>
+            <input
+              className="inline-input"
+              value={deleteAllConfirmText}
+              onChange={e => setDeleteAllConfirmText(e.target.value)}
+              placeholder="Type DELETE"
+              style={{ width: '100%', marginBottom: 16 }}
+            />
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setShowDeleteAll(false)}>Cancel</button>
+              <button
+                className="btn btn-danger"
+                disabled={deleteAllConfirmText !== 'DELETE'}
+                style={deleteAllConfirmText !== 'DELETE' ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+                onClick={() => { deleteAllProfileData(); setShowDeleteAll(false); }}
+              >
+                Wipe Everything
+              </button>
             </div>
           </div>
         </div>
@@ -547,8 +718,8 @@ export default function SettingsView({ setView }) {
       {showResetXP && (
         <div className="modal-overlay" onClick={() => setShowResetXP(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h3>Reset XP?</h3>
-            <p>This sets your XP back to 0. Your day data, streak, and badges are not changed — only the XP number resets.</p>
+            <h3>Reset Challenge XP?</h3>
+            <p>This sets your current challenge's XP back to 0. Lifetime XP, rank, day data, streaks, and badges are not changed.</p>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setShowResetXP(false)}>Cancel</button>
               <button className="btn btn-danger" onClick={() => { resetXP(); setShowResetXP(false); }}>

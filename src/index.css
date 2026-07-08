@@ -3435,3 +3435,120 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   text-align: center;
   padding: 4px 0;
 }
+
+/* ─── v3.2.0: Challenge Archives / Lifetime XP / Insights filters ───────── */
+
+.xp-split-row {
+  display: flex;
+  gap: 14px;
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.xp-split-item strong { color: var(--text); font-weight: 700; }
+
+.ins-filter-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.ins-filter-chip {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.ins-filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.archive-row {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.archive-row-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.archive-row-emoji { font-size: 20px; flex-shrink: 0; }
+.archive-row-info { flex: 1; min-width: 0; }
+.archive-row-title { font-size: 14px; font-weight: 700; }
+.archive-row-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.archive-row-arrow { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+
+.archive-row-body {
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--border);
+}
+.archive-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+  padding: 10px 0;
+}
+.archive-detail {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.archive-detail span { color: var(--text2); }
+.archive-detail strong { color: var(--text); }
+
+.archive-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.archive-badge-chip {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.archive-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.danger-zone { border-color: rgba(239,68,68,0.25); }
+.danger-zone-summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--danger);
+  list-style: none;
+  user-select: none;
+}
+.danger-zone-summary::-webkit-details-marker { display: none; }
+.danger-zone-body { margin-top: 12px; }

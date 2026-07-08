@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback } from 'react';
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
-import { computeTotalXP } from '../utils/gamification';
+import { computeTotalXP, computeBadges } from '../utils/gamification';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -259,6 +259,9 @@ export function AppProvider({ children }) {
   const [experiments, setExperimentsState] = useState(() => loadLS('experiments', { me: [], girlfriend: [] }));
   // Dismissed hints: { me: { habitId: expiryDateStr }, girlfriend: {} }
   const [dismissedHints, setDismissedHintsState] = useState(() => loadLS('dismissedHints', { me: {}, girlfriend: {} }));
+  // Challenge archives: { me: [archiveEntry], girlfriend: [] } — never wiped by
+  // starting a new challenge; feeds lifetime XP and long-term Insights trends.
+  const [archives, setArchivesState] = useState(() => loadLS('archives', { me: [], girlfriend: [] }));
 
   const setActiveProfile = useCallback((id) => {
     setActiveProfileState(id);
@@ -301,6 +304,14 @@ export function AppProvider({ children }) {
     setDismissedHintsState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       saveLS('dismissedHints', next);
+      return next;
+    });
+  }, []);
+
+  const setArchives = useCallback((updater) => {
+    setArchivesState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveLS('archives', next);
       return next;
     });
   }, []);
@@ -407,13 +418,122 @@ export function AppProvider({ children }) {
     return max;
   }, [activeProfile, allDays, profiles, getDayNumber]);
 
+  /**
+   * Snapshot everything about the current challenge into an archive entry:
+   * tasks, full day history (completions, ratings, notes, sleep, recovery,
+   * workout effort, stress, mental training, faith reflection), quote
+   * reflections, XP earned, badges earned, and comeback history.
+   * Returns null when there is nothing worth archiving.
+   */
+  const buildArchiveEntry = useCallback((profId) => {
+    const prof = profiles[profId];
+    const profDays = allDays[profId] || {};
+    if (!prof?.challengeStart || Object.keys(profDays).length === 0) return null;
+
+    const dayNum = Math.min(getDayNumberFromStart(prof.challengeStart) || 1, 75);
+    const xpData = computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum);
+    const badges = computeBadges(allDays, profiles, profId, getDayCompletion, dayNum).map(b => b.id);
+
+    // Quote reflections logged during this challenge's date range
+    const endDate = getDateForDayNumber(prof.challengeStart, dayNum);
+    const profQuotes = quoteData[profId] || {};
+    const challengeQuotes = {};
+    for (const [date, q] of Object.entries(profQuotes)) {
+      if (date >= prof.challengeStart && date <= endDate) challengeQuotes[date] = q;
+    }
+
+    return {
+      id: `arch_${Date.now()}`,
+      archivedAt: getTodayStr(),
+      challengeStart: prof.challengeStart,
+      endDayNum: dayNum,
+      endDate,
+      tasks: prof.tasks || [],
+      days: profDays,
+      quoteData: challengeQuotes,
+      xpEarned: Math.max(0, xpData.rawTotal),
+      badges,
+      comebackHistory: prof.comebackHistory || [],
+      xpOffset: prof.xpOffset ?? 0,
+      xpStartDay: prof.xpStartDay ?? 1,
+    };
+  }, [profiles, allDays, quoteData, getDayCompletion]);
+
+  /**
+   * Start a new challenge. The current challenge (if any) is archived first —
+   * nothing is deleted. Only active-challenge progress resets: day data,
+   * challenge XP, and comeback state. Lifetime data (archives, quote
+   * reflections, experiments) is preserved.
+   */
   const startChallenge = useCallback((profId = activeProfile) => {
+    const entry = buildArchiveEntry(profId);
+    if (entry) {
+      setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
+    }
     setProfiles(prev => ({
       ...prev,
-      [profId]: { ...prev[profId], challengeStart: getTodayStr() },
+      [profId]: {
+        ...prev[profId],
+        challengeStart: getTodayStr(),
+        xpOffset: 0,
+        xpStartDay: 1,
+        comebackMode: { active: false, dayStart: null, dismissedAt: null },
+        comebackHistory: [],
+      },
     }));
     setAllDays(prev => ({ ...prev, [profId]: {} }));
-  }, [activeProfile, setProfiles, setAllDays]);
+  }, [activeProfile, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+
+  /**
+   * Restore an archived challenge as the active one. If a challenge is
+   * currently running with logged data, it is archived first — no data loss.
+   */
+  const restoreArchive = useCallback((archiveId, profId = activeProfile) => {
+    const list = archives[profId] || [];
+    const entry = list.find(a => a.id === archiveId);
+    if (!entry) return;
+
+    let newList = list.filter(a => a.id !== archiveId);
+    const activeEntry = buildArchiveEntry(profId);
+    if (activeEntry) newList = [...newList, activeEntry];
+
+    setArchives(prev => ({ ...prev, [profId]: newList }));
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: {
+        ...prev[profId],
+        challengeStart: entry.challengeStart,
+        tasks: entry.tasks?.length ? entry.tasks : prev[profId].tasks,
+        comebackMode: { active: false, dayStart: null, dismissedAt: null },
+        comebackHistory: entry.comebackHistory || [],
+        xpOffset: entry.xpOffset ?? 0,
+        xpStartDay: entry.xpStartDay ?? 1,
+      },
+    }));
+    setAllDays(prev => ({ ...prev, [profId]: entry.days || {} }));
+  }, [activeProfile, archives, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+
+  const deleteArchive = useCallback((archiveId, profId = activeProfile) => {
+    setArchives(prev => ({
+      ...prev,
+      [profId]: (prev[profId] || []).filter(a => a.id !== archiveId),
+    }));
+  }, [activeProfile, setArchives]);
+
+  /**
+   * Advanced danger-zone option: permanently delete ALL data for one profile —
+   * active challenge, archives, lifetime XP, quotes, experiments. The other
+   * profile's data is untouched.
+   */
+  const deleteAllProfileData = useCallback((profId = activeProfile) => {
+    const defaults = makeDefaultProfiles()[profId];
+    setProfiles(prev => ({ ...prev, [profId]: defaults }));
+    setAllDays(prev => ({ ...prev, [profId]: {} }));
+    setArchives(prev => ({ ...prev, [profId]: [] }));
+    setQuoteData(prev => ({ ...prev, [profId]: {} }));
+    setExperiments(prev => ({ ...prev, [profId]: [] }));
+    setDismissedHints(prev => ({ ...prev, [profId]: {} }));
+  }, [activeProfile, setProfiles, setAllDays, setArchives, setQuoteData, setExperiments, setDismissedHints]);
 
   // Update start date without wiping saved day data — used for backfilling
   const setChallengeStart = useCallback((dateStr, profId = activeProfile) => {
@@ -423,14 +543,6 @@ export function AppProvider({ children }) {
       [profId]: { ...prev[profId], challengeStart: dateStr },
     }));
   }, [activeProfile, setProfiles]);
-
-  const resetChallenge = useCallback((profId = activeProfile) => {
-    setProfiles(prev => ({
-      ...prev,
-      [profId]: { ...prev[profId], challengeStart: null },
-    }));
-    setAllDays(prev => ({ ...prev, [profId]: {} }));
-  }, [activeProfile, setProfiles, setAllDays]);
 
   const updateProfile = useCallback((updates) => {
     if (!activeProfile) return;
@@ -640,7 +752,9 @@ export function AppProvider({ children }) {
       getDayNumber, getDayData, getTodayData,
       getDayCompletion, getStreak, getLongestStreak,
       updateDay, toggleTask,
-      startChallenge, resetChallenge, setChallengeStart, updateProfile,
+      startChallenge, setChallengeStart, updateProfile,
+      // Archives
+      archives, restoreArchive, deleteArchive, deleteAllProfileData,
       addTask, updateTask, deleteTask, reorderTasks,
       MENTAL_OPTIONS,
       // Quote

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { getTodayStr } from '../utils/dateUtils';
 import { HABIT_LIBRARY, getHabit } from '../data/habitLibrary';
-import { computeAverages, generateSuggestions, assessExperiment, getCoachMessage, getPriorityBottleneck } from '../utils/insightsUtils';
+import { computeAverages, computeAveragesFromEntries, generateSuggestions, assessExperiment, getCoachMessage, getPriorityBottleneck } from '../utils/insightsUtils';
+import { buildTimeline, entriesInLastNDays, activeChallengeEntries } from '../utils/archiveUtils';
 import { detectSetback, computeDayXP } from '../utils/gamification';
 import BuildBanner from './BuildBanner';
 
@@ -441,9 +442,16 @@ function XPTrendCard({ xpTrend, avg7, comebackMode, onStartComeback }) {
   return null;
 }
 
+const RANGE_FILTERS = [
+  { id: 'current', label: 'Current Challenge' },
+  { id: '7d',      label: 'Last 7 Days' },
+  { id: '14d',     label: 'Last 14 Days' },
+  { id: 'all',     label: 'All-Time' },
+];
+
 export default function InsightsView() {
   const {
-    activeProfile, profile, profiles, allDays,
+    activeProfile, profile, profiles, allDays, archives,
     getDayNumber, addTask, getDayCompletion,
     experiments, updateExperiment, startExperiment,
     dismissHint, dismissedHints,
@@ -452,6 +460,7 @@ export default function InsightsView() {
 
   const [recalcKey, setRecalcKey] = useState(0);
   const [recalcFlash, setRecalcFlash] = useState(false);
+  const [rangeFilter, setRangeFilter] = useState('7d');
 
   const dayNum     = getDayNumber();
   const days       = allDays[activeProfile] || {};
@@ -460,13 +469,28 @@ export default function InsightsView() {
   const today      = getTodayStr();
   const sleepTarget = profile?.sleepTarget ?? 8;
 
-  const last7  = dayNum ? Array.from({ length: 7  }, (_, i) => dayNum - i).filter(n => n >= 1) : [];
-  const last14 = dayNum ? Array.from({ length: 14 }, (_, i) => dayNum - i).filter(n => n >= 1) : [];
+  const last7 = dayNum ? Array.from({ length: 7 }, (_, i) => dayNum - i).filter(n => n >= 1) : [];
+
+  // Unified timeline across archived challenges + the active challenge,
+  // keyed by calendar date — so 7/14-day windows keep working even right
+  // after starting a new challenge.
+  const profileArchives = archives[activeProfile] || [];
+  const timeline = buildTimeline(profile, days, profileArchives);
 
   // recalcKey forces recompute when the button is pressed
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const avg7  = computeAverages(last7,  days, tasks);
-  const avg14 = computeAverages(last14, days, tasks);
+  const avg7  = computeAveragesFromEntries(entriesInLastNDays(timeline, 7, today));
+  const avg14 = computeAveragesFromEntries(entriesInLastNDays(timeline, 14, today));
+  const avgCurrent = computeAveragesFromEntries(activeChallengeEntries(timeline));
+  const avgAll     = computeAveragesFromEntries(timeline);
+
+  const rangeAvg = { current: avgCurrent, '7d': avg7, '14d': avg14, all: avgAll }[rangeFilter] || avg7;
+  const rangeLabel = {
+    current: '🔥 Current Challenge',
+    '7d':    '📊 Last 7 Days',
+    '14d':   '📊 Last 14 Days',
+    all:     '🏛 All-Time Trends',
+  }[rangeFilter];
 
   const profileExps = experiments[activeProfile] || [];
   const profileDism = dismissedHints[activeProfile] || {};
@@ -528,7 +552,7 @@ export default function InsightsView() {
 
   // ── Empty states ──────────────────────────────────────────────────────────
 
-  if (!profile?.challengeStart) {
+  if (!profile?.challengeStart && timeline.length === 0) {
     return (
       <div className="insights-view">
         <BuildBanner />
@@ -542,7 +566,7 @@ export default function InsightsView() {
     );
   }
 
-  if (avg7.daysLogged < 3) {
+  if (avgAll.daysLogged < 3) {
     return (
       <div className="insights-view">
         <BuildBanner />
@@ -551,7 +575,7 @@ export default function InsightsView() {
           <div className="ins-empty-icon">📈</div>
           <h3>Building your baseline</h3>
           <p>Keep logging your daily ratings for at least 3 days — insights will appear once there's enough data to spot patterns.</p>
-          <div className="ins-progress-hint">{avg7.daysLogged} / 3 days with data</div>
+          <div className="ins-progress-hint">{avgAll.daysLogged} / 3 days with data</div>
         </div>
       </div>
     );
@@ -595,16 +619,25 @@ export default function InsightsView() {
         {/* 2. Coach message */}
         <CoachMessage msg={coachMsg} />
 
-        {/* 2. Weekly summary */}
-        <SummaryCard avg={avg7} label="📊 Last 7 Days" />
-
-        {avg14.daysLogged >= 10 && (
-          <details className="ins-details">
-            <summary className="ins-details-summary">📊 Last 14 Days</summary>
-            <div style={{ padding: '0 0 12px' }}>
-              <SummaryCard avg={avg14} label="Last 14 Days" />
-            </div>
-          </details>
+        {/* 2. Summary with range filter (includes archived challenge data) */}
+        <div className="ins-filter-row">
+          {RANGE_FILTERS.map(f => (
+            <button
+              key={f.id}
+              className={`ins-filter-chip${rangeFilter === f.id ? ' active' : ''}`}
+              onClick={() => setRangeFilter(f.id)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        {rangeAvg.daysLogged > 0 ? (
+          <SummaryCard avg={rangeAvg} label={rangeLabel} />
+        ) : (
+          <div className="ins-all-good" style={{ marginBottom: 12 }}>
+            <div className="ins-all-good-icon">📭</div>
+            <p>No logged days in this range yet{rangeFilter === 'current' ? ' — your archived data still counts toward the other views' : ''}.</p>
+          </div>
         )}
 
         {/* 3. Recommended Tasks */}
@@ -612,7 +645,7 @@ export default function InsightsView() {
           <div className="ins-section">
             <div className="ins-section-title">💡 Recommended Tasks</div>
             <p className="ins-section-sub">
-              Based on your last 7 days. Add to your daily checklist or run a 7-day experiment, then come back to compare.
+              Based on your last 7 days — even across challenges. Add to your daily checklist or run a 7-day experiment, then come back to compare.
             </p>
             {suggestions.map(s => (
               <SuggestionCard

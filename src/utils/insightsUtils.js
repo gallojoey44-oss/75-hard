@@ -10,6 +10,20 @@ const THRESHOLD_VERY_LOW = 5;
  * Ratings are 1–10; 0 means "not logged" and is excluded from averages.
  */
 export function computeAverages(dayNums, days, tasks) {
+  if (!tasks?.length) return computeAveragesFromEntries([]);
+  const entries = dayNums
+    .map(n => days[n])
+    .filter(Boolean)
+    .map(data => ({ data, tasks }));
+  return computeAveragesFromEntries(entries);
+}
+
+/**
+ * Same averages, but over a list of { data, tasks } entries — used to merge
+ * days across archived challenges and the active challenge (each day is
+ * scored against the task list of its own challenge).
+ */
+export function computeAveragesFromEntries(entries) {
   const base = {
     daysLogged: 0, completion: 0,
     energy: 0, sleep: 0, mood: 0, confidence: 0,
@@ -24,7 +38,7 @@ export function computeAverages(dayNums, days, tasks) {
     missedDays: 0,
     partialDays: 0,
   };
-  if (!dayNums.length || !tasks.length) return base;
+  if (!entries.length) return base;
 
   let compSum = 0, compCount = 0;
   let energySum = 0, energyCount = 0;
@@ -40,14 +54,13 @@ export function computeAverages(dayNums, days, tasks) {
   let mentalDone  = 0, mentalTotal  = 0;
   let stressNoteCount = 0, hungerNoteCount = 0;
 
-  const workoutTask = tasks.find(t => t.id === 'workout'  || t.id === 'gf_workout');
-  const dietTask    = tasks.find(t => t.id === 'diet'     || t.id === 'gf_diet');
-  const mentalTask  = tasks.find(t => t.id === 'mental'   || t.id === 'gf_mental');
-
-  for (const n of dayNums) {
-    const data = days[n];
-    if (!data) continue;
+  for (const { data, tasks } of entries) {
+    if (!data || !tasks?.length) continue;
     base.daysLogged++;
+
+    const workoutTask = tasks.find(t => t.id === 'workout'  || t.id === 'gf_workout');
+    const dietTask    = tasks.find(t => t.id === 'diet'     || t.id === 'gf_diet');
+    const mentalTask  = tasks.find(t => t.id === 'mental'   || t.id === 'gf_mental');
 
     const done = tasks.filter(t => data.tasks?.[t.id]).length;
     compSum += Math.round((done / tasks.length) * 100);

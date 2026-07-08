@@ -238,6 +238,16 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
 }
 
 /**
+ * Lifetime XP = XP banked in archived challenges + everything earned in the
+ * current challenge (raw, so "Reset Challenge XP" never lowers it).
+ * Only the advanced delete-all-data option can clear it (by clearing archives).
+ */
+export function computeLifetimeXP(archiveList, currentRawTotal = 0) {
+  const archivedXP = (archiveList || []).reduce((s, a) => s + (a.xpEarned || 0), 0);
+  return archivedXP + Math.max(0, currentRawTotal);
+}
+
+/**
  * XP breakdown for today only — for the "XP gained/lost today" display.
  */
 export function computeTodayXP(allDays, profiles, profId, getDayCompletion, dayNum) {
