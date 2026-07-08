@@ -68,6 +68,7 @@ export const HIGH_VALUE_TASK_IDS = new Set([
   'sleep_target', 'gf_sleep_target',
   'diet', 'gf_diet',
   'mental', 'gf_mental',
+  'mt_mind', 'mt_body', // Mental Training Phase core tasks
 ]);
 
 // ─── Per-day XP computation ──────────────────────────────────────────────────

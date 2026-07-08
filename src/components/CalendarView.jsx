@@ -6,7 +6,8 @@ const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 export default function CalendarView({ onEditDay }) {
-  const { profile, getDayCompletion, getDayNumber } = useApp();
+  const { profile, getChallengeMeta, getDayCompletion, getDayNumber } = useApp();
+  const challengeDuration = getChallengeMeta().durationDays || 75;
 
   const today = new Date();
   const [year, setYear]   = useState(today.getFullYear());
@@ -20,7 +21,7 @@ export default function CalendarView({ onEditDay }) {
     const s = new Date(start + 'T00:00:00');
     const d = new Date(dateStr + 'T00:00:00');
     const diff = Math.floor((d - s) / 86400000) + 1;
-    if (diff < 1 || diff > 75) return null;
+    if (diff < 1 || diff > challengeDuration) return null;
     return diff;
   }
 

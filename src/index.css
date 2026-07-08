@@ -3667,3 +3667,44 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   border-radius: 8px;
   padding: 10px;
 }
+
+/* ─── v3.4.0: Startable Mental Training Phase ────────────────── */
+
+.tpl-tagline {
+  font-size: 13px;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--accent2);
+  line-height: 1.5;
+  margin: -4px 0 12px;
+}
+
+.tpl-duration-chip {
+  padding: 6px 14px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.tpl-duration-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.tpl-panel-note {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.55;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 8px;
+}
+.tpl-panel-note strong { color: var(--text); }

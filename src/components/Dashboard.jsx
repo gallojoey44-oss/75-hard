@@ -204,7 +204,7 @@ function ComebackCard({ dayNum, comebackMode, setback, onStart, onDismiss, onCom
 export default function Dashboard({ setView }) {
   const {
     activeProfile, profile, profiles, days, allDays, archives,
-    getDayNumber, getDayCompletion, getStreak, getLongestStreak,
+    getChallengeMeta, getDayNumber, getDayCompletion, getStreak, getLongestStreak,
     startChallenge,
     setActiveProfile,
     startComeback, dismissComeback, completeComeback,
@@ -215,6 +215,8 @@ export default function Dashboard({ setView }) {
   const [xpAnim, setXpAnim] = useState(null);
   const prevXpRef = useRef(null);
 
+  const meta      = getChallengeMeta();
+  const duration  = meta.durationDays || 75;
   const dayNum    = getDayNumber();
   const streak    = getStreak();
   const longest   = getLongestStreak();
@@ -292,7 +294,7 @@ export default function Dashboard({ setView }) {
     );
   }
 
-  const isDone = dayNum >= 75;
+  const isDone = dayNum >= duration;
   const prevDay = dayNum ? dayNum - 1 : null;
   const prevPct = prevDay ? getDayCompletion(prevDay) : 100;
   const showWarning = prevDay && prevPct < 100 && prevDay > 0;
@@ -306,7 +308,8 @@ export default function Dashboard({ setView }) {
           <div>
             <h2>{profile.name}</h2>
             <p className="text-muted dash-challenge-label">
-              🔥 75-Day Discipline Challenge
+              {meta.emoji} Active Challenge: {meta.name}
+              {meta.variant ? ` · ${meta.variant.charAt(0).toUpperCase() + meta.variant.slice(1)}` : ''}
             </p>
           </div>
         </div>
@@ -347,7 +350,7 @@ export default function Dashboard({ setView }) {
       {isDone && (
         <div className="challenge-complete">
           <h3>🏆 Challenge Complete!</h3>
-          <p>You finished all 75 days. Incredible!</p>
+          <p>You finished all {duration} days. Incredible!</p>
         </div>
       )}
 
@@ -372,10 +375,10 @@ export default function Dashboard({ setView }) {
       {/* Hero Ring */}
       <div className="hero-card">
         <div className="hero-ring-wrap">
-          <CircleRing value={dayNum || 0} max={75} size={120} />
+          <CircleRing value={dayNum || 0} max={duration} size={120} />
           <div className="hero-ring-text">
-            <span className="hero-day-num">{isDone ? '75' : (dayNum || '—')}</span>
-            <span className="hero-of-75">of 75</span>
+            <span className="hero-day-num">{isDone ? duration : (dayNum || '—')}</span>
+            <span className="hero-of-75">of {duration}</span>
           </div>
         </div>
         <div className="hero-stats">
@@ -390,15 +393,15 @@ export default function Dashboard({ setView }) {
         </div>
       </div>
 
-      {/* 75-day bar */}
+      {/* Challenge progress bar */}
       <div className="section-card" style={{ marginBottom: 14 }}>
         <div className="prog-bar-wrap">
           <div className="prog-bar-label">
             <span>Challenge progress</span>
-            <span>{totalDone}/{Math.min(dayNum || 0, 75)} perfect days</span>
+            <span>{totalDone}/{Math.min(dayNum || 0, duration)} perfect days</span>
           </div>
           <div className="prog-bar-track">
-            <div className="prog-bar-fill" style={{ width: `${((dayNum || 0) / 75) * 100}%` }} />
+            <div className="prog-bar-fill" style={{ width: `${((dayNum || 0) / duration) * 100}%` }} />
           </div>
         </div>
         <div className="prog-bar-wrap">

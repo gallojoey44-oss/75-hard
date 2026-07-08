@@ -34,8 +34,9 @@ function durationText(days) {
   return `${days.slice(0, -1).join(', ')}, or ${days[days.length - 1]} days`;
 }
 
-function VariantPanel({ variant }) {
+function VariantPanel({ variant, template }) {
   if (!variant) return null;
+  const hasColdShower = variant.required_daily_tasks.some(t => /cold shower/i.test(t));
   return (
     <div className="tpl-variant-panel">
       <div className="tpl-variant-section-label">Daily tasks</div>
@@ -54,6 +55,18 @@ function VariantPanel({ variant }) {
           </ul>
         </>
       )}
+      {template.physical_examples?.length > 0 && (
+        <div className="tpl-panel-note">
+          <strong>Physical discipline block</strong> — short and scalable, not a full workout.
+          Pick one: {template.physical_examples.join(', ').toLowerCase()}.
+        </div>
+      )}
+      {hasColdShower && (
+        <div className="tpl-panel-note">
+          <strong>Cold shower finish</strong> — optional if you have a medical reason, feel
+          lightheaded, or react poorly to cold. Keep it brief. It&apos;s a discipline cue, not an endurance test.
+        </div>
+      )}
     </div>
   );
 }
@@ -61,6 +74,9 @@ function VariantPanel({ variant }) {
 function ChallengeCard({ template, isActive, onStart, setView }) {
   const [expanded, setExpanded] = useState(false);
   const [variantTab, setVariantTab] = useState('standard');
+  const isVariantStart = template.start_flow === 'variant';
+  const defaultDuration = template.duration_options_days[Math.floor((template.duration_options_days.length - 1) / 2)];
+  const [durationSel, setDurationSel] = useState(defaultDuration);
 
   return (
     <div className={`challenge-card${isActive ? ' active' : ''}`}>
@@ -93,12 +109,25 @@ function ChallengeCard({ template, isActive, onStart, setView }) {
       {expanded && (
         <div className="challenge-card-body">
           <p className="challenge-card-desc">{template.purpose}</p>
+          {template.tagline && (
+            <p className="tpl-tagline">{template.tagline}</p>
+          )}
 
           <div className="tpl-detail-row">
             <span className="tpl-detail-label">Duration</span>
             <div className="tpl-chip-group">
               {template.duration_options_days.map(d => (
-                <span key={d} className="challenge-focus-chip">{d} days</span>
+                isVariantStart ? (
+                  <button
+                    key={d}
+                    className={`tpl-duration-chip${durationSel === d ? ' active' : ''}`}
+                    onClick={() => setDurationSel(d)}
+                  >
+                    {d} days
+                  </button>
+                ) : (
+                  <span key={d} className="challenge-focus-chip">{d} days</span>
+                )
               ))}
             </div>
           </div>
@@ -135,7 +164,7 @@ function ChallengeCard({ template, isActive, onStart, setView }) {
               </button>
             ))}
           </div>
-          <VariantPanel variant={template.variants[variantTab]} />
+          <VariantPanel variant={template.variants[variantTab]} template={template} />
 
           {template.inspiration_sources?.length > 0 && template.inspiration_sources[0] !== 'User-defined' && (
             <div className="tpl-sources">Informed by: {template.inspiration_sources.join(', ')}</div>
@@ -146,8 +175,16 @@ function ChallengeCard({ template, isActive, onStart, setView }) {
               Log Today →
             </button>
           )}
-          {!isActive && template.startable && (
-            <button className="btn btn-primary challenge-card-action" onClick={onStart}>
+          {!isActive && template.startable && isVariantStart && (
+            <button
+              className="btn btn-primary challenge-card-action"
+              onClick={() => onStart({ variant: variantTab, durationDays: durationSel })}
+            >
+              Start {template.challenge_name}
+            </button>
+          )}
+          {!isActive && template.startable && !isVariantStart && (
+            <button className="btn btn-primary challenge-card-action" onClick={() => onStart(null)}>
               Start Challenge
             </button>
           )}
@@ -162,13 +199,17 @@ function ChallengeCard({ template, isActive, onStart, setView }) {
 
 export default function ChallengesView({ setView }) {
   const {
-    profile, getDayNumber, getDayCompletion,
+    profile, getChallengeMeta, getDayNumber, getDayCompletion,
     getStreak,
     startChallenge,
   } = useApp();
 
   const [showStartConfirm, setShowStartConfirm] = useState(false);
+  // { template, variant, durationDays } — variant-based start pending confirmation
+  const [pendingStart, setPendingStart] = useState(null);
 
+  const meta      = getChallengeMeta();
+  const duration  = meta.durationDays || 75;
   const dayNum    = getDayNumber();
   const todayPct  = dayNum ? getDayCompletion(dayNum) : 0;
   const streak    = getStreak();
@@ -181,6 +222,24 @@ export default function ChallengesView({ setView }) {
   function handleStart75() {
     startChallenge();
     setShowStartConfirm(false);
+    setView('today');
+  }
+
+  function handleStartVariant() {
+    if (!pendingStart) return;
+    const { template, variant, durationDays } = pendingStart;
+    const variantDef = template.variants[variant];
+    startChallenge(undefined, {
+      challenge: {
+        templateId: template.id,
+        name: template.challenge_name,
+        emoji: template.emoji,
+        variant,
+        durationDays,
+      },
+      tasks: variantDef.start_tasks,
+    });
+    setPendingStart(null);
     setView('today');
   }
 
@@ -200,11 +259,14 @@ export default function ChallengesView({ setView }) {
               <span className="acc-dot" />
               <span className="acc-label">Active Challenge</span>
             </div>
-            <div className="acc-name">🔥 75-Day Discipline Challenge</div>
+            <div className="acc-name">
+              {meta.emoji} {meta.name}
+              {meta.variant ? ` · ${meta.variant.charAt(0).toUpperCase() + meta.variant.slice(1)}` : ''}
+            </div>
             <div className="acc-stats-row">
               <div className="acc-stat">
                 <div className="acc-stat-value">Day {dayNum}</div>
-                <div className="acc-stat-label">of 75</div>
+                <div className="acc-stat-label">of {duration}</div>
               </div>
               <div className="acc-stat">
                 <div className="acc-stat-value">{todayPct}%</div>
@@ -223,10 +285,10 @@ export default function ChallengesView({ setView }) {
               <div className="acc-progress-track">
                 <div
                   className="acc-progress-fill"
-                  style={{ width: `${((dayNum || 0) / 75) * 100}%` }}
+                  style={{ width: `${((dayNum || 0) / duration) * 100}%` }}
                 />
               </div>
-              <span className="acc-progress-label">{Math.round(((dayNum || 0) / 75) * 100)}% complete</span>
+              <span className="acc-progress-label">{Math.round(((dayNum || 0) / duration) * 100)}% complete</span>
             </div>
             <div className="acc-actions">
               <button className="btn btn-primary" onClick={() => setView('today')}>Log Today →</button>
@@ -250,10 +312,12 @@ export default function ChallengesView({ setView }) {
             <ChallengeCard
               key={t.id}
               template={t}
-              isActive={isRunning && t.id === '75_day_discipline_challenge'}
+              isActive={isRunning && meta.templateId === t.id}
               setView={setView}
-              onStart={() => {
-                if (t.id === '75_day_discipline_challenge' && !isRunning) {
+              onStart={(payload) => {
+                if (t.start_flow === 'variant' && payload) {
+                  setPendingStart({ template: t, ...payload });
+                } else if (t.id === '75_day_discipline_challenge' && !isRunning) {
                   setShowStartConfirm(true);
                 }
               }}
@@ -262,6 +326,25 @@ export default function ChallengesView({ setView }) {
         </div>
 
       </div>
+
+      {/* Variant challenge start confirmation */}
+      {pendingStart && (
+        <div className="modal-overlay" onClick={() => setPendingStart(null)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h3>Start {pendingStart.template.challenge_name}?</h3>
+            <p>
+              Your current challenge will be archived first. Your historical data will remain available for Insights.
+            </p>
+            <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: -8 }}>
+              {pendingStart.durationDays} days · {pendingStart.variant.charAt(0).toUpperCase() + pendingStart.variant.slice(1)} — train the mind through action.
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setPendingStart(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleStartVariant}>Archive Current &amp; Start</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Start challenge confirmation */}
       {showStartConfirm && (

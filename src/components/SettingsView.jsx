@@ -28,7 +28,7 @@ export default function SettingsView({ setView }) {
   const {
     activeProfile, profile, profiles, allDays,
     updateProfile, startChallenge, setChallengeStart,
-    getDayNumber, getDayCompletion,
+    getChallengeMeta, getDayNumber, getDayCompletion,
     setActiveProfile,
     resetXP,
     archives, restoreArchive, deleteArchive, deleteAllProfileData,
@@ -120,7 +120,8 @@ export default function SettingsView({ setView }) {
 
   function handleSetTodayAsDay() {
     const n = parseInt(todayAsDayInput, 10);
-    if (!n || n < 1 || n > 75) { flash(false, 'Enter a number from 1 to 75.'); return; }
+    const maxDay = getChallengeMeta().durationDays || 75;
+    if (!n || n < 1 || n > maxDay) { flash(false, `Enter a number from 1 to ${maxDay}.`); return; }
     const startStr = dayNumToStartDate(n);
     setChallengeStart(startStr);
     flash(true, `Today is now Day ${n}. Day 1 = ${formatDateShort(startStr)}.`);
@@ -128,6 +129,8 @@ export default function SettingsView({ setView }) {
   }
 
   const otherProfile = activeProfile === 'me' ? 'girlfriend' : 'me';
+  const challengeMeta = getChallengeMeta();
+  const challengeDuration = challengeMeta.durationDays || 75;
 
   return (
     <div className="settings-view">
@@ -266,7 +269,12 @@ export default function SettingsView({ setView }) {
 
       {/* Challenge management + start date */}
       <div className="settings-section">
-        <div className="section-title">🔥 75-Day Discipline Challenge</div>
+        <div className="section-title">
+          {profile?.challengeStart ? `${challengeMeta.emoji} ${challengeMeta.name}` : '🎯 Challenge'}
+          {profile?.challengeStart && challengeMeta.variant
+            ? ` · ${challengeMeta.variant.charAt(0).toUpperCase() + challengeMeta.variant.slice(1)}`
+            : ''}
+        </div>
 
         {/* Current state row */}
         {profile?.challengeStart ? (
@@ -279,7 +287,7 @@ export default function SettingsView({ setView }) {
           <div className="settings-row" style={{ marginBottom: 12 }}>
             <span className="settings-row-label">Today is</span>
             <span className="settings-row-value" style={{ color: 'var(--accent2)', fontWeight: 700 }}>
-              Day {getDayNumber()} of 75
+              Day {getDayNumber()} of {challengeDuration}
             </span>
           </div>
         ) : null}
@@ -324,8 +332,8 @@ export default function SettingsView({ setView }) {
                 className="inline-input"
                 value={todayAsDayInput}
                 min="1"
-                max="75"
-                placeholder="1–75"
+                max={challengeDuration}
+                placeholder={`1–${challengeDuration}`}
                 onChange={e => setTodayAsDayInput(e.target.value)}
                 style={{ width: 70 }}
               />
@@ -338,7 +346,7 @@ export default function SettingsView({ setView }) {
                 Set
               </button>
             </div>
-            {todayAsDayInput && +todayAsDayInput >= 1 && +todayAsDayInput <= 75 && (
+            {todayAsDayInput && +todayAsDayInput >= 1 && +todayAsDayInput <= challengeDuration && (
               <div className="start-date-preview">
                 → Day 1 = {formatDateShort(dayNumToStartDate(+todayAsDayInput))}
               </div>
@@ -388,13 +396,13 @@ export default function SettingsView({ setView }) {
               return (
                 <div key={arch.id} className="archive-row">
                   <button className="archive-row-header" onClick={() => setExpandedArchive(isOpen ? null : arch.id)}>
-                    <span className="archive-row-emoji">🔥</span>
+                    <span className="archive-row-emoji">{arch.challenge?.emoji || '🔥'}</span>
                     <div className="archive-row-info">
                       <div className="archive-row-title">
-                        {formatDateShort(arch.challengeStart)} – {formatDateShort(arch.endDate || arch.archivedAt)}
+                        {arch.challenge?.name || '75-Day Discipline Challenge'} · {formatDateShort(arch.challengeStart)} – {formatDateShort(arch.endDate || arch.archivedAt)}
                       </div>
                       <div className="archive-row-meta">
-                        Day {arch.endDayNum} of 75 · {daysLogged} days logged · {(arch.xpEarned || 0).toLocaleString()} XP
+                        Day {arch.endDayNum} of {arch.challenge?.durationDays || 75} · {daysLogged} days logged · {(arch.xpEarned || 0).toLocaleString()} XP
                       </div>
                     </div>
                     <span className="archive-row-arrow">{isOpen ? '▲' : '▼'}</span>

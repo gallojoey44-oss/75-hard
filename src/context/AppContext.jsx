@@ -39,6 +39,16 @@ const DEFAULT_TASKS_GF = [
   { id: 'gf_screen',  name: 'Limit screen time 30 min before bed',   color: '#A8E6CF', order: 11 },
 ];
 
+// Legacy profiles (before v3.4.0) have no activeChallenge descriptor —
+// they are always the original 75-day discipline challenge.
+export const DEFAULT_CHALLENGE_META = {
+  templateId: '75_day_discipline_challenge',
+  name: '75-Day Discipline Challenge',
+  emoji: '🔥',
+  variant: null,
+  durationDays: 75,
+};
+
 const DEFAULT_QUOTE_SETTINGS = {
   enabledSources: [...SOURCES],
   favorites: [],
@@ -319,11 +329,16 @@ export function AppProvider({ children }) {
   const profile = profiles[activeProfile] || null;
   const days = (activeProfile && allDays[activeProfile]) || {};
 
+  const getChallengeMeta = useCallback((profId = activeProfile) => {
+    return profiles[profId]?.activeChallenge || DEFAULT_CHALLENGE_META;
+  }, [activeProfile, profiles]);
+
   const getDayNumber = useCallback((profId = activeProfile) => {
     const start = profiles[profId]?.challengeStart;
     if (!start) return null;
     const n = getDayNumberFromStart(start);
-    return Math.min(n, 75);
+    const duration = (profiles[profId]?.activeChallenge?.durationDays) || 75;
+    return Math.min(n, duration);
   }, [activeProfile, profiles]);
 
   const getDayData = useCallback((dayNumber) => {
@@ -430,7 +445,8 @@ export function AppProvider({ children }) {
     const profDays = allDays[profId] || {};
     if (!prof?.challengeStart || Object.keys(profDays).length === 0) return null;
 
-    const dayNum = Math.min(getDayNumberFromStart(prof.challengeStart) || 1, 75);
+    const meta = prof.activeChallenge || DEFAULT_CHALLENGE_META;
+    const dayNum = Math.min(getDayNumberFromStart(prof.challengeStart) || 1, meta.durationDays || 75);
     const xpData = computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum);
     const badges = computeBadges(allDays, profiles, profId, getDayCompletion, dayNum).map(b => b.id);
 
@@ -445,6 +461,7 @@ export function AppProvider({ children }) {
     return {
       id: `arch_${Date.now()}`,
       archivedAt: getTodayStr(),
+      challenge: { ...meta },
       challengeStart: prof.challengeStart,
       endDayNum: dayNum,
       endDate,
@@ -463,18 +480,26 @@ export function AppProvider({ children }) {
    * Start a new challenge. The current challenge (if any) is archived first —
    * nothing is deleted. Only active-challenge progress resets: day data,
    * challenge XP, and comeback state. Lifetime data (archives, quote
-   * reflections, experiments) is preserved.
+   * reflections, experiments, profile settings) is preserved.
+   *
+   * options (all optional):
+   *   challenge — { templateId, name, emoji, variant, durationDays } descriptor
+   *   tasks     — task list for the new challenge; replaces the profile's daily
+   *               tasks (the outgoing list is preserved in the archive entry)
    */
-  const startChallenge = useCallback((profId = activeProfile) => {
+  const startChallenge = useCallback((profId = activeProfile, options = null) => {
     const entry = buildArchiveEntry(profId);
     if (entry) {
       setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
     }
+    const meta = options?.challenge ? { ...DEFAULT_CHALLENGE_META, ...options.challenge } : { ...DEFAULT_CHALLENGE_META };
     setProfiles(prev => ({
       ...prev,
       [profId]: {
         ...prev[profId],
         challengeStart: getTodayStr(),
+        activeChallenge: meta,
+        ...(options?.tasks ? { tasks: options.tasks.map((t, i) => ({ ...t, order: i })) } : {}),
         xpOffset: 0,
         xpStartDay: 1,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
@@ -503,6 +528,7 @@ export function AppProvider({ children }) {
       [profId]: {
         ...prev[profId],
         challengeStart: entry.challengeStart,
+        activeChallenge: entry.challenge ? { ...entry.challenge } : { ...DEFAULT_CHALLENGE_META },
         tasks: entry.tasks?.length ? entry.tasks : prev[profId].tasks,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
         comebackHistory: entry.comebackHistory || [],
@@ -749,7 +775,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       activeProfile, profile, profiles, days, allDays,
       setActiveProfile,
-      getDayNumber, getDayData, getTodayData,
+      getChallengeMeta, getDayNumber, getDayData, getTodayData,
       getDayCompletion, getStreak, getLongestStreak,
       updateDay, toggleTask,
       startChallenge, setChallengeStart, updateProfile,

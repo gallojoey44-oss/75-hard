@@ -33,7 +33,7 @@ function GfTaskCard({ task, checked, onToggle, index }) {
   );
 }
 
-function DaySelector({ selected, current, onChange }) {
+function DaySelector({ selected, current, onChange, duration = 75 }) {
   const isOtherDay = current && selected !== current;
   return (
     <div className="day-selector">
@@ -45,7 +45,7 @@ function DaySelector({ selected, current, onChange }) {
       >‹</button>
       <div className="day-sel-center">
         <span className="day-sel-num">
-          Day {selected} <span className="day-sel-of">of 75</span>
+          Day {selected} <span className="day-sel-of">of {duration}</span>
         </span>
         {isOtherDay && (
           <button className="day-sel-today-link" onClick={() => onChange(current)}>
@@ -55,8 +55,8 @@ function DaySelector({ selected, current, onChange }) {
       </div>
       <button
         className="day-sel-btn"
-        onClick={() => onChange(Math.min(75, selected + 1))}
-        disabled={selected >= 75}
+        onClick={() => onChange(Math.min(duration, selected + 1))}
+        disabled={selected >= duration}
         aria-label="Next day"
       >›</button>
     </div>
@@ -93,7 +93,7 @@ function MWDBanner({ comebackMode, dayNum }) {
 export default function DailyView({ editDayNum, setView }) {
   const {
     activeProfile, profile,
-    getDayNumber, getDayData,
+    getChallengeMeta, getDayNumber, getDayData,
     updateDay, toggleTask,
   } = useApp();
 
@@ -257,6 +257,7 @@ export default function DailyView({ editDayNum, setView }) {
         selected={selectedDayNum}
         current={currentDayNum}
         onChange={setSelectedDayNum}
+        duration={getChallengeMeta().durationDays || 75}
       />
 
       {/* Comeback banner */}
