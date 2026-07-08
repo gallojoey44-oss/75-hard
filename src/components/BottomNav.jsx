@@ -1,9 +1,10 @@
 const TABS = [
-  { id: 'home',     label: 'Home',     icon: '🏠' },
-  { id: 'today',    label: 'Today',    icon: '✅' },
-  { id: 'calendar', label: 'Calendar', icon: '📅' },
-  { id: 'insights', label: 'Insights', icon: '🔍' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
+  { id: 'home',       label: 'Home',       icon: '🏠' },
+  { id: 'today',      label: 'Today',      icon: '✅' },
+  { id: 'insights',   label: 'Insights',   icon: '🔍' },
+  { id: 'challenges', label: 'Challenges', icon: '🎯' },
+  { id: 'calendar',   label: 'Calendar',   icon: '📅' },
+  { id: 'settings',   label: 'Settings',   icon: '⚙️' },
 ];
 
 export default function BottomNav({ view, setView }) {

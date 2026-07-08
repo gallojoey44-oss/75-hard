@@ -6,8 +6,8 @@ export default function ProfileSelector() {
   return (
     <div className="profile-selector">
       <div className="profile-selector-header">
-        <h1>75 Hard</h1>
-        <p>Choose your profile to get started</p>
+        <h1>Forge</h1>
+        <p>Health OS — choose your profile</p>
       </div>
 
       <div className="profile-cards">
@@ -30,7 +30,7 @@ export default function ProfileSelector() {
           <span className="profile-card-emoji">🌸</span>
           <div className="profile-card-info">
             <h2>Girlfriend</h2>
-            <p>Daily routine · custom tasks</p>
+            <p>Daily habits · custom tasks</p>
           </div>
           <span className="profile-card-arrow">›</span>
         </button>

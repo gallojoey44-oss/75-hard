@@ -259,12 +259,15 @@ export default function Dashboard({ setView }) {
 
         <div className="start-challenge">
           <div className="start-challenge-emoji">🔥</div>
-          <h2>Start Your 75-Day Challenge</h2>
+          <h2>Start a Challenge</h2>
           <p>
-            Press the button below to begin. Day 1 starts today and your progress will be saved automatically.
+            Begin your 75-Day Discipline Challenge. Day 1 starts today — tasks, XP, and progress track automatically.
           </p>
           <button className="btn btn-primary btn-full" onClick={() => startChallenge()}>
-            Start Challenge
+            Start 75-Day Discipline Challenge
+          </button>
+          <button className="btn btn-ghost btn-full" style={{ marginTop: 8 }} onClick={() => setView('challenges')}>
+            Browse All Challenges
           </button>
         </div>
       </div>
@@ -284,8 +287,8 @@ export default function Dashboard({ setView }) {
           <span className="dash-emoji">{profile.emoji}</span>
           <div>
             <h2>{profile.name}</h2>
-            <p className="text-muted">
-              Since {formatDateShort(profile.challengeStart)}
+            <p className="text-muted dash-challenge-label">
+              🔥 75-Day Discipline Challenge
             </p>
           </div>
         </div>

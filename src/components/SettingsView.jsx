@@ -24,7 +24,7 @@ function exportData() {
   URL.revokeObjectURL(url);
 }
 
-export default function SettingsView() {
+export default function SettingsView({ setView }) {
   const {
     activeProfile, profile, profiles, allDays,
     updateProfile, startChallenge, resetChallenge, setChallengeStart,
@@ -260,7 +260,7 @@ export default function SettingsView() {
 
       {/* Challenge management + start date */}
       <div className="settings-section">
-        <div className="section-title">🎯 Challenge</div>
+        <div className="section-title">🔥 75-Day Discipline Challenge</div>
 
         {/* Current state row */}
         {profile?.challengeStart ? (

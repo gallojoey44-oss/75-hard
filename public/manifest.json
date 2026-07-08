@@ -1,7 +1,7 @@
 {
-  "name": "75 Hard Tracker",
-  "short_name": "75 Hard",
-  "description": "75-day challenge and daily routine tracker",
+  "name": "Forge — Health OS",
+  "short_name": "Forge",
+  "description": "Your personal health and discipline operating system",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0D0D14",
