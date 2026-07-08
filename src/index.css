@@ -3552,3 +3552,118 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 }
 .danger-zone-summary::-webkit-details-marker { display: none; }
 .danger-zone-body { margin-top: 12px; }
+
+/* ─── v3.3.0: Challenge template library ─────────────────────── */
+
+.tpl-detail-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.tpl-detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text3);
+  flex-shrink: 0;
+  min-width: 62px;
+}
+.tpl-level-value {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.tpl-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.tpl-variant-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0 10px;
+}
+.tpl-variant-tab {
+  flex: 1;
+  padding: 8px 4px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.tpl-variant-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.tpl-variant-panel {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.tpl-variant-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.tpl-task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+}
+.tpl-task-list li {
+  position: relative;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+.tpl-task-list li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+.tpl-task-list.optional li { color: var(--text2); }
+.tpl-task-list.optional li::before {
+  content: '+';
+  color: var(--text3);
+}
+.tpl-task-list:last-child { margin-bottom: 0; }
+
+.tpl-sources {
+  font-size: 11px;
+  color: var(--text3);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.tpl-ready-note {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent2);
+  background: var(--card2);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
