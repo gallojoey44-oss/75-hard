@@ -2585,3 +2585,408 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   color: #fff;
   font-weight: 700;
 }
+
+/* ─── v2.9.0: Gamification / XP / Badges ─────────────────────── */
+
+.xp-widget {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+
+.xp-widget-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.xp-level-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 6px;
+  padding: 2px 8px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.xp-level-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  flex: 1;
+}
+
+.xp-value {
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 600;
+}
+
+.xp-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.xp-bar-track {
+  height: 6px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 0.5s ease;
+}
+
+.xp-next-label {
+  font-size: 10px;
+  color: var(--text3, #888);
+  text-align: right;
+}
+
+/* ─── Badges ──────────────────────────────────────────────────── */
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.badge-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: default;
+}
+
+.badge-chip-emoji { font-size: 14px; }
+.badge-chip-label { color: var(--text2); font-weight: 600; }
+
+/* ─── Comeback Card ───────────────────────────────────────────── */
+
+.comeback-card {
+  background: rgba(139,92,246,0.08);
+  border: 1px solid rgba(139,92,246,0.25);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.comeback-card.active {
+  background: rgba(16,185,129,0.06);
+  border-color: rgba(16,185,129,0.2);
+}
+
+.comeback-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.comeback-icon { font-size: 22px; }
+
+.comeback-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.comeback-sub {
+  font-size: 13px;
+  color: var(--text2);
+  margin-top: 2px;
+}
+
+.comeback-body {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.comeback-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.comeback-start-btn {
+  flex: 1;
+  min-width: 160px;
+}
+
+.comeback-dismiss-btn {
+  font-size: 13px;
+  padding: 8px 14px;
+}
+
+.comeback-phases {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comeback-phase {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text3, #888);
+  opacity: 0.6;
+}
+
+.comeback-phase.current {
+  background: rgba(16,185,129,0.08);
+  border: 1px solid rgba(16,185,129,0.2);
+  color: var(--text);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.comeback-phase.done {
+  color: var(--text2);
+  opacity: 0.8;
+}
+
+.comeback-phase-label {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.comeback-phase-desc {
+  font-size: 11px;
+  color: var(--text3, #888);
+  margin-top: 1px;
+}
+
+.comeback-check {
+  margin-left: auto;
+  color: var(--success);
+  font-weight: 700;
+}
+
+/* Comeback day banner in DailyView */
+.comeback-day-banner {
+  background: rgba(16,185,129,0.07);
+  border: 1px solid rgba(16,185,129,0.2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 12px;
+}
+
+/* ─── MWD (Minimum Warrior Day) ──────────────────────────────── */
+
+.mwd-toggle-btn {
+  background: rgba(139,92,246,0.12);
+  border: 1.5px solid rgba(139,92,246,0.3);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.mwd-toggle-btn:hover {
+  background: rgba(139,92,246,0.2);
+}
+
+.mwd-toggle-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.mwd-banner {
+  background: rgba(139,92,246,0.07);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text2);
+  font-style: italic;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.mwd-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mwd-task {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--card2);
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.mwd-task:hover { border-color: rgba(139,92,246,0.3); }
+
+.mwd-task.done {
+  background: rgba(16,185,129,0.07);
+  border-color: rgba(16,185,129,0.2);
+}
+
+.mwd-task-icon { font-size: 18px; min-width: 24px; }
+
+.mwd-task-label {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.mwd-task.done .mwd-task-label {
+  color: var(--text2);
+  text-decoration: line-through;
+}
+
+.mwd-task-check {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+.mwd-task-check.checked {
+  background: rgba(16,185,129,0.15);
+  border-color: var(--success);
+}
+
+/* MWD progress bar */
+.prog-bar-fill.mwd {
+  background: var(--accent);
+  opacity: 0.7;
+}
+
+/* ─── Warrior Message (celebration modal) ─────────────────────── */
+
+.warrior-msg {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  text-align: center;
+  padding: 12px 0 4px;
+}
+
+.mwd-complete-note {
+  font-size: 12px;
+  color: var(--text2);
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* ─── Setback Insight Card ────────────────────────────────────── */
+
+.setback-card {
+  background: rgba(245,158,11,0.06);
+  border: 1px solid rgba(245,158,11,0.2);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.setback-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.setback-icon { font-size: 20px; }
+
+.setback-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--warn);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.setback-sub {
+  font-size: 13px;
+  color: var(--text2);
+  margin-top: 2px;
+}
+
+.setback-body {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.setback-recs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.setback-rec-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.setback-rec-icon { font-size: 18px; min-width: 24px; }
+
+.setback-rec-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.setback-rec-desc {
+  font-size: 12px;
+  color: var(--text3, #888);
+  margin-top: 1px;
+}
+
+.setback-comeback-btn { width: 100%; }
+
+.setback-comeback-active {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--success);
+  text-align: center;
+  padding: 8px;
+}

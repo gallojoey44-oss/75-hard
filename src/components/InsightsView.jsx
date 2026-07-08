@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { getTodayStr } from '../utils/dateUtils';
 import { HABIT_LIBRARY, getHabit } from '../data/habitLibrary';
 import { computeAverages, generateSuggestions, assessExperiment, getCoachMessage, getPriorityBottleneck } from '../utils/insightsUtils';
+import { detectSetback } from '../utils/gamification';
 import BuildBanner from './BuildBanner';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -307,6 +308,56 @@ function ExperimentCard({ experiment, currentDayNum, onRemove }) {
   return null;
 }
 
+function SetbackInsightCard({ setback, comebackMode, onStartComeback }) {
+  if (!setback.hasSetback) return null;
+
+  const isComeback = comebackMode?.active;
+
+  const recs = [
+    { icon: '🛡️', label: 'Minimum Warrior Day', desc: 'On overwhelming days, do just the 6 MWD tasks. Chain stays alive.' },
+    { icon: '↩️', label: 'Comeback Mode', desc: 'A 3-day plan back to full pace. No reset, no shame.' },
+    { icon: '💨', label: 'Physiological Sigh', desc: '30-second stress reset. Double inhale, long exhale. Works immediately.' },
+    { icon: '🧘', label: 'NSDR / Recovery Rest', desc: '10–20 min rest in the afternoon. Nervous system recovery.' },
+    { icon: '🎯', label: 'Micro-commitment', desc: 'One small daily promise, kept without exception. Identity rebuilds from here.' },
+  ];
+
+  return (
+    <div className="setback-card">
+      <div className="setback-header">
+        <span className="setback-icon">📉</span>
+        <div>
+          <div className="setback-title">Pattern noticed</div>
+          <div className="setback-sub">
+            {setback.incompleteDays} of the last 7 days had low completion.
+          </div>
+        </div>
+      </div>
+      <p className="setback-body">
+        You&apos;re not broken. You&apos;re collecting data. Difficult stretches are part of every long challenge — the question is what you do next.
+      </p>
+      <div className="setback-recs">
+        {recs.map((r, i) => (
+          <div key={i} className="setback-rec-row">
+            <span className="setback-rec-icon">{r.icon}</span>
+            <div>
+              <div className="setback-rec-label">{r.label}</div>
+              <div className="setback-rec-desc">{r.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!isComeback && (
+        <button className="btn btn-primary setback-comeback-btn" onClick={onStartComeback}>
+          ↩️ Start Comeback Mode
+        </button>
+      )}
+      {isComeback && (
+        <div className="setback-comeback-active">↩️ Comeback Mode is active — keep going.</div>
+      )}
+    </div>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Main view
 // ────────────────────────────────────────────────────────────────────────────
@@ -314,9 +365,10 @@ function ExperimentCard({ experiment, currentDayNum, onRemove }) {
 export default function InsightsView() {
   const {
     activeProfile, profile, allDays,
-    getDayNumber, addTask,
+    getDayNumber, addTask, getDayCompletion,
     experiments, updateExperiment, startExperiment,
     dismissHint, dismissedHints,
+    startComeback,
   } = useApp();
 
   const [recalcKey, setRecalcKey] = useState(0);
@@ -351,6 +403,8 @@ export default function InsightsView() {
   const suggestions  = generateSuggestions(avg7, activeHabits, dismissedIds, sleepTarget);
   const coachMsg     = getCoachMessage(avg7, sleepTarget);
   const bottleneck   = getPriorityBottleneck(avg7, sleepTarget);
+  const setback      = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
+  const comebackMode = profile?.comebackMode || {};
 
   // Auto-complete experiments that have passed their endDayNum
   useEffect(() => {
@@ -435,6 +489,13 @@ export default function InsightsView() {
 
         {/* 1. Priority bottleneck */}
         <PriorityBottleneckCard bottleneck={bottleneck} />
+
+        {/* Setback insight */}
+        <SetbackInsightCard
+          setback={setback}
+          comebackMode={comebackMode}
+          onStartComeback={() => dayNum && startComeback(dayNum)}
+        />
 
         {/* 2. Coach message */}
         <CoachMessage msg={coachMsg} />

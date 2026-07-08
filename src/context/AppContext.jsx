@@ -84,6 +84,8 @@ function emptyDay(date, dayNumber) {
     glucoseNotes: '',
     hoursSlept: 0,
     validated: false,
+    isMWD: false,
+    mwdTasks: {},
   };
 }
 
@@ -211,6 +213,21 @@ function migrateProfiles(stored) {
         ...profiles.girlfriend,
         tasks: [...tasks, { id: 'gf_sleep_target', name: 'Sleep target met', color: '#DDA0DD', order: maxOrder + 1 }],
       };
+      changed = true;
+    }
+  }
+
+  // Both profiles — add comebackMode and comebackHistory if missing
+  for (const profId of ['me', 'girlfriend']) {
+    if (!profiles[profId].comebackMode) {
+      profiles[profId] = {
+        ...profiles[profId],
+        comebackMode: { active: false, dayStart: null, dismissedAt: null },
+      };
+      changed = true;
+    }
+    if (!profiles[profId].comebackHistory) {
+      profiles[profId] = { ...profiles[profId], comebackHistory: [] };
       changed = true;
     }
   }
@@ -552,6 +569,45 @@ export function AppProvider({ children }) {
     }));
   }, [activeProfile, setDismissedHints]);
 
+  // ── Comeback Mode actions ──────────────────────────────────────────────────
+
+  const startComeback = useCallback((dayNumber) => {
+    if (!activeProfile) return;
+    setProfiles(prev => ({
+      ...prev,
+      [activeProfile]: {
+        ...prev[activeProfile],
+        comebackMode: { active: true, dayStart: dayNumber, dismissedAt: null },
+      },
+    }));
+  }, [activeProfile, setProfiles]);
+
+  const dismissComeback = useCallback((dayNumber) => {
+    if (!activeProfile) return;
+    setProfiles(prev => ({
+      ...prev,
+      [activeProfile]: {
+        ...prev[activeProfile],
+        comebackMode: { active: false, dayStart: null, dismissedAt: dayNumber },
+      },
+    }));
+  }, [activeProfile, setProfiles]);
+
+  const completeComeback = useCallback((startDay) => {
+    if (!activeProfile) return;
+    setProfiles(prev => {
+      const p = prev[activeProfile];
+      return {
+        ...prev,
+        [activeProfile]: {
+          ...p,
+          comebackMode: { active: false, dayStart: null, dismissedAt: null },
+          comebackHistory: [...(p.comebackHistory || []), { startDay, completed: true }],
+        },
+      };
+    });
+  }, [activeProfile, setProfiles]);
+
   return (
     <AppContext.Provider value={{
       activeProfile, profile, profiles, days, allDays,
@@ -571,6 +627,8 @@ export function AppProvider({ children }) {
       // Insights
       experiments, dismissedHints,
       startExperiment, updateExperiment, dismissHint,
+      // Comeback
+      startComeback, dismissComeback, completeComeback,
     }}>
       {children}
     </AppContext.Provider>

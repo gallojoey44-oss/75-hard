@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDateShort, getDateForDayNumber } from '../utils/dateUtils';
 import QuoteOfTheDay from './QuoteOfTheDay';
 import BuildBanner from './BuildBanner';
+import { computeXP, getLevelInfo, computeBadges, detectSetback } from '../utils/gamification';
 
 function CircleRing({ value, max, size = 120 }) {
   const r = (size - 16) / 2;
@@ -24,12 +25,119 @@ function CircleRing({ value, max, size = 120 }) {
   );
 }
 
+function XPWidget({ xp, levelInfo }) {
+  return (
+    <div className="xp-widget">
+      <div className="xp-widget-top">
+        <div className="xp-level-badge">Lv {levelInfo.current.level}</div>
+        <span className="xp-level-name">{levelInfo.current.name}</span>
+        <span className="xp-value">{xp} XP</span>
+      </div>
+      <div className="xp-bar-wrap">
+        <div className="xp-bar-track">
+          <div className="xp-bar-fill" style={{ width: `${levelInfo.progress}%` }} />
+        </div>
+        {levelInfo.next && (
+          <span className="xp-next-label">{levelInfo.next.minXP - xp} XP to {levelInfo.next.name}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BadgeRow({ badges }) {
+  if (!badges.length) return null;
+  return (
+    <div className="badge-row">
+      {badges.map(b => (
+        <div key={b.id} className="badge-chip" title={b.desc}>
+          <span className="badge-chip-emoji">{b.emoji}</span>
+          <span className="badge-chip-label">{b.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ComebackCard({ dayNum, comebackMode, setback, onStart, onDismiss, onComplete }) {
+  // Auto-complete if 3 days have elapsed
+  useEffect(() => {
+    if (comebackMode?.active && comebackMode.dayStart != null && dayNum >= comebackMode.dayStart + 3) {
+      onComplete(comebackMode.dayStart);
+    }
+  }, [dayNum, comebackMode, onComplete]);
+
+  if (comebackMode?.active) {
+    const elapsed = dayNum - (comebackMode.dayStart || dayNum);
+    const phase = Math.min(elapsed, 2);
+    const phases = [
+      { label: 'Day 1', desc: 'Minimum Warrior Day — just show up', icon: '🚶' },
+      { label: 'Day 2', desc: 'Normal tasks, lower intensity', icon: '💪' },
+      { label: 'Day 3', desc: 'Full challenge — back in full', icon: '🔥' },
+    ];
+    return (
+      <div className="comeback-card active">
+        <div className="comeback-header">
+          <span className="comeback-icon">↩️</span>
+          <div>
+            <div className="comeback-title">Comeback Mode — Day {Math.min(phase + 1, 3)} of 3</div>
+            <div className="comeback-sub">Keep going. You&apos;re building something.</div>
+          </div>
+        </div>
+        <div className="comeback-phases">
+          {phases.map((p, i) => (
+            <div
+              key={i}
+              className={`comeback-phase${i < phase ? ' done' : i === phase ? ' current' : ''}`}
+            >
+              <span>{p.icon}</span>
+              <div>
+                <div className="comeback-phase-label">{p.label}</div>
+                <div className="comeback-phase-desc">{p.desc}</div>
+              </div>
+              {i < phase && <span className="comeback-check">✓</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Invitation card (setback detected, not yet dismissed)
+  if (!setback.hasSetback) return null;
+  return (
+    <div className="comeback-card">
+      <div className="comeback-header">
+        <span className="comeback-icon">↩️</span>
+        <div>
+          <div className="comeback-title">You&apos;re not starting over.</div>
+          <div className="comeback-sub">You&apos;re returning.</div>
+        </div>
+      </div>
+      <p className="comeback-body">
+        {setback.incompleteDays} of your last 7 days were incomplete.
+        A 3-day comeback plan gets you back to full pace — without resetting your challenge.
+      </p>
+      <div className="comeback-actions">
+        <button className="btn btn-primary comeback-start-btn" onClick={onStart}>
+          Start Comeback Mode
+        </button>
+        <button className="btn btn-ghost comeback-dismiss-btn" onClick={onDismiss}>
+          Not now
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({ setView }) {
   const {
-    activeProfile, profile, days,
+    activeProfile, profile, profiles, days, allDays,
     getDayNumber, getDayCompletion, getStreak, getLongestStreak,
     startChallenge,
     setActiveProfile,
+    updateProfile,
+    startComeback, dismissComeback, completeComeback,
   } = useApp();
 
   const [showSwitch, setShowSwitch] = useState(false);
@@ -43,6 +151,18 @@ export default function Dashboard({ setView }) {
     : 0;
 
   const otherProfile = activeProfile === 'me' ? 'girlfriend' : 'me';
+
+  const xp        = dayNum ? computeXP(allDays, profiles, activeProfile) : 0;
+  const levelInfo = getLevelInfo(xp);
+  const badges    = dayNum ? computeBadges(allDays, profiles, activeProfile, getDayCompletion, dayNum) : [];
+  const setback   = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
+
+  const comebackMode = profile?.comebackMode || { active: false, dayStart: null, dismissedAt: null };
+  const showComebackCard = !!(comebackMode.active || (
+    setback.hasSetback &&
+    !comebackMode.active &&
+    (comebackMode.dismissedAt == null || dayNum > comebackMode.dismissedAt + 3)
+  ));
 
   if (!profile?.challengeStart) {
     return (
@@ -98,6 +218,12 @@ export default function Dashboard({ setView }) {
         </button>
       </div>
 
+      {/* XP / Level */}
+      <XPWidget xp={xp} levelInfo={levelInfo} />
+
+      {/* Badges */}
+      <BadgeRow badges={badges} />
+
       {isDone && (
         <div className="challenge-complete">
           <h3>🏆 Challenge Complete!</h3>
@@ -109,6 +235,18 @@ export default function Dashboard({ setView }) {
         <div className="warn-banner">
           ⚠️ Day {prevDay} wasn't fully completed — you can still edit it in the Calendar.
         </div>
+      )}
+
+      {/* Comeback card */}
+      {!isDone && showComebackCard && (
+        <ComebackCard
+          dayNum={dayNum}
+          comebackMode={comebackMode}
+          setback={setback}
+          onStart={() => startComeback(dayNum)}
+          onDismiss={() => dismissComeback(dayNum)}
+          onComplete={(startDay) => completeComeback(startDay)}
+        />
       )}
 
       {/* Hero Ring */}

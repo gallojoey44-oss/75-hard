@@ -21,6 +21,8 @@ export function computeAverages(dayNums, days, tasks) {
     hasMoodData: false,   hasConfData: false,
     hasRecoveryData: false, hasEffortData: false, hasStressData: false,
     hasHoursSleptData: false,
+    missedDays: 0,
+    partialDays: 0,
   };
   if (!dayNums.length || !tasks.length) return base;
 
@@ -63,6 +65,10 @@ export function computeAverages(dayNums, days, tasks) {
     if (workoutTask) { workoutTotal++; if (data.tasks?.[workoutTask.id]) workoutDone++; }
     if (dietTask)    { dietTotal++;    if (data.tasks?.[dietTask.id])    dietDone++;    }
     if (mentalTask)  { mentalTotal++;  if (data.tasks?.[mentalTask.id])  mentalDone++;  }
+
+    const dayPct = Math.round((done / tasks.length) * 100);
+    if (dayPct < 40) base.missedDays++;
+    else if (dayPct < 80) base.partialDays++;
 
     if (data.notes) {
       const nText = data.notes.toLowerCase();
@@ -457,6 +463,21 @@ export function generateSuggestions(avg, activeHabitIds = [], dismissedHabitIds 
       `Confidence is low. A daily 90-minute phone-free focus block creates direct proof of being capable and in control of your attention.`,
       `A 90-minute uninterrupted focus block produces direct evidence of competence and self-control. Repeated daily, it accumulates into confidence through demonstrated capability — not motivation, but proof.`,
       15);
+  }
+
+  // ── Setback pattern — repeated missed/partial days ─────────────────────────
+  const hasSetbackPattern = avg.missedDays >= 2 || avg.partialDays >= 3;
+  if (hasSetbackPattern) {
+    add('min_floor_habit',
+      `${avg.missedDays >= 2 ? `${avg.missedDays} days with very low completion` : `${avg.partialDays} partial days`} this week.`,
+      `Consistency is the pattern to rebuild. A minimum floor version of your hardest habit keeps the chain alive on difficult days — better than zero.`,
+      `When days keep falling short, the routine is outpacing the current season. A minimum floor target — even one short daily promise — prevents zero-days and rebuilds the identity layer that momentum sits on.`,
+      16);
+    add('physiological_sigh',
+      `${avg.missedDays >= 2 ? 'Multiple low-completion days' : 'Repeated partial days'} this week suggest external pressure is building.`,
+      `When life is difficult, a real-time stress tool has an outsized return. Physiological sigh breathing takes 30 seconds and can prevent cortisol spikes from compounding through the day.`,
+      `When circumstances make the routine hard to complete, cortisol tends to stay chronically elevated. A rapid-acting tool used reactively prevents acute spikes from compounding — distinct from a scheduled habit. Works anywhere, any time.`,
+      16);
   }
 
   // ── Consistency fallback (for < 60% completion with no priority hit above) ─

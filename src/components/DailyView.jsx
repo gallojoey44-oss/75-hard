@@ -6,6 +6,7 @@ import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
 import BuildBanner from './BuildBanner';
+import { MWD_TASKS, getMWDComplete, getWarriorMessage } from '../utils/gamification';
 
 const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
 
@@ -62,6 +63,33 @@ function DaySelector({ selected, current, onChange }) {
   );
 }
 
+function MWDBanner({ comebackMode, dayNum }) {
+  if (!comebackMode?.active) return null;
+  const elapsed = dayNum - (comebackMode.dayStart || dayNum);
+  if (elapsed === 0) {
+    return (
+      <div className="comeback-day-banner">
+        ↩️ <strong>Comeback Day 1</strong> — Minimum Warrior Day is enough today.
+      </div>
+    );
+  }
+  if (elapsed === 1) {
+    return (
+      <div className="comeback-day-banner">
+        ↩️ <strong>Comeback Day 2</strong> — Normal tasks, lower intensity. Keep going.
+      </div>
+    );
+  }
+  if (elapsed === 2) {
+    return (
+      <div className="comeback-day-banner">
+        ↩️ <strong>Comeback Day 3</strong> — Full challenge. You&apos;re back.
+      </div>
+    );
+  }
+  return null;
+}
+
 export default function DailyView({ editDayNum, setView }) {
   const {
     activeProfile, profile,
@@ -76,21 +104,21 @@ export default function DailyView({ editDayNum, setView }) {
   );
   const [dayData, setDayData] = useState(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationMsg, setCelebrationMsg] = useState('');
+  const [celebrationIsMWD, setCelebrationIsMWD] = useState(false);
   const [prevPct, setPrevPct] = useState(0);
+  const [prevMWDDone, setPrevMWDDone] = useState(false);
 
-  // Sync when Calendar passes a specific day to edit
   useEffect(() => {
     if (editDayNum != null) setSelectedDayNum(editDayNum);
   }, [editDayNum]);
 
-  // Reset to current day when active profile changes
   useEffect(() => {
     const n = editDayNum != null ? editDayNum : (getDayNumber() || 1);
     setSelectedDayNum(n);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProfile]);
 
-  // Load day data whenever selected day or profile changes
   useEffect(() => {
     if (!selectedDayNum) return;
     const data = getDayData(selectedDayNum) || {
@@ -101,9 +129,11 @@ export default function DailyView({ editDayNum, setView }) {
       mood: 0, confidence: 0, sleep: 0, energy: 0,
       recovery: 0, workoutEffort: 0, stress: 0,
       notes: '', glucoseNotes: '', validated: false,
+      isMWD: false, mwdTasks: {},
     };
     setDayData(data);
     setPrevPct(calcPct(data));
+    setPrevMWDDone(getMWDComplete(data));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDayNum, activeProfile]);
 
@@ -120,18 +150,44 @@ export default function DailyView({ editDayNum, setView }) {
     return Math.round(((done + extraDone) / (tasks.length + extra)) * 100);
   }
 
+  function calcMWDPct(data) {
+    if (!data?.isMWD) return 0;
+    const done = MWD_TASKS.filter(t => data.mwdTasks?.[t.id]).length;
+    return Math.round((done / MWD_TASKS.length) * 100);
+  }
+
+  function triggerCelebration(merged, newPct, newMWDDone) {
+    const wasNotComplete = prevPct < 100 && !prevMWDDone;
+    const justCompleted = (newPct === 100 && prevPct < 100) || (newMWDDone && !prevMWDDone);
+    if (!justCompleted) return;
+    if (!wasNotComplete) return;
+
+    const isMWD = merged.isMWD && newMWDDone;
+    const isComeback = !!(profile?.comebackMode?.active);
+    const stressHigh = (merged.stress || 0) >= 7;
+    const msg = getWarriorMessage({ isMWD, isComeback, stressHigh });
+    setCelebrationMsg(msg);
+    setCelebrationIsMWD(isMWD);
+    setShowCelebration(true);
+    setPrevPct(newPct);
+    setPrevMWDDone(newMWDDone);
+  }
+
   function handleUpdate(updates) {
     if (!selectedDayNum) return;
     const merged = { ...dayData, ...updates };
     if (updates.tasks)           merged.tasks           = { ...dayData?.tasks,           ...updates.tasks };
     if (updates.mentalTraining)  merged.mentalTraining  = { ...dayData?.mentalTraining,  ...updates.mentalTraining };
     if (updates.faithReflection) merged.faithReflection = { ...dayData?.faithReflection, ...updates.faithReflection };
+    if (updates.mwdTasks)        merged.mwdTasks        = { ...dayData?.mwdTasks,        ...updates.mwdTasks };
     setDayData(merged);
     updateDay(selectedDayNum, merged);
 
     const newPct = calcPct(merged);
-    if (newPct === 100 && prevPct < 100) setShowCelebration(true);
+    const newMWDDone = getMWDComplete(merged);
+    triggerCelebration(merged, newPct, newMWDDone);
     setPrevPct(newPct);
+    setPrevMWDDone(newMWDDone);
   }
 
   function handleToggleTask(taskId) {
@@ -141,8 +197,20 @@ export default function DailyView({ editDayNum, setView }) {
     toggleTask(selectedDayNum, taskId);
 
     const newPct = calcPct(merged);
-    if (newPct === 100 && prevPct < 100) setShowCelebration(true);
+    const newMWDDone = getMWDComplete(merged);
+    triggerCelebration(merged, newPct, newMWDDone);
     setPrevPct(newPct);
+    setPrevMWDDone(newMWDDone);
+  }
+
+  function handleToggleMWDTask(taskId) {
+    const newMwdTasks = { ...dayData?.mwdTasks, [taskId]: !dayData?.mwdTasks?.[taskId] };
+    handleUpdate({ mwdTasks: newMwdTasks });
+  }
+
+  function handleToggleMWD() {
+    const newIsMWD = !dayData?.isMWD;
+    handleUpdate({ isMWD: newIsMWD });
   }
 
   function handleValidate() {
@@ -164,13 +232,21 @@ export default function DailyView({ editDayNum, setView }) {
 
   const isEditingOtherDay = currentDayNum && selectedDayNum !== currentDayNum;
   const pct     = calcPct(dayData);
+  const mwdPct  = calcMWDPct(dayData);
   const tasks   = [...(profile.tasks || [])].sort((a, b) => a.order - b.order);
   const dateStr = dayData?.date || getDateForDayNumber(profile?.challengeStart, selectedDayNum);
   const isMe    = activeProfile === 'me';
+  const isMWD   = !!dayData?.isMWD;
 
   const mentalTaskId = isMe ? 'mental' : 'gf_mental';
   const faithEnabled = profile?.faithEnabled || false;
   const faithCounts  = profile?.faithCountsToward || false;
+
+  const isCurrentDay = selectedDayNum === currentDayNum;
+  const comebackMode = profile?.comebackMode || {};
+
+  const displayPct = isMWD ? mwdPct : pct;
+  const taskCount  = isMWD ? `${MWD_TASKS.filter(t => dayData?.mwdTasks?.[t.id]).length}/${MWD_TASKS.length} MWD tasks` : `${tasks.filter(t => dayData?.tasks?.[t.id]).length}/${tasks.length} tasks`;
 
   return (
     <div className="daily-view">
@@ -182,6 +258,11 @@ export default function DailyView({ editDayNum, setView }) {
         current={currentDayNum}
         onChange={setSelectedDayNum}
       />
+
+      {/* Comeback banner */}
+      {isMe && isCurrentDay && (
+        <MWDBanner comebackMode={comebackMode} dayNum={selectedDayNum} />
+      )}
 
       <div className="daily-header">
         <div className="daily-header-left">
@@ -205,13 +286,13 @@ export default function DailyView({ editDayNum, setView }) {
       <div className="section-card">
         <div className="prog-bar-wrap">
           <div className="prog-bar-label">
-            <span>Today's progress</span>
-            <span>{tasks.filter(t => dayData?.tasks?.[t.id]).length}/{tasks.length} tasks</span>
+            <span>{isMWD ? '🛡️ MWD progress' : "Today's progress"}</span>
+            <span>{taskCount}</span>
           </div>
           <div className="prog-bar-track">
             <div
-              className={`prog-bar-fill${pct === 100 ? ' success' : ''}`}
-              style={{ width: `${pct}%` }}
+              className={`prog-bar-fill${displayPct === 100 ? ' success' : ''}${isMWD ? ' mwd' : ''}`}
+              style={{ width: `${displayPct}%` }}
             />
           </div>
         </div>
@@ -220,30 +301,65 @@ export default function DailyView({ editDayNum, setView }) {
       {/* ── Joey: standard checklist ── */}
       {isMe && (
         <div className="section-card">
-          <div className="section-title" style={{ justifyContent: 'space-between' }}>
-            <span>✅ Daily Tasks</span>
-            {setView && (
-              <button
-                className="manage-tasks-link"
-                onClick={() => setView('settings')}
-              >
-                ✏️ Manage Tasks
-              </button>
-            )}
+          <div className="section-title" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <span>{isMWD ? '🛡️ Minimum Warrior Day' : '✅ Daily Tasks'}</span>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {isCurrentDay && (
+                <button
+                  className={`mwd-toggle-btn${isMWD ? ' active' : ''}`}
+                  onClick={handleToggleMWD}
+                  title={isMWD ? 'Switch to full challenge' : 'Switch to Minimum Warrior Day'}
+                >
+                  {isMWD ? '↩ Full Mode' : '🛡️ MWD'}
+                </button>
+              )}
+              {setView && (
+                <button
+                  className="manage-tasks-link"
+                  onClick={() => setView('settings')}
+                >
+                  ✏️ Manage Tasks
+                </button>
+              )}
+            </div>
           </div>
-          {tasks.map(task => (
-            <CheckItem
-              key={task.id}
-              task={task}
-              checked={!!dayData?.tasks?.[task.id]}
-              onToggle={() => handleToggleTask(task.id)}
-            />
-          ))}
+
+          {isMWD ? (
+            <>
+              <div className="mwd-banner">
+                Today is about not breaking completely. Do the minimum and return tomorrow.
+              </div>
+              <div className="mwd-task-list">
+                {MWD_TASKS.map(task => (
+                  <div
+                    key={task.id}
+                    className={`mwd-task${dayData?.mwdTasks?.[task.id] ? ' done' : ''}`}
+                    onClick={() => handleToggleMWDTask(task.id)}
+                  >
+                    <span className="mwd-task-icon">{task.icon}</span>
+                    <span className="mwd-task-label">{task.label}</span>
+                    <span className={`mwd-task-check${dayData?.mwdTasks?.[task.id] ? ' checked' : ''}`}>
+                      {dayData?.mwdTasks?.[task.id] ? '✓' : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            tasks.map(task => (
+              <CheckItem
+                key={task.id}
+                task={task}
+                checked={!!dayData?.tasks?.[task.id]}
+                onToggle={() => handleToggleTask(task.id)}
+              />
+            ))
+          )}
         </div>
       )}
 
       {/* ── Joey: mental training ── */}
-      {isMe && (
+      {isMe && !isMWD && (
         <MentalTraining
           dayNumber={selectedDayNum}
           dayData={dayData}
@@ -253,7 +369,7 @@ export default function DailyView({ editDayNum, setView }) {
       )}
 
       {/* ── Joey: faith reflection (optional) ── */}
-      {isMe && faithEnabled && (
+      {isMe && faithEnabled && !isMWD && (
         <FaithReflection
           dayNumber={selectedDayNum}
           dayData={dayData}
@@ -288,7 +404,6 @@ export default function DailyView({ editDayNum, setView }) {
             ))}
           </div>
 
-          {/* Girlfriend mental training section */}
           <MentalTraining
             dayNumber={selectedDayNum}
             dayData={dayData}
@@ -296,7 +411,6 @@ export default function DailyView({ editDayNum, setView }) {
             mentalTaskId={mentalTaskId}
           />
 
-          {/* Girlfriend: faith reflection (optional) */}
           {faithEnabled && (
             <FaithReflection
               dayNumber={selectedDayNum}
@@ -306,7 +420,6 @@ export default function DailyView({ editDayNum, setView }) {
             />
           )}
 
-          {/* Validate Day */}
           <div className="validate-btn-wrap">
             {dayData?.validated ? (
               <div className="validated-badge">
@@ -410,19 +523,20 @@ export default function DailyView({ editDayNum, setView }) {
           onChange={v => handleUpdate({ stress: v })}
           hint="1 = very calm · 10 = very stressed"
         />
-
-
       </div>
 
       {/* Celebration modal */}
       {showCelebration && (
         <div className="celebration-overlay" onClick={() => setShowCelebration(false)}>
           <div className="celebration-card" onClick={e => e.stopPropagation()}>
-            <div className="celebration-emoji">🎉</div>
-            <h2>Day {selectedDayNum} Complete!</h2>
-            <p>Every task done. You're building something real — keep going!</p>
+            <div className="celebration-emoji">{celebrationIsMWD ? '🛡️' : '🎉'}</div>
+            <h2>{celebrationIsMWD ? `MWD Complete — Day ${selectedDayNum}` : `Day ${selectedDayNum} Complete!`}</h2>
+            <div className="warrior-msg">{celebrationMsg}</div>
+            {celebrationIsMWD && (
+              <p className="mwd-complete-note">Chain kept. Come back stronger tomorrow.</p>
+            )}
             <button className="btn btn-primary btn-full" onClick={() => setShowCelebration(false)}>
-              Let's go! 💪
+              {celebrationIsMWD ? 'Keep going 🛡️' : "Let's go! 💪"}
             </button>
           </div>
         </div>
