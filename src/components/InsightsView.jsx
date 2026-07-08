@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { getTodayStr } from '../utils/dateUtils';
 import { HABIT_LIBRARY, getHabit } from '../data/habitLibrary';
 import { computeAverages, generateSuggestions, assessExperiment, getCoachMessage, getPriorityBottleneck } from '../utils/insightsUtils';
-import { detectSetback } from '../utils/gamification';
+import { detectSetback, computeDayXP } from '../utils/gamification';
 import BuildBanner from './BuildBanner';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -362,9 +362,88 @@ function SetbackInsightCard({ setback, comebackMode, onStartComeback }) {
 // Main view
 // ────────────────────────────────────────────────────────────────────────────
 
+function XPTrendCard({ xpTrend, avg7, comebackMode, onStartComeback }) {
+  if (!xpTrend || xpTrend.length < 3) return null;
+
+  const last3 = xpTrend.slice(0, 3);
+  const allNegativeLast3 = last3.every(d => d.net < 0);
+  const xpRising = xpTrend[0].net > 0 && xpTrend[1].net >= 0;
+  const wellnessDipping = xpRising && avg7.daysLogged >= 3 && (
+    (avg7.hasEnergyData && avg7.energy < 6) ||
+    (avg7.hasSleepData && avg7.sleep < 6) ||
+    (avg7.hasRecoveryData && avg7.recovery < 6)
+  );
+
+  if (!allNegativeLast3 && !wellnessDipping) return null;
+
+  if (allNegativeLast3) {
+    const isComeback = comebackMode?.active;
+    return (
+      <div className="xp-trend-card decline">
+        <div className="xp-trend-header">
+          <span className="xp-trend-icon">📉</span>
+          <div>
+            <div className="xp-trend-title">XP declining</div>
+            <div className="xp-trend-sub">Last 3 days were net negative. You can turn this around.</div>
+          </div>
+        </div>
+        <div className="xp-trend-recs">
+          <div className="xp-trend-rec">
+            <span>🛡️</span>
+            <div><strong>Minimum Warrior Day</strong> — 6 tasks, chain stays alive, penalties cut 70%.</div>
+          </div>
+          <div className="xp-trend-rec">
+            <span>🎯</span>
+            <div><strong>Micro-commitment</strong> — Pick one task. Do it without exception.</div>
+          </div>
+        </div>
+        {!isComeback && (
+          <button className="btn btn-primary xp-trend-action" onClick={onStartComeback}>
+            ↩️ Start Comeback Mode
+          </button>
+        )}
+        {isComeback && (
+          <div className="xp-trend-comeback-active">↩️ Comeback Mode is active — keep going.</div>
+        )}
+      </div>
+    );
+  }
+
+  if (wellnessDipping) {
+    const flags = [
+      avg7.hasEnergyData && avg7.energy < 6 ? `energy (${avg7.energy}/10)` : null,
+      avg7.hasSleepData && avg7.sleep < 6 ? `sleep (${avg7.sleep}/10)` : null,
+      avg7.hasRecoveryData && avg7.recovery < 6 ? `recovery (${avg7.recovery}/10)` : null,
+    ].filter(Boolean);
+    return (
+      <div className="xp-trend-card warn">
+        <div className="xp-trend-header">
+          <span className="xp-trend-icon">⚠️</span>
+          <div>
+            <div className="xp-trend-title">XP rising, wellness dropping</div>
+            <div className="xp-trend-sub">Your output is up but {flags.join(', ')} is low.</div>
+          </div>
+        </div>
+        <div className="xp-trend-recs">
+          <div className="xp-trend-rec">
+            <span>🔋</span>
+            <div><strong>Prioritize recovery</strong> — Unsustainable output leads to burnout. Build in rest.</div>
+          </div>
+          <div className="xp-trend-rec">
+            <span>😴</span>
+            <div><strong>Sleep first</strong> — Quality sleep rebuilds everything else. Hit your sleep target tonight.</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default function InsightsView() {
   const {
-    activeProfile, profile, allDays,
+    activeProfile, profile, profiles, allDays,
     getDayNumber, addTask, getDayCompletion,
     experiments, updateExperiment, startExperiment,
     dismissHint, dismissedHints,
@@ -405,6 +484,14 @@ export default function InsightsView() {
   const bottleneck   = getPriorityBottleneck(avg7, sleepTarget);
   const setback      = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
   const comebackMode = profile?.comebackMode || {};
+
+  // XP trend for last 5 days (most recent first)
+  const penaltiesOn = profiles[activeProfile]?.xpPenalties !== false;
+  const xpTrend = dayNum ? Array.from({ length: Math.min(5, dayNum) }, (_, i) => {
+    const n = dayNum - i;
+    const { gained, lost } = computeDayXP(days[n], tasks, activeProfile, n, dayNum, penaltiesOn);
+    return { day: n, net: gained - lost };
+  }) : [];
 
   // Auto-complete experiments that have passed their endDayNum
   useEffect(() => {
@@ -493,6 +580,14 @@ export default function InsightsView() {
         {/* Setback insight */}
         <SetbackInsightCard
           setback={setback}
+          comebackMode={comebackMode}
+          onStartComeback={() => dayNum && startComeback(dayNum)}
+        />
+
+        {/* XP trend */}
+        <XPTrendCard
+          xpTrend={xpTrend}
+          avg7={avg7}
           comebackMode={comebackMode}
           onStartComeback={() => dayNum && startComeback(dayNum)}
         />

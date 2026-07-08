@@ -5,6 +5,7 @@ import TaskManager from './TaskManager';
 import QuoteLibrary from './QuoteLibrary';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 import BuildBanner, { BUILD_VERSION } from './BuildBanner';
+import { computeTotalXP, getRankInfo } from '../utils/gamification';
 
 const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints'];
 
@@ -25,15 +26,17 @@ function exportData() {
 
 export default function SettingsView() {
   const {
-    activeProfile, profile, profiles,
+    activeProfile, profile, profiles, allDays,
     updateProfile, startChallenge, resetChallenge, setChallengeStart,
-    getDayNumber,
+    getDayNumber, getDayCompletion,
     setActiveProfile,
+    resetXP,
   } = useApp();
 
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(profile?.name || '');
   const [showReset, setShowReset] = useState(false);
+  const [showResetXP, setShowResetXP] = useState(false);
   const [importStatus, setImportStatus] = useState('idle'); // 'idle'|'success'|'error'
   const importRef = useRef(null);
 
@@ -358,6 +361,49 @@ export default function SettingsView() {
         </div>
       </div>
 
+      {/* XP System */}
+      <div className="settings-section">
+        <div className="section-title">⚡ XP System</div>
+        {(() => {
+          const dayNum = getDayNumber();
+          const xpData = dayNum ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum) : { total: 0 };
+          const rankInfo = getRankInfo(xpData.total);
+          return (
+            <div className="settings-row" style={{ marginBottom: 12 }}>
+              <span className="settings-row-label">Current Rank</span>
+              <span className="settings-row-value" style={{ color: 'var(--accent2)', fontWeight: 700 }}>
+                {rankInfo.current.name} · {xpData.total.toLocaleString()} XP
+              </span>
+            </div>
+          );
+        })()}
+        <div className="settings-row">
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>XP Penalties</div>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+              Lose XP for missed tasks and broken streaks. Kept low — MWD reduces penalties by 70%.
+            </div>
+          </div>
+          <button
+            className={`toggle-btn${profile?.xpPenalties !== false ? ' on' : ''}`}
+            onClick={() => updateProfile({ xpPenalties: profile?.xpPenalties === false ? true : false })}
+          >
+            {profile?.xpPenalties !== false ? 'On' : 'Off'}
+          </button>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <button
+            className="btn btn-danger btn-full"
+            onClick={() => setShowResetXP(true)}
+          >
+            Reset XP to Zero
+          </button>
+          <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, textAlign: 'center' }}>
+            Your challenge progress and day data are not affected.
+          </p>
+        </div>
+      </div>
+
       {/* Install instructions */}
       <div className="settings-section">
         <div className="section-title">📱 Add to iPhone Home Screen</div>
@@ -483,7 +529,7 @@ export default function SettingsView() {
         )}
       </div>
 
-      {/* Reset confirmation */}
+      {/* Reset challenge confirmation */}
       {showReset && (
         <div className="modal-overlay" onClick={() => setShowReset(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
@@ -492,6 +538,22 @@ export default function SettingsView() {
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setShowReset(false)}>Cancel</button>
               <button className="btn btn-danger" onClick={handleReset}>Yes, Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset XP confirmation */}
+      {showResetXP && (
+        <div className="modal-overlay" onClick={() => setShowResetXP(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h3>Reset XP?</h3>
+            <p>This sets your XP back to 0. Your day data, streak, and badges are not changed — only the XP number resets.</p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setShowResetXP(false)}>Cancel</button>
+              <button className="btn btn-danger" onClick={() => { resetXP(); setShowResetXP(false); }}>
+                Yes, Reset XP
+              </button>
             </div>
           </div>
         </div>

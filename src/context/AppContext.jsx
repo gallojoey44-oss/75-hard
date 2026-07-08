@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback } from 'react';
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
+import { computeTotalXP } from '../utils/gamification';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -228,6 +229,14 @@ function migrateProfiles(stored) {
     }
     if (!profiles[profId].comebackHistory) {
       profiles[profId] = { ...profiles[profId], comebackHistory: [] };
+      changed = true;
+    }
+    if (profiles[profId].xpPenalties === undefined) {
+      profiles[profId] = { ...profiles[profId], xpPenalties: true };
+      changed = true;
+    }
+    if (profiles[profId].xpOffset === undefined) {
+      profiles[profId] = { ...profiles[profId], xpOffset: 0 };
       changed = true;
     }
   }
@@ -569,6 +578,22 @@ export function AppProvider({ children }) {
     }));
   }, [activeProfile, setDismissedHints]);
 
+  // ── XP actions ────────────────────────────────────────────────────────────
+
+  const resetXP = useCallback(() => {
+    if (!activeProfile) return;
+    const dayNum = getDayNumber();
+    if (!dayNum) return;
+    const { total } = computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum);
+    setProfiles(prev => ({
+      ...prev,
+      [activeProfile]: {
+        ...prev[activeProfile],
+        xpOffset: (prev[activeProfile].xpOffset || 0) - total,
+      },
+    }));
+  }, [activeProfile, allDays, profiles, getDayCompletion, getDayNumber, setProfiles]);
+
   // ── Comeback Mode actions ──────────────────────────────────────────────────
 
   const startComeback = useCallback((dayNumber) => {
@@ -627,6 +652,8 @@ export function AppProvider({ children }) {
       // Insights
       experiments, dismissedHints,
       startExperiment, updateExperiment, dismissHint,
+      // XP
+      resetXP,
       // Comeback
       startComeback, dismissComeback, completeComeback,
     }}>

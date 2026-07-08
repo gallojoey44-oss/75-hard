@@ -2990,3 +2990,170 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   text-align: center;
   padding: 8px;
 }
+
+/* ─── v3.0.0: Rank System ─────────────────────────────────────── */
+
+/* Rank badge in XP widget */
+.xp-rank-badge {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 6px;
+  padding: 3px 10px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+/* Details toggle button in XP widget */
+.xp-details-btn {
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.xp-details-btn:active { opacity: 0.6; }
+
+/* Today's XP row */
+.xp-today-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.xp-today-gain { color: var(--success); }
+.xp-today-loss { color: var(--warn); }
+.xp-today-label { color: var(--text3); font-weight: 500; }
+
+/* XP float animation */
+@keyframes xpFloat {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  20%  { opacity: 1; transform: translateY(-6px) scale(1.1); }
+  100% { opacity: 0; transform: translateY(-44px) scale(0.9); }
+}
+
+.xp-float {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  color: var(--success);
+  font-weight: 800;
+  font-size: 15px;
+  pointer-events: none;
+  animation: xpFloat 1.6s ease-out forwards;
+  z-index: 20;
+  text-shadow: 0 2px 8px rgba(16,185,129,0.4);
+}
+
+/* Rank Details Card */
+.rank-details-card {
+  background: var(--card2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.rank-details-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 10px;
+}
+
+.rank-details-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.rank-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rank-detail-label {
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.rank-detail-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ─── v3.0.0: XP Trend Card (Insights) ───────────────────────── */
+
+.xp-trend-card {
+  border-radius: var(--radius);
+  border: 1px solid rgba(245,158,11,0.2);
+  background: rgba(245,158,11,0.05);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.xp-trend-card.decline {
+  border-color: rgba(239,68,68,0.2);
+  background: rgba(239,68,68,0.05);
+}
+
+.xp-trend-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.xp-trend-icon { font-size: 20px; }
+
+.xp-trend-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.xp-trend-sub {
+  font-size: 12px;
+  color: var(--text2);
+  margin-top: 2px;
+}
+
+.xp-trend-recs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.xp-trend-rec {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.4;
+}
+
+.xp-trend-rec strong { color: var(--text); }
+.xp-trend-rec > span { min-width: 20px; }
+
+.xp-trend-action { width: 100%; }
+
+.xp-trend-comeback-active {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--success);
+  text-align: center;
+  padding: 6px;
+}

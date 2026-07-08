@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatDateShort, getDateForDayNumber } from '../utils/dateUtils';
+import { formatDateShort } from '../utils/dateUtils';
 import QuoteOfTheDay from './QuoteOfTheDay';
 import BuildBanner from './BuildBanner';
-import { computeXP, getLevelInfo, computeBadges, detectSetback } from '../utils/gamification';
+import {
+  computeTotalXP, computeTodayXP, getRankInfo,
+  computeBadges, detectSetback, BADGE_DEFS,
+} from '../utils/gamification';
 
 function CircleRing({ value, max, size = 120 }) {
   const r = (size - 16) / 2;
@@ -25,20 +28,76 @@ function CircleRing({ value, max, size = 120 }) {
   );
 }
 
-function XPWidget({ xp, levelInfo }) {
+function XPWidget({ rankInfo, todayXP, onToggleDetails, showDetails }) {
   return (
     <div className="xp-widget">
       <div className="xp-widget-top">
-        <div className="xp-level-badge">Lv {levelInfo.current.level}</div>
-        <span className="xp-level-name">{levelInfo.current.name}</span>
-        <span className="xp-value">{xp} XP</span>
+        <div className="xp-rank-badge">{rankInfo.current.name}</div>
+        <span style={{ flex: 1 }} />
+        <span className="xp-value">{rankInfo.xp.toLocaleString()} XP</span>
+        <button className="xp-details-btn" onClick={onToggleDetails}>
+          {showDetails ? '▲' : '▼ Details'}
+        </button>
       </div>
       <div className="xp-bar-wrap">
         <div className="xp-bar-track">
-          <div className="xp-bar-fill" style={{ width: `${levelInfo.progress}%` }} />
+          <div className="xp-bar-fill" style={{ width: `${rankInfo.progress}%` }} />
         </div>
-        {levelInfo.next && (
-          <span className="xp-next-label">{levelInfo.next.minXP - xp} XP to {levelInfo.next.name}</span>
+        {rankInfo.next ? (
+          <span className="xp-next-label">{(rankInfo.next.minXP - rankInfo.xp).toLocaleString()} XP to {rankInfo.next.name}</span>
+        ) : (
+          <span className="xp-next-label">Max rank — Unbreakable</span>
+        )}
+      </div>
+      {(todayXP.gained > 0 || todayXP.lost > 0) && (
+        <div className="xp-today-row">
+          {todayXP.gained > 0 && <span className="xp-today-gain">+{todayXP.gained}</span>}
+          {todayXP.lost > 0 && <span className="xp-today-loss">-{todayXP.lost}</span>}
+          <span className="xp-today-label">today</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RankDetailsCard({ rankInfo, longest, totalDone, comebackCompletions }) {
+  return (
+    <div className="rank-details-card">
+      <div className="rank-details-title">Rank Details</div>
+      <div className="rank-details-grid">
+        <div className="rank-detail-row">
+          <span className="rank-detail-label">Current Rank</span>
+          <span className="rank-detail-value">{rankInfo.current.name}</span>
+        </div>
+        {rankInfo.next && (
+          <div className="rank-detail-row">
+            <span className="rank-detail-label">Next Rank</span>
+            <span className="rank-detail-value">{rankInfo.next.name}</span>
+          </div>
+        )}
+        <div className="rank-detail-row">
+          <span className="rank-detail-label">Total XP</span>
+          <span className="rank-detail-value">{rankInfo.xp.toLocaleString()}</span>
+        </div>
+        {rankInfo.next && (
+          <div className="rank-detail-row">
+            <span className="rank-detail-label">XP to Next</span>
+            <span className="rank-detail-value">{(rankInfo.next.minXP - rankInfo.xp).toLocaleString()}</span>
+          </div>
+        )}
+        <div className="rank-detail-row">
+          <span className="rank-detail-label">Best Streak</span>
+          <span className="rank-detail-value">{longest}d</span>
+        </div>
+        <div className="rank-detail-row">
+          <span className="rank-detail-label">Perfect Days</span>
+          <span className="rank-detail-value">{totalDone}</span>
+        </div>
+        {comebackCompletions > 0 && (
+          <div className="rank-detail-row">
+            <span className="rank-detail-label">Comebacks</span>
+            <span className="rank-detail-value">{comebackCompletions}</span>
+          </div>
         )}
       </div>
     </div>
@@ -60,7 +119,6 @@ function BadgeRow({ badges }) {
 }
 
 function ComebackCard({ dayNum, comebackMode, setback, onStart, onDismiss, onComplete }) {
-  // Auto-complete if 3 days have elapsed
   useEffect(() => {
     if (comebackMode?.active && comebackMode.dayStart != null && dayNum >= comebackMode.dayStart + 3) {
       onComplete(comebackMode.dayStart);
@@ -103,7 +161,6 @@ function ComebackCard({ dayNum, comebackMode, setback, onStart, onDismiss, onCom
     );
   }
 
-  // Invitation card (setback detected, not yet dismissed)
   if (!setback.hasSetback) return null;
   return (
     <div className="comeback-card">
@@ -136,11 +193,13 @@ export default function Dashboard({ setView }) {
     getDayNumber, getDayCompletion, getStreak, getLongestStreak,
     startChallenge,
     setActiveProfile,
-    updateProfile,
     startComeback, dismissComeback, completeComeback,
   } = useApp();
 
   const [showSwitch, setShowSwitch] = useState(false);
+  const [showRankDetails, setShowRankDetails] = useState(false);
+  const [xpAnim, setXpAnim] = useState(null);
+  const prevXpRef = useRef(null);
 
   const dayNum    = getDayNumber();
   const streak    = getStreak();
@@ -152,17 +211,34 @@ export default function Dashboard({ setView }) {
 
   const otherProfile = activeProfile === 'me' ? 'girlfriend' : 'me';
 
-  const xp        = dayNum ? computeXP(allDays, profiles, activeProfile) : 0;
-  const levelInfo = getLevelInfo(xp);
-  const badges    = dayNum ? computeBadges(allDays, profiles, activeProfile, getDayCompletion, dayNum) : [];
-  const setback   = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
+  const xpData   = dayNum ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum) : { total: 0 };
+  const rankInfo = getRankInfo(xpData.total);
+  const todayXP  = dayNum ? computeTodayXP(allDays, profiles, activeProfile, getDayCompletion, dayNum) : { gained: 0, lost: 0, streakBonus: 0 };
 
+  // Compute badges and add true_warrior_rank if XP qualifies
+  const rawBadges   = dayNum ? computeBadges(allDays, profiles, activeProfile, getDayCompletion, dayNum) : [];
+  const badges = xpData.total >= 7500 && !rawBadges.find(b => b.id === 'true_warrior_rank')
+    ? [...rawBadges, BADGE_DEFS.find(b => b.id === 'true_warrior_rank')]
+    : rawBadges;
+
+  const setback     = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
   const comebackMode = profile?.comebackMode || { active: false, dayStart: null, dismissedAt: null };
+  const comebackCompletions = (profile?.comebackHistory || []).filter(cb => cb.completed).length;
+
   const showComebackCard = !!(comebackMode.active || (
     setback.hasSetback &&
     !comebackMode.active &&
     (comebackMode.dismissedAt == null || dayNum > comebackMode.dismissedAt + 3)
   ));
+
+  // XP float animation on gain
+  useEffect(() => {
+    if (prevXpRef.current !== null && xpData.total > prevXpRef.current) {
+      const diff = xpData.total - prevXpRef.current;
+      setXpAnim({ key: Date.now(), text: `+${diff}` });
+    }
+    prevXpRef.current = xpData.total;
+  }, [xpData.total]);
 
   if (!profile?.challengeStart) {
     return (
@@ -218,8 +294,28 @@ export default function Dashboard({ setView }) {
         </button>
       </div>
 
-      {/* XP / Level */}
-      <XPWidget xp={xp} levelInfo={levelInfo} />
+      {/* XP / Rank widget with animation */}
+      <div style={{ position: 'relative' }}>
+        <XPWidget
+          rankInfo={rankInfo}
+          todayXP={todayXP}
+          onToggleDetails={() => setShowRankDetails(v => !v)}
+          showDetails={showRankDetails}
+        />
+        {xpAnim && (
+          <div key={xpAnim.key} className="xp-float">{xpAnim.text} XP</div>
+        )}
+      </div>
+
+      {/* Rank details (expandable) */}
+      {showRankDetails && (
+        <RankDetailsCard
+          rankInfo={rankInfo}
+          longest={longest}
+          totalDone={totalDone}
+          comebackCompletions={comebackCompletions}
+        />
+      )}
 
       {/* Badges */}
       <BadgeRow badges={badges} />
@@ -233,7 +329,7 @@ export default function Dashboard({ setView }) {
 
       {showWarning && !isDone && (
         <div className="warn-banner">
-          ⚠️ Day {prevDay} wasn't fully completed — you can still edit it in the Calendar.
+          ⚠️ Day {prevDay} wasn&apos;t fully completed — you can still edit it in the Calendar.
         </div>
       )}
 
