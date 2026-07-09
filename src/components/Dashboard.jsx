@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatDateShort } from '../utils/dateUtils';
-import QuoteOfTheDay from './QuoteOfTheDay';
 import BuildBanner from './BuildBanner';
 import {
   computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
-  computeBadges, detectSetback, BADGE_DEFS,
+  computeBadges, detectSetback, BADGE_DEFS, RANKS,
 } from '../utils/gamification';
 
 function CircleRing({ value, max, size = 120 }) {
@@ -28,13 +26,16 @@ function CircleRing({ value, max, size = 120 }) {
   );
 }
 
-function XPWidget({ rankInfo, challengeXP, todayXP, onToggleDetails, showDetails }) {
+function XPWidget({ rankInfo, challengeXP, todayXP, onToggleDetails, showDetails, onToggleLadder, showLadder }) {
   return (
     <div className="xp-widget">
       <div className="xp-widget-top">
         <div className="xp-rank-badge">{rankInfo.current.name}</div>
         <span style={{ flex: 1 }} />
         <span className="xp-value">{rankInfo.xp.toLocaleString()} XP</span>
+        <button className="xp-details-btn" onClick={onToggleLadder}>
+          {showLadder ? '▲ Ladder' : '🪜 Ladder'}
+        </button>
         <button className="xp-details-btn" onClick={onToggleDetails}>
           {showDetails ? '▲' : '▼ Details'}
         </button>
@@ -60,6 +61,62 @@ function XPWidget({ rankInfo, challengeXP, todayXP, onToggleDetails, showDetails
           <span className="xp-today-label">today</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function RankLadderCard({ rankInfo }) {
+  return (
+    <div className="rank-ladder-card">
+      <div className="rank-details-title">🪜 Rank Ladder</div>
+      <div className="rank-ladder-summary">
+        <div className="rank-ladder-summary-row">
+          <span className="rank-ladder-summary-label">Current rank</span>
+          <span className="rank-ladder-summary-value">{rankInfo.current.name}</span>
+        </div>
+        <div className="rank-ladder-summary-row">
+          <span className="rank-ladder-summary-label">Lifetime XP</span>
+          <span className="rank-ladder-summary-value">{rankInfo.xp.toLocaleString()}</span>
+        </div>
+        {rankInfo.next ? (
+          <>
+            <div className="rank-ladder-summary-row">
+              <span className="rank-ladder-summary-label">Next rank</span>
+              <span className="rank-ladder-summary-value">{rankInfo.next.name}</span>
+            </div>
+            <div className="rank-ladder-summary-row">
+              <span className="rank-ladder-summary-label">XP to next rank</span>
+              <span className="rank-ladder-summary-value">{(rankInfo.next.minXP - rankInfo.xp).toLocaleString()}</span>
+            </div>
+          </>
+        ) : (
+          <div className="rank-ladder-summary-row">
+            <span className="rank-ladder-summary-label">Next rank</span>
+            <span className="rank-ladder-summary-value">Max rank reached</span>
+          </div>
+        )}
+      </div>
+      <div className="xp-bar-track" style={{ marginBottom: 12 }}>
+        <div className="xp-bar-fill" style={{ width: `${rankInfo.progress}%` }} />
+      </div>
+      <div className="rank-ladder-list">
+        {RANKS.map(r => {
+          const status = r.rank < rankInfo.current.rank ? 'done'
+            : r.rank === rankInfo.current.rank ? 'current' : 'locked';
+          return (
+            <div key={r.rank} className={`rank-ladder-row ${status}`}>
+              <span className="rank-ladder-status">
+                {status === 'done' ? '✓' : status === 'current' ? '▶' : '🔒'}
+              </span>
+              <div className="rank-ladder-info">
+                <div className="rank-ladder-name">{r.name}</div>
+                <div className="rank-ladder-desc">{r.desc}</div>
+              </div>
+              <span className="rank-ladder-xp">{r.minXP.toLocaleString()} XP</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -212,6 +269,7 @@ export default function Dashboard({ setView }) {
 
   const [showSwitch, setShowSwitch] = useState(false);
   const [showRankDetails, setShowRankDetails] = useState(false);
+  const [showRankLadder, setShowRankLadder] = useState(false);
   const [xpAnim, setXpAnim] = useState(null);
   const prevXpRef = useRef(null);
 
@@ -326,11 +384,16 @@ export default function Dashboard({ setView }) {
           todayXP={todayXP}
           onToggleDetails={() => setShowRankDetails(v => !v)}
           showDetails={showRankDetails}
+          onToggleLadder={() => setShowRankLadder(v => !v)}
+          showLadder={showRankLadder}
         />
         {xpAnim && (
           <div key={xpAnim.key} className="xp-float">{xpAnim.text} XP</div>
         )}
       </div>
+
+      {/* Rank ladder (expandable) */}
+      {showRankLadder && <RankLadderCard rankInfo={rankInfo} />}
 
       {/* Rank details (expandable) */}
       {showRankDetails && (
@@ -430,18 +493,6 @@ export default function Dashboard({ setView }) {
         </div>
       </div>
 
-      {/* Quick actions */}
-      <div className="quick-actions">
-        <button className="btn btn-primary" onClick={() => setView('today')}>
-          Log Today →
-        </button>
-        <button className="btn btn-ghost" onClick={() => setView('calendar')}>
-          📅 Calendar
-        </button>
-      </div>
-
-      {/* Quote of the Day */}
-      <QuoteOfTheDay />
     </div>
   );
 }

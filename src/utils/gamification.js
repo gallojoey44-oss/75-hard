@@ -17,14 +17,14 @@ export function getMWDComplete(dayData) {
 // ─── Ranks ──────────────────────────────────────────────────────────────────
 
 export const RANKS = [
-  { rank: 1, name: 'Initiate',      minXP: 0     },
-  { rank: 2, name: 'Apprentice',    minXP: 250   },
-  { rank: 3, name: 'Disciplined',   minXP: 750   },
-  { rank: 4, name: 'Resilient',     minXP: 1500  },
-  { rank: 5, name: 'Warrior',       minXP: 3000  },
-  { rank: 6, name: 'Elite Warrior', minXP: 5000  },
-  { rank: 7, name: 'True Warrior',  minXP: 7500  },
-  { rank: 8, name: 'Unbreakable',   minXP: 10000 },
+  { rank: 1, name: 'Initiate',      minXP: 0,     desc: 'You began.' },
+  { rank: 2, name: 'Apprentice',    minXP: 250,   desc: 'You are learning consistency.' },
+  { rank: 3, name: 'Disciplined',   minXP: 750,   desc: 'You keep promises more often.' },
+  { rank: 4, name: 'Resilient',     minXP: 1500,  desc: 'You return after setbacks.' },
+  { rank: 5, name: 'Warrior',       minXP: 3000,  desc: 'You execute under pressure.' },
+  { rank: 6, name: 'Elite Warrior', minXP: 5000,  desc: 'Discipline is becoming identity.' },
+  { rank: 7, name: 'True Warrior',  minXP: 7500,  desc: 'You act from principle, not mood.' },
+  { rank: 8, name: 'Unbreakable',   minXP: 10000, desc: 'You are hard to derail.' },
 ];
 
 export function getRankInfo(xp) {

@@ -3823,3 +3823,64 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   margin-top: 8px;
   text-align: center;
 }
+
+/* ─── v3.8.0: Home merge + Rank Ladder ───────────────────────── */
+
+.home-quote-wrap { padding: 0 16px 16px; }
+
+.rank-ladder-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.rank-ladder-summary { margin-bottom: 10px; }
+.rank-ladder-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 13px;
+}
+.rank-ladder-summary-label { color: var(--text2); }
+.rank-ladder-summary-value { font-weight: 700; }
+
+.rank-ladder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rank-ladder-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+}
+.rank-ladder-row.current {
+  border-color: var(--accent);
+  background: var(--card);
+}
+.rank-ladder-row.locked { opacity: 0.55; }
+.rank-ladder-status {
+  width: 20px;
+  text-align: center;
+  font-size: 13px;
+  flex-shrink: 0;
+  color: var(--accent2);
+}
+.rank-ladder-row.done .rank-ladder-status { color: var(--success, #10B981); }
+.rank-ladder-info { flex: 1; min-width: 0; }
+.rank-ladder-name { font-size: 13px; font-weight: 700; }
+.rank-ladder-row.current .rank-ladder-name { color: var(--accent2); }
+.rank-ladder-desc { font-size: 11px; color: var(--text2); margin-top: 1px; }
+.rank-ladder-xp {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
