@@ -202,11 +202,13 @@ export default function ChallengesView({ setView }) {
     profile, getChallengeMeta, getDayNumber, getDayCompletion,
     getStreak,
     startChallenge,
+    isChallengeTemplateOutdated, syncActiveChallengeWithTemplate,
   } = useApp();
 
   const [showStartConfirm, setShowStartConfirm] = useState(false);
   // { template, variant, durationDays } — variant-based start pending confirmation
   const [pendingStart, setPendingStart] = useState(null);
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
 
   const meta      = getChallengeMeta();
   const duration  = meta.durationDays || 75;
@@ -236,6 +238,7 @@ export default function ChallengesView({ setView }) {
         emoji: template.emoji,
         variant,
         durationDays,
+        templateVersion: template.template_version || 1,
       },
       tasks: variantDef.start_tasks,
     });
@@ -290,6 +293,14 @@ export default function ChallengesView({ setView }) {
               </div>
               <span className="acc-progress-label">{Math.round(((dayNum || 0) / duration) * 100)}% complete</span>
             </div>
+            {isChallengeTemplateOutdated() && (
+              <div className="tpl-update-box">
+                <div className="tpl-update-notice">🆕 A newer version of this challenge template is available.</div>
+                <button className="btn btn-primary btn-full" onClick={() => setShowSyncConfirm(true)}>
+                  Update Active Challenge
+                </button>
+              </div>
+            )}
             <div className="acc-actions">
               <button className="btn btn-primary" onClick={() => setView('today')}>Log Today →</button>
               <button className="btn btn-ghost" onClick={() => setView('home')}>Dashboard</button>
@@ -326,6 +337,22 @@ export default function ChallengesView({ setView }) {
         </div>
 
       </div>
+
+      {/* Sync active challenge with latest template */}
+      {showSyncConfirm && (
+        <div className="modal-overlay" onClick={() => setShowSyncConfirm(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h3>Update Active Challenge?</h3>
+            <p>This updates future task lists while preserving saved progress.</p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setShowSyncConfirm(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { syncActiveChallengeWithTemplate(); setShowSyncConfirm(false); }}>
+                Update Tasks
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Variant challenge start confirmation */}
       {pendingStart && (

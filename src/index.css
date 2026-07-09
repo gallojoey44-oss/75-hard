@@ -3777,3 +3777,20 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   text-align: center;
   margin-top: 8px;
 }
+
+/* ─── v3.6.0: Template sync notice ───────────────────────────── */
+
+.tpl-update-box {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.tpl-update-notice {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent2);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}

@@ -3,6 +3,7 @@ import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../util
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges } from '../utils/gamification';
+import { getTemplateById } from '../data/challengeTemplates';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -539,6 +540,45 @@ export function AppProvider({ children }) {
     setAllDays(prev => ({ ...prev, [profId]: entry.days || {} }));
   }, [activeProfile, archives, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
 
+  /**
+   * True when the active challenge was started from an older version of its
+   * template (only variant-based templates carry a version).
+   */
+  const isChallengeTemplateOutdated = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    const meta = prof?.activeChallenge;
+    if (!prof?.challengeStart || !meta) return false;
+    const tpl = getTemplateById(meta.templateId);
+    if (!tpl || tpl.start_flow !== 'variant' || !meta.variant) return false;
+    if (!tpl.variants?.[meta.variant]?.start_tasks) return false;
+    return (meta.templateVersion || 1) < (tpl.template_version || 1);
+  }, [activeProfile, profiles]);
+
+  /**
+   * Sync the active challenge's task list with the latest version of its
+   * template (same variant). Nothing resets: challenge start date, day data,
+   * XP history, and archives are untouched. Task IDs are stable across
+   * template versions, so completion for matching tasks is preserved; flags
+   * for removed tasks stay in the day records (ignored, never deleted) and
+   * new tasks simply start unchecked going forward.
+   */
+  const syncActiveChallengeWithTemplate = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    const meta = prof?.activeChallenge;
+    if (!prof?.challengeStart || !meta) return;
+    const tpl = getTemplateById(meta.templateId);
+    const variantDef = tpl?.variants?.[meta.variant];
+    if (!variantDef?.start_tasks) return;
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: {
+        ...prev[profId],
+        tasks: variantDef.start_tasks.map((t, i) => ({ ...t, order: i })),
+        activeChallenge: { ...prev[profId].activeChallenge, templateVersion: tpl.template_version || 1 },
+      },
+    }));
+  }, [activeProfile, profiles, setProfiles]);
+
   const deleteArchive = useCallback((archiveId, profId = activeProfile) => {
     setArchives(prev => ({
       ...prev,
@@ -781,6 +821,8 @@ export function AppProvider({ children }) {
       startChallenge, setChallengeStart, updateProfile,
       // Archives
       archives, restoreArchive, deleteArchive, deleteAllProfileData,
+      // Template sync
+      isChallengeTemplateOutdated, syncActiveChallengeWithTemplate,
       addTask, updateTask, deleteTask, reorderTasks,
       MENTAL_OPTIONS,
       // Quote

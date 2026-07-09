@@ -15,6 +15,10 @@ export const METRIC_LABELS = {
   user_selected_metrics:     'Your Chosen Metrics',
 };
 
+export function getTemplateById(id) {
+  return CHALLENGE_TEMPLATES.find(t => t.id === id) || null;
+}
+
 export const CHALLENGE_TEMPLATES = [
   {
     id: 'sleep_reset_challenge',
@@ -228,6 +232,9 @@ export const CHALLENGE_TEMPLATES = [
     emoji: '🧠',
     startable: true,
     start_flow: 'variant', // start button with variant + duration selection
+    // Bump when the variant task lists change, so active challenges can offer
+    // a sync to the latest version without resetting progress.
+    template_version: 2,
     challenge_name: 'Mental Training Phase',
     purpose: 'Train the mind through action. Build focus, calm under pressure, and self-control with short daily mental and physical discipline work.',
     tagline: 'Physical discipline sharpens mental control. Do the hard small thing.',

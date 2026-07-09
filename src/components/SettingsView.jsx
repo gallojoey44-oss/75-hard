@@ -32,6 +32,7 @@ export default function SettingsView({ setView }) {
     setActiveProfile,
     resetXP,
     archives, restoreArchive, deleteArchive, deleteAllProfileData,
+    isChallengeTemplateOutdated, syncActiveChallengeWithTemplate,
   } = useApp();
 
   const [editingName, setEditingName] = useState(false);
@@ -43,6 +44,7 @@ export default function SettingsView({ setView }) {
   const [deleteArchTarget, setDeleteArchTarget] = useState(null); // archive entry pending delete
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const [importStatus, setImportStatus] = useState('idle'); // 'idle'|'success'|'error'
   const importRef = useRef(null);
 
@@ -291,6 +293,16 @@ export default function SettingsView({ setView }) {
             </span>
           </div>
         ) : null}
+
+        {/* Template sync */}
+        {isChallengeTemplateOutdated() && (
+          <div className="tpl-update-box" style={{ marginBottom: 12 }}>
+            <div className="tpl-update-notice">🆕 A newer version of this challenge template is available.</div>
+            <button className="btn btn-primary btn-full" onClick={() => setShowSyncConfirm(true)}>
+              Sync Active Challenge with Latest Template
+            </button>
+          </div>
+        )}
 
         {/* Challenge Start Date controls */}
         <div className="start-date-box">
@@ -637,6 +649,22 @@ export default function SettingsView({ setView }) {
           </p>
         </div>
       </details>
+
+      {/* Sync active challenge confirmation */}
+      {showSyncConfirm && (
+        <div className="modal-overlay" onClick={() => setShowSyncConfirm(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h3>Update Active Challenge?</h3>
+            <p>This updates future task lists while preserving saved progress.</p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setShowSyncConfirm(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { syncActiveChallengeWithTemplate(); setShowSyncConfirm(false); }}>
+                Update Tasks
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Start New Challenge confirmation */}
       {showStartNew && (
