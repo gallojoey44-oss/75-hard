@@ -63,6 +63,60 @@ function DaySelector({ selected, current, onChange, duration = 75 }) {
   );
 }
 
+// ── Gratitude / Prayer (Mental Training Phase) ──────────────────────────────
+
+const GRATITUDE_PROMPTS = [
+  'What am I grateful for today?',
+  'Who should I pray for today?',
+  'What did I receive that I did not earn?',
+  'Where do I need humility today?',
+  'What is one thing I need to surrender?',
+];
+
+function GratitudePrayer({ dayData, onUpdate, onToggleComplete }) {
+  const grat      = dayData?.gratitude || { promptIndex: null, notes: '' };
+  const completed = !!dayData?.tasks?.mt_gratitude;
+
+  return (
+    <div className="section-card grat-card">
+      <div className="section-title">🙏 Gratitude / Prayer</div>
+      <p className="grat-tone">
+        Gratitude trains perspective. Prayer lowers ego and restores focus.
+        A strong mind starts with humility.
+      </p>
+
+      <div className="grat-prompt-label">Optional prompt — pick one, or just take the moment:</div>
+      <div className="grat-prompts">
+        {GRATITUDE_PROMPTS.map((p, i) => (
+          <button
+            key={i}
+            className={`grat-prompt-chip${grat.promptIndex === i ? ' active' : ''}`}
+            onClick={() => onUpdate({ gratitude: { promptIndex: grat.promptIndex === i ? null : i } })}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
+      <textarea
+        className="grat-notes"
+        placeholder="Optional — a few words is enough."
+        value={grat.notes || ''}
+        onChange={e => onUpdate({ gratitude: { notes: e.target.value } })}
+        rows={2}
+      />
+
+      <button
+        className={`btn btn-full ${completed ? 'btn-success' : 'btn-primary'}`}
+        onClick={onToggleComplete}
+      >
+        {completed ? '✓ Gratitude / Prayer Complete' : 'Mark Gratitude / Prayer Complete'}
+      </button>
+      <p className="grat-footnote">Train the mind before the world tests it.</p>
+    </div>
+  );
+}
+
 function MWDBanner({ comebackMode, dayNum }) {
   if (!comebackMode?.active) return null;
   const elapsed = dayNum - (comebackMode.dayStart || dayNum);
@@ -180,6 +234,7 @@ export default function DailyView({ editDayNum, setView }) {
     if (updates.mentalTraining)  merged.mentalTraining  = { ...dayData?.mentalTraining,  ...updates.mentalTraining };
     if (updates.faithReflection) merged.faithReflection = { ...dayData?.faithReflection, ...updates.faithReflection };
     if (updates.mwdTasks)        merged.mwdTasks        = { ...dayData?.mwdTasks,        ...updates.mwdTasks };
+    if (updates.gratitude)       merged.gratitude       = { ...dayData?.gratitude,       ...updates.gratitude };
     setDayData(merged);
     updateDay(selectedDayNum, merged);
 
@@ -241,6 +296,7 @@ export default function DailyView({ editDayNum, setView }) {
   const mentalTaskId = isMe ? 'mental' : 'gf_mental';
   const faithEnabled = profile?.faithEnabled || false;
   const faithCounts  = profile?.faithCountsToward || false;
+  const hasGratitudeTask = tasks.some(t => t.id === 'mt_gratitude');
 
   const isCurrentDay = selectedDayNum === currentDayNum;
   const comebackMode = profile?.comebackMode || {};
@@ -359,6 +415,15 @@ export default function DailyView({ editDayNum, setView }) {
         </div>
       )}
 
+      {/* ── Joey: Gratitude / Prayer (Mental Training Phase) ── */}
+      {isMe && hasGratitudeTask && !isMWD && (
+        <GratitudePrayer
+          dayData={dayData}
+          onUpdate={handleUpdate}
+          onToggleComplete={() => handleToggleTask('mt_gratitude')}
+        />
+      )}
+
       {/* ── Joey: mental training ── */}
       {isMe && !isMWD && (
         <MentalTraining
@@ -404,6 +469,14 @@ export default function DailyView({ editDayNum, setView }) {
               />
             ))}
           </div>
+
+          {hasGratitudeTask && (
+            <GratitudePrayer
+              dayData={dayData}
+              onUpdate={handleUpdate}
+              onToggleComplete={() => handleToggleTask('mt_gratitude')}
+            />
+          )}
 
           <MentalTraining
             dayNumber={selectedDayNum}
