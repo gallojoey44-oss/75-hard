@@ -5,6 +5,8 @@ import {
   computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
 } from '../utils/gamification';
+import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
+import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
 
 function CircleRing({ value, max, size = 120 }) {
   const r = (size - 16) / 2;
@@ -299,6 +301,12 @@ export default function Dashboard({ setView }) {
   if (lifetimeXP >= 7500) badgeIds.add('true_warrior_rank');
   const badges = BADGE_DEFS.filter(b => badgeIds.has(b.id));
 
+  // Top insight preview — highest-priority bottleneck from the last 7 days
+  // (merged across archived + active challenges, same data Insights uses)
+  const timeline = buildTimeline(profile, days, profileArchives);
+  const avg7Home = computeAveragesFromEntries(entriesInLastNDays(timeline, 7));
+  const topInsight = getPriorityBottleneck(avg7Home, profile?.sleepTarget ?? 8);
+
   const setback     = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
   const comebackMode = profile?.comebackMode || { active: false, dayStart: null, dismissedAt: null };
   const comebackCompletions = (profile?.comebackHistory || []).filter(cb => cb.completed).length;
@@ -419,7 +427,7 @@ export default function Dashboard({ setView }) {
 
       {showWarning && !isDone && (
         <div className="warn-banner">
-          ⚠️ Day {prevDay} wasn&apos;t fully completed — you can still edit it in the Calendar.
+          ⚠️ Day {prevDay} wasn&apos;t fully completed — you can still edit it with the Day Selector on the Today tab.
         </div>
       )}
 
@@ -493,6 +501,22 @@ export default function Dashboard({ setView }) {
         </div>
       </div>
 
+      {/* Top insight preview */}
+      {topInsight?.bottleneck && (
+        <button className="ins-preview-card" onClick={() => setView('insights')}>
+          <span className="ins-preview-emoji">{topInsight.emoji}</span>
+          <div className="ins-preview-body">
+            <div className="ins-preview-title">Top Insight · {topInsight.label}</div>
+            <div className="ins-preview-msg">{topInsight.coachMsg}</div>
+          </div>
+          <span className="ins-preview-arrow">→</span>
+        </button>
+      )}
+
+      {/* Log Today */}
+      <button className="btn btn-primary btn-full" onClick={() => setView('today')}>
+        ✅ Log Today →
+      </button>
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { AppProvider, useApp } from './context/AppContext';
 import ProfileSelector from './components/ProfileSelector';
 import Dashboard from './components/Dashboard';
 import DailyView from './components/DailyView';
-import CalendarView from './components/CalendarView';
 import InsightsView from './components/InsightsView';
 import ChallengesView from './components/ChallengesView';
 import SettingsView from './components/SettingsView';
@@ -40,52 +39,37 @@ function UpdateBanner() {
 
 function AppContent() {
   const { activeProfile, profile } = useApp();
-  const [view, setView]         = useState('home');
-  const [editDayNum, setEditDayNum] = useState(null);
+  const [view, setView] = useState('home');
 
   if (!activeProfile) {
     return <ProfileSelector />;
   }
 
-  // The old Today tab is merged into Home — any leftover setView('today')
-  // safely lands on Home, which now hosts the daily logging flow.
+  // The Calendar tab was removed — day editing happens through the Today
+  // page's Day Selector, so any leftover navigation to it lands on Today.
   function navigate(v) {
-    setView(v === 'today' ? 'home' : v);
-  }
-
-  function handleEditDay(n) {
-    setView('home');
-    setEditDayNum(n);
+    setView(v === 'calendar' ? 'today' : v);
   }
 
   return (
     <div className="app" data-profile={activeProfile}>
       <main className="main-content">
-        {view === 'home' && (
+        {view === 'home' && <Dashboard setView={navigate} />}
+        {view === 'today' && (
           <>
-            <Dashboard setView={navigate} />
+            <DailyView editDayNum={null} setView={navigate} />
             {profile?.challengeStart && (
-              <>
-                <DailyView
-                  editDayNum={editDayNum}
-                  setView={navigate}
-                />
-                <div className="home-quote-wrap">
-                  <QuoteOfTheDay />
-                </div>
-              </>
+              <div className="home-quote-wrap">
+                <QuoteOfTheDay />
+              </div>
             )}
           </>
         )}
-        {view === 'calendar'   && <CalendarView onEditDay={handleEditDay} />}
         {view === 'insights'   && <InsightsView />}
         {view === 'challenges' && <ChallengesView setView={navigate} />}
         {view === 'settings'   && <SettingsView setView={navigate} />}
       </main>
-      <BottomNav
-        view={view}
-        setView={v => { navigate(v); setEditDayNum(null); }}
-      />
+      <BottomNav view={view} setView={navigate} />
     </div>
   );
 }
