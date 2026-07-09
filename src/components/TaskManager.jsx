@@ -59,8 +59,11 @@ function IconPicker({ value, onChange }) {
 }
 
 export default function TaskManager() {
-  const { activeProfile, profile, addTask, updateTask, deleteTask, reorderTasks } = useApp();
+  const { activeProfile, profile, addTask, updateTask, deleteTask, reorderTasks, getTaskSource } = useApp();
   const isGf = activeProfile === 'girlfriend';
+  // Only label task sources when the active challenge actually syncs with a
+  // template — otherwise every task is user-managed and labels are noise.
+  const hasTemplateTasks = (profile?.tasks || []).some(t => getTaskSource(t) === 'template');
 
   const [showAdd, setShowAdd]     = useState(false);
   const [newName, setNewName]     = useState('');
@@ -151,7 +154,14 @@ export default function TaskManager() {
               </span>
             )}
 
-            <span className="task-name-edit">{task.name}</span>
+            <span className="task-name-edit">
+              {task.name}
+              {hasTemplateTasks && (
+                <span className={`task-source-chip${getTaskSource(task) === 'template' ? ' template' : ''}`}>
+                  {getTaskSource(task) === 'template' ? 'Template Task' : 'Custom Task'}
+                </span>
+              )}
+            </span>
 
             <div className="task-actions">
               <button

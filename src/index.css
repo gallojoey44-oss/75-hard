@@ -3794,3 +3794,32 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   line-height: 1.5;
   margin-bottom: 10px;
 }
+
+/* ─── v3.7.0: Task source labels + sync hint ─────────────────── */
+
+.task-source-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text3);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.task-source-chip.template {
+  color: var(--accent2);
+  border-color: var(--accent2);
+}
+
+.tpl-update-hint {
+  font-size: 11px;
+  color: var(--text3);
+  line-height: 1.5;
+  margin-top: 8px;
+  text-align: center;
+}

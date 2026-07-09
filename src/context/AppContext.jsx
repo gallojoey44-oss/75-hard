@@ -122,6 +122,14 @@ function migrateProfiles(stored) {
   const profiles = { ...stored };
   let changed = false;
 
+  // Task-list migrations only apply to the original 75-day challenge —
+  // profiles running a template challenge (e.g. Mental Training Phase) manage
+  // their task list through the template, not these defaults.
+  const onDefaultChallenge = (profId) => {
+    const meta = profiles[profId]?.activeChallenge;
+    return !meta || meta.templateId === '75_day_discipline_challenge';
+  };
+
   // Ensure both profile slots always exist
   if (!profiles.me) { profiles.me = makeDefaultProfiles().me; changed = true; }
   if (!profiles.girlfriend) { profiles.girlfriend = makeDefaultProfiles().girlfriend; changed = true; }
@@ -142,7 +150,7 @@ function migrateProfiles(stored) {
   }
 
   // Girlfriend — add any missing required tasks (appended at end, stable IDs)
-  {
+  if (onDefaultChallenge('girlfriend')) {
     const tasks = profiles.girlfriend.tasks || [];
     const required = [
       { id: 'gf_workout', name: '45-minute workout complete', color: '#FF6B6B' },
@@ -204,7 +212,7 @@ function migrateProfiles(stored) {
   }
 
   // Joey — add sleep_target task if missing
-  {
+  if (onDefaultChallenge('me')) {
     const tasks = profiles.me.tasks || [];
     if (!tasks.find(t => t.id === 'sleep_target')) {
       const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order ?? 0)) : -1;
@@ -217,7 +225,7 @@ function migrateProfiles(stored) {
   }
 
   // Girlfriend — add gf_sleep_target task if missing
-  {
+  if (onDefaultChallenge('girlfriend')) {
     const tasks = profiles.girlfriend.tasks || [];
     if (!tasks.find(t => t.id === 'gf_sleep_target')) {
       const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order ?? 0)) : -1;
@@ -500,7 +508,7 @@ export function AppProvider({ children }) {
         ...prev[profId],
         challengeStart: getTodayStr(),
         activeChallenge: meta,
-        ...(options?.tasks ? { tasks: options.tasks.map((t, i) => ({ ...t, order: i })) } : {}),
+        ...(options?.tasks ? { tasks: options.tasks.map((t, i) => ({ ...t, source: 'template', order: i })) } : {}),
         xpOffset: 0,
         xpStartDay: 1,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
@@ -555,10 +563,33 @@ export function AppProvider({ children }) {
   }, [activeProfile, profiles]);
 
   /**
+   * Resolve whether a task is template-owned or user-added. Tasks saved
+   * before the source field existed are inferred safely: an id that belongs
+   * to the active template (any variant, or its id prefix) is template-owned;
+   * anything else — including tasks added via Manage Tasks — is custom.
+   */
+  const getTaskSource = useCallback((task, profId = activeProfile) => {
+    if (task?.source === 'template' || task?.source === 'custom') return task.source;
+    const meta = profiles[profId]?.activeChallenge;
+    const tpl = meta ? getTemplateById(meta.templateId) : null;
+    if (!tpl || tpl.start_flow !== 'variant') return 'custom';
+    for (const v of Object.values(tpl.variants || {})) {
+      if ((v.start_tasks || []).some(t => t.id === task.id)) return 'template';
+    }
+    if (tpl.task_id_prefix && task.id?.startsWith(tpl.task_id_prefix)) return 'template';
+    return 'custom';
+  }, [activeProfile, profiles]);
+
+  /**
    * Sync the active challenge's task list with the latest version of its
-   * template (same variant). Nothing resets: challenge start date, day data,
-   * XP history, and archives are untouched. Task IDs are stable across
-   * template versions, so completion for matching tasks is preserved; flags
+   * template (same variant). Only template-owned tasks are refreshed:
+   * new template tasks are added, outdated template tasks are removed, and
+   * user-added custom tasks are always preserved (appended after the
+   * template tasks, keeping their relative order).
+   *
+   * Nothing resets: challenge start date, day data, XP history, and archives
+   * are untouched. Task IDs are stable across template versions, so saved
+   * completion for matching tasks (template and custom) is preserved; flags
    * for removed tasks stay in the day records (ignored, never deleted) and
    * new tasks simply start unchecked going forward.
    */
@@ -569,15 +600,22 @@ export function AppProvider({ children }) {
     const tpl = getTemplateById(meta.templateId);
     const variantDef = tpl?.variants?.[meta.variant];
     if (!variantDef?.start_tasks) return;
+
+    const templateTasks = variantDef.start_tasks.map(t => ({ ...t, source: 'template' }));
+    const customTasks = [...(prof.tasks || [])]
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .filter(t => getTaskSource(t, profId) === 'custom')
+      .map(t => ({ ...t, source: 'custom' }));
+
     setProfiles(prev => ({
       ...prev,
       [profId]: {
         ...prev[profId],
-        tasks: variantDef.start_tasks.map((t, i) => ({ ...t, order: i })),
+        tasks: [...templateTasks, ...customTasks].map((t, i) => ({ ...t, order: i })),
         activeChallenge: { ...prev[profId].activeChallenge, templateVersion: tpl.template_version || 1 },
       },
     }));
-  }, [activeProfile, profiles, setProfiles]);
+  }, [activeProfile, profiles, getTaskSource, setProfiles]);
 
   const deleteArchive = useCallback((archiveId, profId = activeProfile) => {
     setArchives(prev => ({
@@ -621,7 +659,9 @@ export function AppProvider({ children }) {
   const addTask = useCallback((taskData) => {
     if (!activeProfile) return;
     const tasks = profile?.tasks || [];
-    const newTask = { id: `task_${Date.now()}`, order: tasks.length, ...taskData };
+    // Tasks added through Manage Tasks (or Insights) are user-owned:
+    // template syncs must never remove them.
+    const newTask = { id: `task_${Date.now()}`, order: tasks.length, source: 'custom', ...taskData };
     updateProfile({ tasks: [...tasks, newTask] });
   }, [activeProfile, profile, updateProfile]);
 
@@ -822,7 +862,7 @@ export function AppProvider({ children }) {
       // Archives
       archives, restoreArchive, deleteArchive, deleteAllProfileData,
       // Template sync
-      isChallengeTemplateOutdated, syncActiveChallengeWithTemplate,
+      isChallengeTemplateOutdated, syncActiveChallengeWithTemplate, getTaskSource,
       addTask, updateTask, deleteTask, reorderTasks,
       MENTAL_OPTIONS,
       // Quote

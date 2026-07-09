@@ -235,6 +235,10 @@ export const CHALLENGE_TEMPLATES = [
     // Bump when the variant task lists change, so active challenges can offer
     // a sync to the latest version without resetting progress.
     template_version: 2,
+    // All template-owned task ids share this prefix — used to tell template
+    // tasks apart from user-added custom tasks on lists saved before tasks
+    // carried an explicit source.
+    task_id_prefix: 'mt_',
     challenge_name: 'Mental Training Phase',
     purpose: 'Train the mind through action. Build focus, calm under pressure, and self-control with short daily mental and physical discipline work.',
     tagline: 'Physical discipline sharpens mental control. Do the hard small thing.',

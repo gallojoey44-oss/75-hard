@@ -301,6 +301,9 @@ export default function SettingsView({ setView }) {
             <button className="btn btn-primary btn-full" onClick={() => setShowSyncConfirm(true)}>
               Sync Active Challenge with Latest Template
             </button>
+            <p className="tpl-update-hint">
+              Updating the challenge will refresh template tasks but keep your custom tasks.
+            </p>
           </div>
         )}
 
@@ -655,11 +658,11 @@ export default function SettingsView({ setView }) {
         <div className="modal-overlay" onClick={() => setShowSyncConfirm(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h3>Update Active Challenge?</h3>
-            <p>This updates future task lists while preserving saved progress.</p>
+            <p>This will refresh challenge template tasks while preserving your custom tasks and saved progress.</p>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setShowSyncConfirm(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={() => { syncActiveChallengeWithTemplate(); setShowSyncConfirm(false); }}>
-                Update Tasks
+                Update Template Tasks
               </button>
             </div>
           </div>
