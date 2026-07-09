@@ -9,13 +9,20 @@ const EVIDENCE_COLOR = {
   anecdotal:    '#9090B8',
   user_defined: '#8B5CF6',
 };
-const RISK_COLOR = {
-  low:          '#10B981',
-  medium:       '#F59E0B',
-  high:         '#EF4444',
-  user_defined: '#8B5CF6',
+// Overall challenge difficulty — fixed per challenge, independent of the
+// Beginner/Standard/Hard mode chosen inside it.
+const DIFFICULTY_COLOR = {
+  'Easy':        '#10B981',
+  'Medium':      '#F59E0B',
+  'Medium/Hard': '#F97316',
+  'Hard':        '#EF4444',
+  'You decide':  '#8B5CF6',
 };
 const LEVEL_LABEL = { user_defined: 'You decide' };
+
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
 
 const VARIANT_TABS = [
   { key: 'beginner', label: 'Beginner' },
@@ -71,10 +78,11 @@ function VariantPanel({ variant, template }) {
   );
 }
 
-function ChallengeCard({ template, isActive, onStart, setView }) {
+function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) {
   const [expanded, setExpanded] = useState(false);
   const [variantTab, setVariantTab] = useState('standard');
   const isVariantStart = template.start_flow === 'variant';
+  const isCustom = template.id === 'custom_challenge_framework';
   const defaultDuration = template.duration_options_days[Math.floor((template.duration_options_days.length - 1) / 2)];
   const [durationSel, setDurationSel] = useState(defaultDuration);
 
@@ -89,19 +97,31 @@ function ChallengeCard({ template, isActive, onStart, setView }) {
         <div className="challenge-card-info">
           <div className="challenge-card-name">{template.challenge_name}</div>
           <div className="challenge-card-meta">
-            {durationText(template.duration_options_days)}
-            {' · '}
-            <span style={{ color: EVIDENCE_COLOR[template.evidence_level] }}>
-              {levelText(template.evidence_level)} evidence
-            </span>
-            {' · '}
-            <span style={{ color: RISK_COLOR[template.risk_level] }}>
-              {levelText(template.risk_level)} risk
-            </span>
+            {isCustom ? (
+              <>
+                Custom · <span style={{ color: DIFFICULTY_COLOR[template.overall_difficulty] }}>Difficulty: {template.overall_difficulty}</span>
+              </>
+            ) : (
+              <>
+                {durationText(template.duration_options_days)}
+                {' · '}
+                <span style={{ color: DIFFICULTY_COLOR[template.overall_difficulty] }}>
+                  {template.overall_difficulty} challenge
+                </span>
+                {' · '}
+                <span style={{ color: EVIDENCE_COLOR[template.evidence_level] }}>
+                  {levelText(template.evidence_level)} evidence
+                </span>
+              </>
+            )}
           </div>
         </div>
         <div className="challenge-card-badges">
-          {isActive && <span className="challenge-active-badge">Active</span>}
+          {isActive && (
+            <span className="challenge-active-badge">
+              Active{activeVariant ? ` · ${capitalize(activeVariant)} mode` : ''}
+            </span>
+          )}
           <span className="challenge-expand-icon">{expanded ? '▲' : '▼'}</span>
         </div>
       </button>
@@ -142,18 +162,19 @@ function ChallengeCard({ template, isActive, onStart, setView }) {
           </div>
 
           <div className="tpl-detail-row">
-            <span className="tpl-detail-label">Evidence</span>
+            <span className="tpl-detail-label">Difficulty</span>
+            <span className="tpl-level-value" style={{ color: DIFFICULTY_COLOR[template.overall_difficulty] }}>
+              {template.overall_difficulty}
+            </span>
+            <span className="tpl-detail-label" style={{ marginLeft: 14 }}>Evidence</span>
             <span className="tpl-level-value" style={{ color: EVIDENCE_COLOR[template.evidence_level] }}>
               {levelText(template.evidence_level)}
             </span>
-            <span className="tpl-detail-label" style={{ marginLeft: 14 }}>Risk</span>
-            <span className="tpl-level-value" style={{ color: RISK_COLOR[template.risk_level] }}>
-              {levelText(template.risk_level)}
-            </span>
           </div>
 
-          {/* Variant tabs */}
-          <div className="tpl-variant-tabs">
+          {/* Mode selector */}
+          <div className="tpl-detail-label" style={{ margin: '12px 0 6px' }}>Choose Mode</div>
+          <div className="tpl-variant-tabs" style={{ margin: '0 0 10px' }}>
             {VARIANT_TABS.map(v => (
               <button
                 key={v.key}
@@ -264,7 +285,7 @@ export default function ChallengesView({ setView }) {
             </div>
             <div className="acc-name">
               {meta.emoji} {meta.name}
-              {meta.variant ? ` · ${meta.variant.charAt(0).toUpperCase() + meta.variant.slice(1)}` : ''}
+              {meta.variant ? ` · ${capitalize(meta.variant)} mode` : ''}
             </div>
             <div className="acc-stats-row">
               <div className="acc-stat">
@@ -327,6 +348,7 @@ export default function ChallengesView({ setView }) {
               key={t.id}
               template={t}
               isActive={isRunning && meta.templateId === t.id}
+              activeVariant={isRunning && meta.templateId === t.id ? meta.variant : null}
               setView={setView}
               onStart={(payload) => {
                 if (t.start_flow === 'variant' && payload) {
@@ -366,7 +388,7 @@ export default function ChallengesView({ setView }) {
               Your current challenge will be archived first. Your historical data will remain available for Insights.
             </p>
             <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: -8 }}>
-              {pendingStart.durationDays} days · {pendingStart.variant.charAt(0).toUpperCase() + pendingStart.variant.slice(1)} — train the mind through action.
+              {pendingStart.durationDays} days · {capitalize(pendingStart.variant)} mode — train the mind through action.
             </p>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setPendingStart(null)}>Cancel</button>

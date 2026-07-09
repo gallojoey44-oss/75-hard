@@ -22,6 +22,7 @@ export function getTemplateById(id) {
 export const CHALLENGE_TEMPLATES = [
   {
     id: 'sleep_reset_challenge',
+    overall_difficulty: 'Easy',
     emoji: '😴',
     startable: false,
     challenge_name: 'Sleep Reset Challenge',
@@ -90,6 +91,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: 'fat_loss_phase',
+    overall_difficulty: 'Medium',
     emoji: '⚡',
     startable: false,
     challenge_name: 'Fat Loss Phase',
@@ -161,6 +163,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: 'strength_phase',
+    overall_difficulty: 'Medium/Hard',
     emoji: '💪',
     startable: false,
     challenge_name: 'Strength Phase',
@@ -229,6 +232,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: 'mental_training_phase',
+    overall_difficulty: 'Medium',
     emoji: '🧠',
     startable: true,
     start_flow: 'variant', // start button with variant + duration selection
@@ -337,6 +341,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: 'recovery_phase',
+    overall_difficulty: 'Easy',
     emoji: '🔋',
     startable: false,
     challenge_name: 'Recovery Phase',
@@ -402,6 +407,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: '75_day_discipline_challenge',
+    overall_difficulty: 'Hard',
     emoji: '🔥',
     startable: true,
     challenge_name: '75-Day Discipline Challenge',
@@ -478,6 +484,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: 'custom_challenge_framework',
+    overall_difficulty: 'You decide',
     emoji: '🎯',
     startable: false,
     challenge_name: 'Custom Challenge',
