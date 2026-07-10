@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
+import QuoteOfTheDay from './QuoteOfTheDay';
 import {
   computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
@@ -415,8 +416,8 @@ export default function Dashboard({ setView }) {
         />
       )}
 
-      {/* Badges */}
-      <BadgeRow badges={badges} />
+      {/* Quote of the Day — identity and motivation live on Home */}
+      <QuoteOfTheDay />
 
       {isDone && (
         <div className="challenge-complete">
@@ -512,6 +513,9 @@ export default function Dashboard({ setView }) {
           <span className="ins-preview-arrow">→</span>
         </button>
       )}
+
+      {/* Recent badges */}
+      <BadgeRow badges={badges} />
 
       {/* Log Today */}
       <button className="btn btn-primary btn-full" onClick={() => setView('today')}>

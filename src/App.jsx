@@ -7,7 +7,6 @@ import InsightsView from './components/InsightsView';
 import ChallengesView from './components/ChallengesView';
 import SettingsView from './components/SettingsView';
 import BottomNav from './components/BottomNav';
-import QuoteOfTheDay from './components/QuoteOfTheDay';
 import { applyUpdate } from './utils/swUtils.js';
 
 // Listens for the 'sw-update-available' event dispatched by swUtils
@@ -38,7 +37,7 @@ function UpdateBanner() {
 }
 
 function AppContent() {
-  const { activeProfile, profile } = useApp();
+  const { activeProfile } = useApp();
   const [view, setView] = useState('home');
 
   if (!activeProfile) {
@@ -55,16 +54,7 @@ function AppContent() {
     <div className="app" data-profile={activeProfile}>
       <main className="main-content">
         {view === 'home' && <Dashboard setView={navigate} />}
-        {view === 'today' && (
-          <>
-            <DailyView editDayNum={null} setView={navigate} />
-            {profile?.challengeStart && (
-              <div className="home-quote-wrap">
-                <QuoteOfTheDay />
-              </div>
-            )}
-          </>
-        )}
+        {view === 'today' && <DailyView editDayNum={null} setView={navigate} />}
         {view === 'insights'   && <InsightsView />}
         {view === 'challenges' && <ChallengesView setView={navigate} />}
         {view === 'settings'   && <SettingsView setView={navigate} />}

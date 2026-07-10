@@ -60,7 +60,7 @@ function makeDefaultProfiles() {
   return {
     me: {
       id: 'me',
-      name: 'Joey',
+      name: 'Male',
       emoji: '💪',
       challengeStart: null,
       tasks: DEFAULT_TASKS_ME,
@@ -69,7 +69,7 @@ function makeDefaultProfiles() {
     },
     girlfriend: {
       id: 'girlfriend',
-      name: 'Girlfriend',
+      name: 'Female',
       emoji: '🌸',
       challengeStart: null,
       tasks: DEFAULT_TASKS_GF,
@@ -133,6 +133,17 @@ function migrateProfiles(stored) {
   // Ensure both profile slots always exist
   if (!profiles.me) { profiles.me = makeDefaultProfiles().me; changed = true; }
   if (!profiles.girlfriend) { profiles.girlfriend = makeDefaultProfiles().girlfriend; changed = true; }
+
+  // Generic profile labels — rename only the old default names; names the
+  // user set themselves are left alone. Profile ids and data are unchanged.
+  if (profiles.me.name === 'Joey') {
+    profiles.me = { ...profiles.me, name: 'Male' };
+    changed = true;
+  }
+  if (profiles.girlfriend.name === 'Girlfriend') {
+    profiles.girlfriend = { ...profiles.girlfriend, name: 'Female' };
+    changed = true;
+  }
 
   // Joey — rename old 'workout' task name (preserves ID so history is intact)
   {
