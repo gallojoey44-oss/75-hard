@@ -52,6 +52,16 @@ function VariantPanel({ variant, template }) {
           <li key={i}>{t}</li>
         ))}
       </ul>
+      {variant.weekly_requirements?.length > 0 && (
+        <>
+          <div className="tpl-variant-section-label">Weekly requirements</div>
+          <ul className="tpl-task-list weekly">
+            {variant.weekly_requirements.map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+          </ul>
+        </>
+      )}
       {variant.optional_tasks?.length > 0 && (
         <>
           <div className="tpl-variant-section-label">Optional</div>
@@ -61,6 +71,11 @@ function VariantPanel({ variant, template }) {
             ))}
           </ul>
         </>
+      )}
+      {variant.expected_results && (
+        <div className="tpl-variant-expected">
+          📈 Expected on this mode: <strong>{variant.expected_results}</strong>
+        </div>
       )}
       {template.physical_examples?.length > 0 && (
         <div className="tpl-panel-note">
@@ -74,6 +89,74 @@ function VariantPanel({ variant, template }) {
           lightheaded, or react poorly to cold. Keep it brief. It&apos;s a discipline cue, not an endurance test.
         </div>
       )}
+    </div>
+  );
+}
+
+// Transformation-program sections (🎯 Goal, 📈 Expected Results, etc.) for
+// templates that ship full program content.
+function ProgramSections({ program, category }) {
+  if (!program) return null;
+  return (
+    <div className="tpl-program">
+      {category && <div className="tpl-program-category">🏷 {category}</div>}
+
+      {/* Expected results — shown prominently, not collapsed */}
+      <div className="tpl-program-block">
+        <div className="tpl-program-title">📈 Expected Results (30 Days)</div>
+        <ul className="tpl-task-list program">
+          {program.expected_results.map((r, i) => <li key={i}>{r}</li>)}
+        </ul>
+        <div className="tpl-program-disclaimer">{program.results_disclaimer}</div>
+      </div>
+
+      <details className="tpl-program-details">
+        <summary className="tpl-program-summary">🎯 Goal</summary>
+        <p className="tpl-program-text">{program.goal}</p>
+      </details>
+
+      <details className="tpl-program-details">
+        <summary className="tpl-program-summary">👀 What You&apos;ll Notice</summary>
+        <ul className="tpl-task-list program">
+          {program.visual_changes.map((v, i) => <li key={i}>{v}</li>)}
+        </ul>
+      </details>
+
+      <details className="tpl-program-details">
+        <summary className="tpl-program-summary">🧠 Why This Works</summary>
+        <div className="tpl-program-pillars">
+          {program.why_it_works.map((p, i) => (
+            <div key={i} className="tpl-program-pillar">
+              <div className="tpl-program-pillar-name">{p.pillar}</div>
+              <ul className="tpl-task-list program">
+                {p.points.map((pt, j) => <li key={j}>{pt}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </details>
+
+      <details className="tpl-program-details">
+        <summary className="tpl-program-summary">📅 Transformation Timeline</summary>
+        <div className="tpl-program-pillars">
+          {program.timeline.map((w, i) => (
+            <div key={i} className="tpl-program-pillar">
+              <div className="tpl-program-pillar-name">{w.week}</div>
+              <ul className="tpl-task-list program">
+                {w.points.map((pt, j) => <li key={j}>{pt}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </details>
+
+      <details className="tpl-program-details">
+        <summary className="tpl-program-summary">📷 Progress</summary>
+        <ul className="tpl-task-list program">
+          {program.progress.items.map((p, i) => <li key={i}>{p}</li>)}
+        </ul>
+        <p className="tpl-program-text">{program.progress.finish}</p>
+      </details>
     </div>
   );
 }
@@ -132,6 +215,8 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
           {template.tagline && (
             <p className="tpl-tagline">{template.tagline}</p>
           )}
+
+          <ProgramSections program={template.program} category={template.category} />
 
           <div className="tpl-detail-row">
             <span className="tpl-detail-label">Duration</span>
@@ -260,6 +345,8 @@ export default function ChallengesView({ setView }) {
         variant,
         durationDays,
         templateVersion: template.template_version || 1,
+        rewardXP: template.rewards?.xp || 0,
+        badgeId: template.rewards?.badge_id || null,
       },
       tasks: variantDef.start_tasks,
     });
@@ -388,7 +475,8 @@ export default function ChallengesView({ setView }) {
               Your current challenge will be archived first. Your historical data will remain available for Insights.
             </p>
             <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: -8 }}>
-              {pendingStart.durationDays} days · {capitalize(pendingStart.variant)} mode — train the mind through action.
+              {pendingStart.durationDays} days · {capitalize(pendingStart.variant)} mode
+              {pendingStart.template.tagline ? ` — ${pendingStart.template.tagline.charAt(0).toLowerCase()}${pendingStart.template.tagline.slice(1)}` : ''}
             </p>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setPendingStart(null)}>Cancel</button>

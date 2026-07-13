@@ -192,6 +192,74 @@ function BadgeRow({ badges }) {
   );
 }
 
+// ── Transformation report (Fat Loss Challenge completion reward) ────────────
+
+function TransformationReport({ days, duration, totalDone, challengeXP, getDayCompletion }) {
+  const nums = Object.keys(days).map(Number).sort((a, b) => a - b);
+  const withWeight = nums.filter(n => (days[n]?.weight || 0) > 0);
+  const withWaist  = nums.filter(n => (days[n]?.waist  || 0) > 0);
+  const firstW = withWeight.length ? days[withWeight[0]].weight : null;
+  const lastW  = withWeight.length > 1 ? days[withWeight[withWeight.length - 1]].weight : null;
+  const firstWaist = withWaist.length ? days[withWaist[0]].waist : null;
+  const lastWaist  = withWaist.length > 1 ? days[withWaist[withWaist.length - 1]].waist : null;
+  const photoDays  = nums.filter(n => days[n]?.tasks?.fl_photo).length;
+  const daysLogged = nums.length;
+  const avgCompletion = duration
+    ? Math.round(Array.from({ length: duration }, (_, i) => getDayCompletion(i + 1)).reduce((s, v) => s + v, 0) / duration)
+    : 0;
+  const weightDelta = firstW != null && lastW != null ? Math.round((lastW - firstW) * 10) / 10 : null;
+  const waistDelta  = firstWaist != null && lastWaist != null ? Math.round((lastWaist - firstWaist) * 10) / 10 : null;
+  const fmtDelta = (d, unit) => `${d > 0 ? '+' : ''}${d} ${unit}`;
+
+  return (
+    <div className="transform-report">
+      <div className="transform-report-title">🏆 Your Transformation Report</div>
+      <p className="transform-report-sub">
+        30 days done. Put your Day 1 and Day {duration} photos side by side — that&apos;s your before and after.
+      </p>
+      <div className="transform-grid">
+        <div className="transform-cell">
+          <div className="transform-cell-label">Weight change</div>
+          <div className="transform-cell-value">{weightDelta != null ? fmtDelta(weightDelta, 'lb') : '—'}</div>
+          {firstW != null && lastW != null && (
+            <div className="transform-cell-detail">{firstW} → {lastW} lb</div>
+          )}
+        </div>
+        <div className="transform-cell">
+          <div className="transform-cell-label">Est. body fat change</div>
+          <div className="transform-cell-value">{weightDelta != null ? `~${fmtDelta(weightDelta, 'lb')}` : '—'}</div>
+          <div className="transform-cell-detail">estimate — protein + lifting keep it mostly fat</div>
+        </div>
+        <div className="transform-cell">
+          <div className="transform-cell-label">Waist change</div>
+          <div className="transform-cell-value">{waistDelta != null ? fmtDelta(waistDelta, 'in') : '—'}</div>
+          {firstWaist != null && lastWaist != null && (
+            <div className="transform-cell-detail">{firstWaist}&quot; → {lastWaist}&quot;</div>
+          )}
+        </div>
+        <div className="transform-cell">
+          <div className="transform-cell-label">Progress photos</div>
+          <div className="transform-cell-value">{photoDays}/{duration}</div>
+        </div>
+        <div className="transform-cell">
+          <div className="transform-cell-label">Days logged</div>
+          <div className="transform-cell-value">{daysLogged}/{duration}</div>
+          <div className="transform-cell-detail">{totalDone} perfect · {avgCompletion}% avg</div>
+        </div>
+        <div className="transform-cell">
+          <div className="transform-cell-label">XP earned</div>
+          <div className="transform-cell-value">{challengeXP.toLocaleString()}</div>
+          <div className="transform-cell-detail">incl. +500 completion reward</div>
+        </div>
+      </div>
+      <div className="transform-badge-row">🗡️ Badge earned: <strong>Body Fat Slayer</strong></div>
+      <p className="transform-report-note">
+        Numbers are estimates from your logs. Results vary depending on starting body fat, adherence, calorie intake, and individual response.
+      </p>
+    </div>
+  );
+}
+
 function ComebackCard({ dayNum, comebackMode, setback, onStart, onDismiss, onComplete }) {
   useEffect(() => {
     if (comebackMode?.active && comebackMode.dayStart != null && dayNum >= comebackMode.dayStart + 3) {
@@ -298,8 +366,16 @@ export default function Dashboard({ setView }) {
   // Badges are lifetime achievements: current challenge + everything archived
   const rawBadges = dayNum ? computeBadges(allDays, profiles, activeProfile, getDayCompletion, dayNum) : [];
   const badgeIds  = new Set(rawBadges.map(b => b.id));
-  for (const arch of profileArchives) for (const id of arch.badges || []) badgeIds.add(id);
+  for (const arch of profileArchives) {
+    for (const id of arch.badges || []) badgeIds.add(id);
+    // Completion badge for archived challenges that reached their final day
+    if (arch.challenge?.badgeId && arch.endDayNum >= (arch.challenge.durationDays || 75)) {
+      badgeIds.add(arch.challenge.badgeId);
+    }
+  }
   if (lifetimeXP >= 7500) badgeIds.add('true_warrior_rank');
+  const challengeDone = !!(dayNum && dayNum >= duration);
+  if (challengeDone && meta.badgeId) badgeIds.add(meta.badgeId);
   const badges = BADGE_DEFS.filter(b => badgeIds.has(b.id));
 
   // Top insight preview — highest-priority bottleneck from the last 7 days
@@ -419,11 +495,22 @@ export default function Dashboard({ setView }) {
       {/* Quote of the Day — identity and motivation live on Home */}
       <QuoteOfTheDay />
 
-      {isDone && (
+      {isDone && meta.templateId !== 'fat_loss_phase' && (
         <div className="challenge-complete">
           <h3>🏆 Challenge Complete!</h3>
           <p>You finished all {duration} days. Incredible!</p>
         </div>
+      )}
+
+      {/* Fat Loss Challenge completion reward: before/after transformation report */}
+      {isDone && meta.templateId === 'fat_loss_phase' && (
+        <TransformationReport
+          days={days}
+          duration={duration}
+          totalDone={totalDone}
+          challengeXP={xpData.total}
+          getDayCompletion={getDayCompletion}
+        />
       )}
 
       {showWarning && !isDone && (

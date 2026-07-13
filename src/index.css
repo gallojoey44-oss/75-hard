@@ -3919,3 +3919,164 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   overflow: hidden;
 }
 .ins-preview-arrow { color: var(--text3); flex-shrink: 0; align-self: center; }
+
+/* ─── v3.12.0: Fat Loss Challenge program + progress + report ── */
+
+.tpl-program { margin-bottom: 12px; }
+
+.tpl-program-category {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+
+.tpl-program-block {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+.tpl-program-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.tpl-program-disclaimer {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text3);
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.tpl-program-details {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.tpl-program-summary {
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.tpl-program-summary::-webkit-details-marker { display: none; }
+.tpl-program-details[open] .tpl-program-summary { margin-bottom: 8px; }
+.tpl-program-text {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+.tpl-program-pillars { display: flex; flex-direction: column; gap: 8px; }
+.tpl-program-pillar-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent2);
+  margin-bottom: 3px;
+}
+
+.tpl-task-list.weekly li::before { content: '📆'; font-size: 10px; }
+.tpl-task-list.program li { color: var(--text2); }
+.tpl-task-list.program li::before { content: '•'; color: var(--text3); }
+
+.tpl-variant-expected {
+  font-size: 12px;
+  color: var(--text2);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 8px;
+}
+.tpl-variant-expected strong { color: var(--text); }
+
+/* Body metrics (Today) */
+.body-metrics-card { margin-bottom: 14px; }
+.body-metrics-hint {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.55;
+  margin-bottom: 10px;
+}
+.body-metrics-row { display: flex; gap: 10px; }
+.body-metric-field { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.body-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.body-metric-field .inline-input { width: 100%; }
+
+/* Transformation report */
+.transform-report {
+  background: linear-gradient(160deg, rgba(167,139,250,0.12), rgba(16,185,129,0.08));
+  border: 1px solid var(--accent2);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.transform-report-title {
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.transform-report-sub {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.55;
+  margin-bottom: 12px;
+}
+.transform-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.transform-cell {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+}
+.transform-cell-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 4px;
+}
+.transform-cell-value {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.transform-cell-detail {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 3px;
+  line-height: 1.4;
+}
+.transform-badge-row {
+  font-size: 13px;
+  padding: 8px 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+.transform-report-note {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text3);
+  line-height: 1.5;
+}

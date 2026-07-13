@@ -117,6 +117,49 @@ function GratitudePrayer({ dayData, onUpdate, onToggleComplete }) {
   );
 }
 
+// ── Body metrics (Fat Loss Challenge) ────────────────────────────────────────
+
+function BodyMetrics({ dayData, dayNumber, onUpdate }) {
+  const isWaistDay = dayNumber % 7 === 1; // days 1, 8, 15, 22, 29
+  return (
+    <div className="section-card body-metrics-card">
+      <div className="section-title">📷 Progress Tracking</div>
+      <p className="body-metrics-hint">
+        Photos are your before/after. Weigh-ins are optional but encouraged — trends matter, single days don&apos;t.
+        {isWaistDay ? ' Today is a waist measurement day.' : ''}
+      </p>
+      <div className="body-metrics-row">
+        <label className="body-metric-field">
+          <span className="body-metric-label">⚖️ Weight (lb)</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min="0"
+            className="inline-input"
+            placeholder="optional"
+            value={dayData?.weight || ''}
+            onChange={e => onUpdate({ weight: parseFloat(e.target.value) || 0 })}
+          />
+        </label>
+        <label className="body-metric-field">
+          <span className="body-metric-label">📏 Waist (in){isWaistDay ? ' · due' : ''}</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min="0"
+            className="inline-input"
+            placeholder={isWaistDay ? 'measure today' : 'weekly'}
+            value={dayData?.waist || ''}
+            onChange={e => onUpdate({ waist: parseFloat(e.target.value) || 0 })}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function MWDBanner({ comebackMode, dayNum }) {
   if (!comebackMode?.active) return null;
   const elapsed = dayNum - (comebackMode.dayStart || dayNum);
@@ -297,6 +340,7 @@ export default function DailyView({ editDayNum, setView }) {
   const faithEnabled = profile?.faithEnabled || false;
   const faithCounts  = profile?.faithCountsToward || false;
   const hasGratitudeTask = tasks.some(t => t.id === 'mt_gratitude');
+  const isFatLoss = getChallengeMeta().templateId === 'fat_loss_phase';
 
   const isCurrentDay = selectedDayNum === currentDayNum;
   const comebackMode = profile?.comebackMode || {};
@@ -415,6 +459,15 @@ export default function DailyView({ editDayNum, setView }) {
         </div>
       )}
 
+      {/* ── Body metrics (Fat Loss Challenge) ── */}
+      {isMe && isFatLoss && !isMWD && (
+        <BodyMetrics
+          dayData={dayData}
+          dayNumber={selectedDayNum}
+          onUpdate={handleUpdate}
+        />
+      )}
+
       {/* ── Joey: Gratitude / Prayer (Mental Training Phase) ── */}
       {isMe && hasGratitudeTask && !isMWD && (
         <GratitudePrayer
@@ -469,6 +522,14 @@ export default function DailyView({ editDayNum, setView }) {
               />
             ))}
           </div>
+
+          {isFatLoss && (
+            <BodyMetrics
+              dayData={dayData}
+              dayNumber={selectedDayNum}
+              onUpdate={handleUpdate}
+            />
+          )}
 
           {hasGratitudeTask && (
             <GratitudePrayer

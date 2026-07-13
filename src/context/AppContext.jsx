@@ -95,6 +95,8 @@ function emptyDay(date, dayNumber) {
     notes: '',
     glucoseNotes: '',
     hoursSlept: 0,
+    weight: 0,
+    waist: 0,
     validated: false,
     isMWD: false,
     mwdTasks: {},

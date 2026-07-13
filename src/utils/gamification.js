@@ -59,6 +59,7 @@ export const BADGE_DEFS = [
   { id: 'stress_defeated',        emoji: '🧘', label: 'Stress Defeated',     desc: 'Reduced stress from 7+ down to 5 or below.' },
   { id: 'recovery_master',        emoji: '🔋', label: 'Recovery Master',     desc: 'Recovery stayed at 7+ for 7 consecutive days.' },
   { id: 'true_warrior_rank',      emoji: '🏅', label: 'True Warrior',        desc: 'Reached the True Warrior rank (7,500 XP).' },
+  { id: 'body_fat_slayer',        emoji: '🗡️', label: 'Body Fat Slayer',     desc: 'Completed the 30-day Fat Loss Challenge.' },
 ];
 
 // ─── High-value task IDs ─────────────────────────────────────────────────────
@@ -232,6 +233,12 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
 
   // Comeback bonuses
   totalGained += computeComebackXP(profiles, profId, xpStartDay);
+
+  // Challenge completion reward (e.g. Fat Loss Challenge: +500 XP at day 30)
+  const meta = profiles[profId]?.activeChallenge;
+  if (meta?.rewardXP && meta?.durationDays && dayNum >= meta.durationDays) {
+    totalGained += meta.rewardXP;
+  }
 
   const rawTotal = totalGained - totalLost;
   const total    = Math.max(0, rawTotal + xpOffset);
