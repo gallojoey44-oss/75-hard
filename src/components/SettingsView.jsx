@@ -3,11 +3,12 @@ import { useApp } from '../context/AppContext';
 import { formatDateShort, getTodayStr } from '../utils/dateUtils';
 import TaskManager from './TaskManager';
 import QuoteLibrary from './QuoteLibrary';
+import NotificationSettings from './NotificationSettings';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 import BuildBanner, { BUILD_VERSION } from './BuildBanner';
 import { computeTotalXP, computeLifetimeXP, getRankInfo, BADGE_DEFS } from '../utils/gamification';
 
-const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints', 'archives'];
+const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints', 'archives', 'notifPrefs'];
 
 function exportData() {
   const data = {};
@@ -262,6 +263,11 @@ export default function SettingsView({ setView }) {
             {profile?.sleepAutoComplete !== false ? 'On' : 'Off'}
           </button>
         </div>
+      </div>
+
+      {/* Notifications */}
+      <div className="settings-section">
+        <NotificationSettings />
       </div>
 
       {/* Quote Library */}

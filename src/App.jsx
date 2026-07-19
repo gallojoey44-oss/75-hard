@@ -8,6 +8,11 @@ import ChallengesView from './components/ChallengesView';
 import SettingsView from './components/SettingsView';
 import BottomNav from './components/BottomNav';
 import { applyUpdate } from './utils/swUtils.js';
+import { getTodayStr } from './utils/dateUtils';
+import { getDueReminders, getNotificationSupport, showNotification, markFired } from './utils/notificationUtils';
+import { computeTotalXP, computeLifetimeXP, getMWDComplete } from './utils/gamification';
+import { buildTimeline, entriesInLastNDays } from './utils/archiveUtils';
+import { computeAveragesFromEntries, getPriorityBottleneck } from './utils/insightsUtils';
 
 // Listens for the 'sw-update-available' event dispatched by swUtils
 // and shows a fixed top banner. Rendered outside AppContent so it
@@ -36,9 +41,85 @@ function UpdateBanner() {
   );
 }
 
+// In-app reminder scheduler. Runs a minute tick while the app is OPEN and
+// shows due reminders through the service worker. Background delivery while
+// the app is closed is the job of the (prepared, not yet configured) Web Push
+// backend — this scheduler makes no such claim.
+function NotificationScheduler() {
+  const {
+    activeProfile, profile, profiles, allDays, archives, notifPrefs,
+    getChallengeMeta, getDayNumber, getDayCompletion,
+  } = useApp();
+
+  useEffect(() => {
+    if (!activeProfile) return undefined;
+
+    function tick() {
+      const prefs = notifPrefs[activeProfile];
+      if (!prefs?.masterEnabled) return;
+      const support = getNotificationSupport();
+      if (!support.supported || support.permission !== 'granted') return;
+
+      const dayNum = getDayNumber();
+      if (!dayNum) return;
+      const dayData = (allDays[activeProfile] || {})[dayNum] || null;
+      const meta = getChallengeMeta();
+      const xpData = computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum);
+      const lifetimeXP = computeLifetimeXP(archives[activeProfile], xpData.rawTotal || 0);
+      const timeline = buildTimeline(profile, allDays[activeProfile] || {}, archives[activeProfile] || []);
+      const avg7 = computeAveragesFromEntries(entriesInLastNDays(timeline, 7));
+      const bottleneck = getPriorityBottleneck(avg7, profile?.sleepTarget ?? 8);
+
+      const ctx = {
+        profileId: activeProfile,
+        tasks: profile?.tasks || [],
+        dayData,
+        isMWD: !!dayData?.isMWD && !getMWDComplete(dayData),
+        comebackActive: !!profile?.comebackMode?.active,
+        hasSetback: false,
+        challengeName: meta.name,
+        lifetimeXP,
+        challengeXP: xpData.total,
+        bottleneckLabel: bottleneck?.bottleneck ? bottleneck.label : null,
+      };
+
+      const todayStr = getTodayStr();
+      for (const reminder of getDueReminders(prefs, ctx, todayStr)) {
+        showNotification(reminder);
+        markFired(activeProfile, reminder.type, todayStr);
+      }
+    }
+
+    tick();
+    const id = setInterval(tick, 60 * 1000);
+    return () => clearInterval(id);
+  }, [activeProfile, profile, profiles, allDays, archives, notifPrefs, getChallengeMeta, getDayNumber, getDayCompletion]);
+
+  return null;
+}
+
 function AppContent() {
   const { activeProfile } = useApp();
   const [view, setView] = useState('home');
+
+  // Notification taps: the service worker posts FORGE_NAVIGATE with the
+  // target view (also honors a ?view= param when opened cold).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get('view');
+    if (target && ['home', 'today', 'insights', 'challenges', 'settings'].includes(target)) {
+      setView(target);
+      window.history.replaceState({}, '', '/');
+    }
+    if (!('serviceWorker' in navigator)) return undefined;
+    const handler = (e) => {
+      if (e.data?.type === 'FORGE_NAVIGATE' && e.data.view) {
+        setView(e.data.view === 'calendar' ? 'today' : e.data.view);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, []);
 
   if (!activeProfile) {
     return <ProfileSelector />;
@@ -69,6 +150,7 @@ export default function App() {
     <AppProvider>
       {/* Banner lives outside AppContent so it renders on every screen */}
       <UpdateBanner />
+      <NotificationScheduler />
       <AppContent />
     </AppProvider>
   );

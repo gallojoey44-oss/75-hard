@@ -4080,3 +4080,60 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   color: var(--text3);
   line-height: 1.5;
 }
+
+/* ─── v3.13.0: Notification settings ─────────────────────────── */
+
+.notif-status-chip {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.notif-banner {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.55;
+  margin-bottom: 10px;
+}
+.notif-banner.warn {
+  border-color: rgba(245,158,11,0.4);
+  color: #F59E0B;
+}
+
+.notif-reminder-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+.notif-reminder-row,
+.notif-quiet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.notif-quiet-row { border-bottom: none; margin-top: 4px; }
+.notif-reminder-row:last-child { border-bottom: none; }
+.notif-reminder-label {
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+.notif-reminder-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.notif-time-input {
+  width: 92px;
+  padding: 5px 6px;
+  font-size: 13px;
+}

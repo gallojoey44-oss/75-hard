@@ -4,6 +4,7 @@ import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges } from '../utils/gamification';
 import { getTemplateById } from '../data/challengeTemplates';
+import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -294,6 +295,10 @@ export function AppProvider({ children }) {
   // Challenge archives: { me: [archiveEntry], girlfriend: [] } — never wiped by
   // starting a new challenge; feeds lifetime XP and long-term Insights trends.
   const [archives, setArchivesState] = useState(() => loadLS('archives', { me: [], girlfriend: [] }));
+  // Notification preferences, per profile — all reminders default OFF
+  const [notifPrefs, setNotifPrefsState] = useState(() =>
+    loadLS('notifPrefs', { me: makeDefaultNotifPrefs(), girlfriend: makeDefaultNotifPrefs() })
+  );
 
   const setActiveProfile = useCallback((id) => {
     setActiveProfileState(id);
@@ -347,6 +352,29 @@ export function AppProvider({ children }) {
       return next;
     });
   }, []);
+
+  // Merge updates into the active profile's notification preferences
+  const updateNotifPrefs = useCallback((updates, profId = activeProfile) => {
+    if (!profId) return;
+    setNotifPrefsState(prev => {
+      const cur = prev[profId] || makeDefaultNotifPrefs();
+      const next = {
+        ...prev,
+        [profId]: {
+          ...cur,
+          ...updates,
+          quietHours: updates.quietHours ? { ...cur.quietHours, ...updates.quietHours } : cur.quietHours,
+          reminders: updates.reminders
+            ? Object.fromEntries(Object.entries({ ...cur.reminders, ...updates.reminders }).map(([k, v]) => [
+                k, { ...cur.reminders?.[k], ...v },
+              ]))
+            : cur.reminders,
+        },
+      };
+      saveLS('notifPrefs', next);
+      return next;
+    });
+  }, [activeProfile]);
 
   const profile = profiles[activeProfile] || null;
   const days = (activeProfile && allDays[activeProfile]) || {};
@@ -876,6 +904,8 @@ export function AppProvider({ children }) {
       archives, restoreArchive, deleteArchive, deleteAllProfileData,
       // Template sync
       isChallengeTemplateOutdated, syncActiveChallengeWithTemplate, getTaskSource,
+      // Notifications
+      notifPrefs, updateNotifPrefs,
       addTask, updateTask, deleteTask, reorderTasks,
       MENTAL_OPTIONS,
       // Quote

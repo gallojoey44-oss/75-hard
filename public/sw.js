@@ -1,5 +1,5 @@
 // Cache version — bump this string to invalidate ALL old caches on next deploy
-const CACHE_VER  = '75hard-v16';
+const CACHE_VER  = '75hard-v17';
 const ASSET_CACHE = `${CACHE_VER}-assets`;  // hashed JS/CSS — cache-first (immutable)
 const HTML_CACHE  = `${CACHE_VER}-html`;    // index.html — network-first (always fresh)
 const STATIC_CACHE = `${CACHE_VER}-static`; // icons, manifest — stale-while-revalidate
@@ -111,3 +111,43 @@ async function staleWhileRevalidate(request, cacheName) {
   }).catch(() => null);
   return cached ?? (await fetchPromise) ?? new Response('', { status: 503 });
 }
+
+// ────────────────────────────────────────────────────────────────
+// Notifications & Web Push
+// ────────────────────────────────────────────────────────────────
+
+// ── Push: display server-sent notifications (payload: {title, body, tag, view})
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+  const title = data.title || '⚔️ Forge';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      tag: data.tag || 'forge-push',       // same tag replaces instead of stacking
+      renotify: false,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      data: { view: data.view || 'today' },
+    })
+  );
+});
+
+// ── Notification click: focus the app (or open it) and navigate to the right page
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const view = event.notification.data?.view || 'today';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      for (const client of clients) {
+        if (client.url.startsWith(self.location.origin)) {
+          client.postMessage({ type: 'FORGE_NAVIGATE', view });
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(`/?view=${encodeURIComponent(view)}`);
+    })
+  );
+});
