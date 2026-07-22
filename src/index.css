@@ -4137,3 +4137,124 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   padding: 5px 6px;
   font-size: 13px;
 }
+
+/* ─── v3.14.0: Keystone habits, Future Self Letter, coaching ── */
+
+/* Keystone check items */
+.check-item.keystone {
+  border-left: 3px solid var(--accent2);
+  padding-left: 9px;
+  background: linear-gradient(90deg, rgba(167,139,250,0.06), transparent 60%);
+}
+.check-item.keystone-3 { border-left-color: #F9E04B; }
+.check-item.keystone-2 { border-left-color: #FFB347; }
+.keystone-stars { margin-left: 6px; font-size: 11px; letter-spacing: -1px; }
+.check-xp {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text3);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.check-item.keystone .check-xp { color: var(--accent2); }
+.keystone-explainer {
+  font-size: 12px;
+  color: var(--text2);
+  background: var(--card2);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+}
+
+/* Difficulty guide + philosophy */
+.tpl-difficulty-guide {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.tpl-difficulty-guide-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tpl-recommended-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #10B981;
+  border: 1px solid #10B981;
+  border-radius: 20px;
+  padding: 1px 7px;
+}
+.tpl-philosophy {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.55;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.tpl-philosophy strong { color: var(--accent2); }
+
+/* Future Self Letter + reflection fields */
+.letter-modal { max-width: 480px; text-align: left; }
+.letter-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.letter-field { display: flex; flex-direction: column; gap: 5px; }
+.letter-field-label { font-size: 13px; font-weight: 600; }
+.letter-textarea {
+  width: 100%;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 9px 11px;
+  resize: vertical;
+  font-family: inherit;
+}
+.letter-textarea:focus { outline: none; border-color: var(--accent); }
+.letter-read { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.letter-read-q { font-size: 12px; font-weight: 700; color: var(--accent2); margin-bottom: 3px; }
+.letter-read-a { font-size: 14px; color: var(--text); line-height: 1.55; white-space: pre-wrap; }
+.letter-read-date { font-size: 11px; color: var(--text3); font-style: italic; }
+
+/* Why bar */
+.why-bar { display: flex; gap: 8px; margin-bottom: 14px; }
+.why-btn { flex: 1; font-size: 13px; padding: 9px; }
+
+/* Coaching card */
+.coaching-card {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.3);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.coaching-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.coaching-body { font-size: 13px; color: var(--text2); line-height: 1.55; margin-bottom: 10px; }
+.coaching-body strong { color: var(--text); }
+.coaching-actions { display: flex; flex-direction: column; gap: 6px; }
+.coaching-action { justify-content: flex-start; text-align: left; font-size: 13px; }
+.coaching-why {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.6;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+/* Weekly reflection */
+.reflection-card { margin-bottom: 14px; }
+.reflection-hint { font-size: 12px; color: var(--text2); line-height: 1.5; margin-bottom: 10px; }

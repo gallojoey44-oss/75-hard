@@ -6,7 +6,13 @@ import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
 import BuildBanner from './BuildBanner';
-import { MWD_TASKS, getMWDComplete, getWarriorMessage } from '../utils/gamification';
+import { FutureSelfLetterView } from './FutureSelfLetter';
+import {
+  MWD_TASKS, getMWDComplete, getWarriorMessage,
+  sortTasksByKeystone, getTaskKeystone, getTaskXP, isKeystone,
+} from '../utils/gamification';
+import { KEYSTONE_EXPLAINER, WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
+import { getTemplateById } from '../data/challengeTemplates';
 
 const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
 
@@ -79,10 +85,9 @@ function GratitudePrayer({ dayData, onUpdate, onToggleComplete }) {
 
   return (
     <div className="section-card grat-card">
-      <div className="section-title">🙏 Gratitude / Prayer</div>
+      <div className="section-title">🙏 Gratitude</div>
       <p className="grat-tone">
-        Gratitude trains perspective. Prayer lowers ego and restores focus.
-        A strong mind starts with humility.
+        Gratitude trains perspective. A strong mind starts with humility.
       </p>
 
       <div className="grat-prompt-label">Optional prompt — pick one, or just take the moment:</div>
@@ -110,7 +115,7 @@ function GratitudePrayer({ dayData, onUpdate, onToggleComplete }) {
         className={`btn btn-full ${completed ? 'btn-success' : 'btn-primary'}`}
         onClick={onToggleComplete}
       >
-        {completed ? '✓ Gratitude / Prayer Complete' : 'Mark Gratitude / Prayer Complete'}
+        {completed ? '✓ Gratitude Complete' : 'Mark Gratitude Complete'}
       </button>
       <p className="grat-footnote">Train the mind before the world tests it.</p>
     </div>
@@ -160,6 +165,83 @@ function BodyMetrics({ dayData, dayNumber, onUpdate }) {
   );
 }
 
+// ── Read My Why / I'm struggling ─────────────────────────────────────────────
+
+function WhyBar({ letter, onReadWhy, onStruggling }) {
+  return (
+    <div className="why-bar">
+      {letter && (
+        <button className="btn btn-ghost why-btn" onClick={onReadWhy}>📖 Read My Why</button>
+      )}
+      <button className="btn btn-ghost why-btn" onClick={onStruggling}>🫂 I&apos;m struggling</button>
+    </div>
+  );
+}
+
+// ── Challenge coaching: repeatedly skipped keystone ─────────────────────────
+
+function CoachingCard({ keystone, whyText, onReduce, onReadWhy, isCurrentDay, canReduce }) {
+  const [showWhy, setShowWhy] = useState(false);
+  return (
+    <div className="coaching-card">
+      <div className="coaching-title">🧭 A gentle nudge</div>
+      <p className="coaching-body">
+        We&apos;ve noticed you&apos;ve consistently skipped <strong>{keystone.name.replace(/ —.*$/, '')}</strong>.
+        This habit is the foundation of this challenge. Would you like to:
+      </p>
+      <div className="coaching-actions">
+        {isCurrentDay && canReduce && (
+          <button className="btn btn-ghost coaching-action" onClick={onReduce}>Reduce today&apos;s duration</button>
+        )}
+        <button className="btn btn-ghost coaching-action" onClick={onReadWhy}>Read your Why</button>
+        <button className="btn btn-ghost coaching-action" onClick={() => setShowWhy(v => !v)}>
+          {showWhy ? 'Hide' : 'Learn why this habit matters'}
+        </button>
+      </div>
+      {showWhy && whyText && <div className="coaching-why">{whyText}</div>}
+    </div>
+  );
+}
+
+// ── Weekly reflection ────────────────────────────────────────────────────────
+
+function WeeklyReflection({ weekNumber, existing, onSave }) {
+  const [answers, setAnswers] = useState(existing || {});
+  const [saved, setSaved] = useState(!!existing);
+  if (saved && existing) {
+    return (
+      <div className="section-card reflection-card">
+        <div className="section-title">🪞 Week {weekNumber} reflection saved</div>
+        <p className="reflection-hint">Thanks for reflecting — Forge uses this to tune future recommendations.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="section-card reflection-card">
+      <div className="section-title">🪞 Week {weekNumber} reflection</div>
+      <p className="reflection-hint">A quick check-in helps you (and Forge) learn what&apos;s working.</p>
+      {WEEKLY_REFLECTION_PROMPTS.map(p => (
+        <label key={p.key} className="letter-field">
+          <span className="letter-field-label">{p.label}</span>
+          <textarea
+            className="letter-textarea"
+            rows={2}
+            value={answers[p.key] || ''}
+            onChange={e => setAnswers(a => ({ ...a, [p.key]: e.target.value }))}
+          />
+        </label>
+      ))}
+      <button
+        className="btn btn-primary btn-full"
+        style={{ marginTop: 8 }}
+        onClick={() => { onSave(weekNumber, answers); setSaved(true); }}
+      >
+        Save Reflection
+      </button>
+    </div>
+  );
+}
+
 function MWDBanner({ comebackMode, dayNum }) {
   if (!comebackMode?.active) return null;
   const elapsed = dayNum - (comebackMode.dayStart || dayNum);
@@ -189,10 +271,13 @@ function MWDBanner({ comebackMode, dayNum }) {
 
 export default function DailyView({ editDayNum, setView }) {
   const {
-    activeProfile, profile,
+    activeProfile, profile, allDays,
     getChallengeMeta, getDayNumber, getDayData,
     updateDay, toggleTask,
+    weeklyReflections, saveWeeklyReflection,
   } = useApp();
+
+  const [showLetter, setShowLetter] = useState(false);
 
   const currentDayNum = getDayNumber();
 
@@ -340,7 +425,37 @@ export default function DailyView({ editDayNum, setView }) {
   const faithEnabled = profile?.faithEnabled || false;
   const faithCounts  = profile?.faithCountsToward || false;
   const hasGratitudeTask = tasks.some(t => t.id === 'mt_gratitude');
-  const isFatLoss = getChallengeMeta().templateId === 'fat_loss_phase';
+  const meta = getChallengeMeta();
+  const isFatLoss = meta.templateId === 'fat_loss_phase';
+
+  // Keystone display: keystones pinned to the top of the checklist.
+  const displayTasks = sortTasksByKeystone(tasks);
+  const hasKeystones = tasks.some(isKeystone);
+
+  // Future Self Letter for the active challenge (archived per challenge).
+  const letter = meta.futureSelfLetter || null;
+
+  // Weekly reflection: prompt on each 7-day boundary if not yet answered.
+  const weekNumber = currentDayNum && currentDayNum % 7 === 0 ? currentDayNum / 7 : null;
+  const reflectionDue = weekNumber && !(weeklyReflections?.[activeProfile]?.[weekNumber]);
+
+  // Challenge coaching: the top keystone repeatedly skipped in recent days.
+  const coachingKeystone = (() => {
+    if (!hasKeystones || !currentDayNum || currentDayNum < 3) return null;
+    const profDays = allDays[activeProfile] || {};
+    const top = displayTasks.find(isKeystone);
+    if (!top) return null;
+    let skipped = 0;
+    for (let i = Math.max(1, currentDayNum - 6); i <= currentDayNum; i++) {
+      const d = profDays[i];
+      const logged = d && (Object.values(d.tasks || {}).some(Boolean) || (d.notes || '').trim());
+      if (logged && !d.tasks?.[top.id]) skipped++;
+    }
+    return skipped >= 3 ? top : null;
+  })();
+  const keystoneWhy = coachingKeystone
+    ? getTemplateById(meta.templateId)?.keystone_why?.[coachingKeystone.id]
+    : null;
 
   const isCurrentDay = selectedDayNum === currentDayNum;
   const comebackMode = profile?.comebackMode || {};
@@ -399,6 +514,34 @@ export default function DailyView({ editDayNum, setView }) {
         </div>
       </div>
 
+      {/* Read My Why / I'm struggling */}
+      <WhyBar
+        letter={letter}
+        onReadWhy={() => setShowLetter(true)}
+        onStruggling={() => setShowLetter(true)}
+      />
+
+      {/* Challenge coaching — repeatedly skipped keystone */}
+      {isCurrentDay && coachingKeystone && (
+        <CoachingCard
+          keystone={coachingKeystone}
+          whyText={keystoneWhy}
+          isCurrentDay={isCurrentDay}
+          canReduce={!isMWD}
+          onReduce={() => { if (!isMWD) handleToggleMWD(); }}
+          onReadWhy={() => setShowLetter(true)}
+        />
+      )}
+
+      {/* Weekly reflection */}
+      {isCurrentDay && reflectionDue && (
+        <WeeklyReflection
+          weekNumber={weekNumber}
+          existing={weeklyReflections?.[activeProfile]?.[weekNumber]}
+          onSave={saveWeeklyReflection}
+        />
+      )}
+
       {/* ── Joey: standard checklist ── */}
       {isMe && (
         <div className="section-card">
@@ -447,16 +590,28 @@ export default function DailyView({ editDayNum, setView }) {
               </div>
             </>
           ) : (
-            tasks.map(task => (
-              <CheckItem
-                key={task.id}
-                task={task}
-                checked={!!dayData?.tasks?.[task.id]}
-                onToggle={() => handleToggleTask(task.id)}
-              />
-            ))
+            <>
+              {hasKeystones && (
+                <div className="keystone-explainer">⭐ {KEYSTONE_EXPLAINER}</div>
+              )}
+              {displayTasks.map(task => (
+                <CheckItem
+                  key={task.id}
+                  task={task}
+                  checked={!!dayData?.tasks?.[task.id]}
+                  onToggle={() => handleToggleTask(task.id)}
+                  keystone={getTaskKeystone(task)}
+                  xp={getTaskXP(task)}
+                />
+              ))}
+            </>
           )}
         </div>
+      )}
+
+      {/* Future Self Letter viewer */}
+      {showLetter && (
+        <FutureSelfLetterView letter={letter} onClose={() => setShowLetter(false)} />
       )}
 
       {/* ── Body metrics (Fat Loss Challenge) ── */}
@@ -512,7 +667,7 @@ export default function DailyView({ editDayNum, setView }) {
           )}
 
           <div className="gf-tasks">
-            {tasks.map((task, i) => (
+            {displayTasks.map((task, i) => (
               <GfTaskCard
                 key={task.id}
                 task={task}

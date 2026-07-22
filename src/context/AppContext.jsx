@@ -299,6 +299,10 @@ export function AppProvider({ children }) {
   const [notifPrefs, setNotifPrefsState] = useState(() =>
     loadLS('notifPrefs', { me: makeDefaultNotifPrefs(), girlfriend: makeDefaultNotifPrefs() })
   );
+  // Weekly reflections, per profile: { me: { [weekNumber]: {helped, avoided, tooHard, date} } }
+  const [weeklyReflections, setWeeklyReflectionsState] = useState(() =>
+    loadLS('weeklyReflections', { me: {}, girlfriend: {} })
+  );
 
   const setActiveProfile = useCallback((id) => {
     setActiveProfileState(id);
@@ -352,6 +356,19 @@ export function AppProvider({ children }) {
       return next;
     });
   }, []);
+
+  const saveWeeklyReflection = useCallback((weekNumber, answers, profId = activeProfile) => {
+    if (!profId) return;
+    setWeeklyReflectionsState(prev => {
+      const cur = prev[profId] || {};
+      const next = {
+        ...prev,
+        [profId]: { ...cur, [weekNumber]: { ...answers, date: getTodayStr() } },
+      };
+      saveLS('weeklyReflections', next);
+      return next;
+    });
+  }, [activeProfile]);
 
   // Merge updates into the active profile's notification preferences
   const updateNotifPrefs = useCallback((updates, profId = activeProfile) => {
@@ -543,6 +560,12 @@ export function AppProvider({ children }) {
       setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
     }
     const meta = options?.challenge ? { ...DEFAULT_CHALLENGE_META, ...options.challenge } : { ...DEFAULT_CHALLENGE_META };
+    // Future Self Letter is stored on the challenge descriptor, so it archives
+    // with the challenge (buildArchiveEntry snapshots the descriptor) and is
+    // never overwritten by a later challenge.
+    if (options?.futureSelfLetter) {
+      meta.futureSelfLetter = { ...options.futureSelfLetter, writtenAt: getTodayStr() };
+    }
     setProfiles(prev => ({
       ...prev,
       [profId]: {
@@ -906,6 +929,8 @@ export function AppProvider({ children }) {
       isChallengeTemplateOutdated, syncActiveChallengeWithTemplate, getTaskSource,
       // Notifications
       notifPrefs, updateNotifPrefs,
+      // Weekly reflection
+      weeklyReflections, saveWeeklyReflection,
       addTask, updateTask, deleteTask, reorderTasks,
       MENTAL_OPTIONS,
       // Quote

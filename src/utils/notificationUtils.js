@@ -9,7 +9,13 @@
 //   needs the Vercel API routes deployed with VAPID keys (see .env.example).
 //   Never claim closed-app delivery works before that is configured.
 
-import { HIGH_VALUE_TASK_IDS, MWD_TASKS, getRankInfo } from './gamification';
+import { HIGH_VALUE_TASK_IDS, MWD_TASKS, getRankInfo, getTaskXP, topIncompleteKeystone } from './gamification';
+
+// A keystone task's display name without its duration suffix ("Mental
+// Training — 10 min…" → "Mental Training").
+function keystoneName(task) {
+  return task ? task.name.replace(/\s+—.*$/, '') : '';
+}
 
 // ─── Reminder catalog ────────────────────────────────────────────────────────
 
@@ -223,10 +229,20 @@ export function buildReminder(type, ctx) {
   const remaining = ctx.isMWD ? mwdRemaining.length : remainingTasks.length;
   const dayComplete = ctx.isMWD ? mwdRemaining.length === 0 : (tasks.length > 0 && remainingTasks.length === 0);
   const tag = (t) => `forge-${ctx.profileId}-${t}`;
+  // Keystone habits are prioritized in reminders when present and unfinished.
+  const keystone = topIncompleteKeystone(tasks, ctx.dayData);
 
   switch (type) {
     case 'morning': {
       if (dayComplete) return null;
+      // Lead with the keystone habit when the challenge has one.
+      if (keystone) {
+        return {
+          title: '⚔️ Your most important task remains unfinished.',
+          body: `${keystoneName(keystone)} — ${getTaskXP(keystone)} XP.`,
+          tag: tag('morning'), view: 'today',
+        };
+      }
       const availableXP = tasks.reduce((s, t) => s + taskXP(t), 0) + 50 + 15 + 10;
       return {
         title: '⚔️ Daily Mission',
@@ -253,6 +269,14 @@ export function buildReminder(type, ctx) {
     }
     case 'evening': {
       if (dayComplete || remaining === 0) return null;
+      // A more urgent keystone push in the evening — still encouraging.
+      if (keystone && !ctx.isMWD) {
+        return {
+          title: '🔥 Your challenge is at risk.',
+          body: `Complete your ${keystoneName(keystone)} today. You've still got time.`,
+          tag: tag('evening'), view: 'today',
+        };
+      }
       const body = ctx.isMWD
         ? `Minimum Warrior Day: ${remaining} small ${remaining === 1 ? 'task' : 'tasks'} left. The floor holds.`
         : `${remaining} ${remaining === 1 ? 'task' : 'tasks'} left today. Still time to close it out.`;

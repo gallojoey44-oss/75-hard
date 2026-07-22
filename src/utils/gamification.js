@@ -72,6 +72,56 @@ export const HIGH_VALUE_TASK_IDS = new Set([
   'mt_mind', 'mt_body', // Mental Training Phase core tasks
 ]);
 
+// ─── Keystone habits & per-task XP ───────────────────────────────────────────
+// Newer challenge templates weight tasks unequally: each task can carry an
+// explicit `xp` value and a `keystone` tier (1–3 stars). Keystone habits earn
+// significantly more XP, are pinned/highlighted in the UI, and are prioritized
+// in reminders. Legacy tasks without these fields fall back to the flat
+// high-value scheme so existing challenges are unaffected.
+
+/** XP a single task is worth when completed. */
+export function getTaskXP(task) {
+  if (task && typeof task.xp === 'number') return task.xp;
+  return HIGH_VALUE_TASK_IDS.has(task?.id) ? 15 : 10;
+}
+
+/** Keystone tier: 3 (⭐⭐⭐) / 2 (⭐⭐) / 1 (⭐) / 0 (not a keystone). */
+export function getTaskKeystone(task) {
+  return task && typeof task.keystone === 'number' ? task.keystone : 0;
+}
+
+export function isKeystone(task) {
+  return getTaskKeystone(task) > 0;
+}
+
+export function keystoneStars(tier) {
+  return '⭐'.repeat(Math.max(0, Math.min(3, tier || 0)));
+}
+
+/** XP lost for missing a task (kept modest — the app never punishes harshly). */
+function taskMissPenalty(task) {
+  if (task && typeof task.xp === 'number') return Math.round(Math.min(task.xp * 0.25, 12));
+  return HIGH_VALUE_TASK_IDS.has(task?.id) ? 10 : 5;
+}
+
+/**
+ * Tasks sorted for display: keystones first (highest tier first), then the
+ * rest in their existing order. Stable within each group.
+ */
+export function sortTasksByKeystone(tasks) {
+  return [...(tasks || [])]
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => (getTaskKeystone(b.t) - getTaskKeystone(a.t)) || (a.i - b.i))
+    .map(x => x.t);
+}
+
+/** The highest-tier keystone task that is not yet complete today, or null. */
+export function topIncompleteKeystone(tasks, dayData) {
+  const incomplete = (tasks || []).filter(t => isKeystone(t) && !dayData?.tasks?.[t.id]);
+  if (!incomplete.length) return null;
+  return incomplete.sort((a, b) => getTaskKeystone(b) - getTaskKeystone(a))[0];
+}
+
 // ─── Per-day XP computation ──────────────────────────────────────────────────
 
 function hasAnyActivity(dayData) {
@@ -104,14 +154,14 @@ export function computeDayXP(dayData, tasks, profId, dayNum, currentDayNum, pena
   // Penalty multiplier: 0.3× when MWD was completed (user still showed up)
   const penaltyMult = (mwdDone && penaltiesEnabled) ? 0.3 : 1.0;
 
-  // Task XP
+  // Task XP — per-task weighting when the task carries an xp value, otherwise
+  // the flat high-value scheme. Keystone habits earn significantly more.
   for (const task of tasks) {
     const done = !!dayData.tasks?.[task.id];
-    const isHV = HIGH_VALUE_TASK_IDS.has(task.id);
     if (done) {
-      gained += isHV ? 15 : 10;
+      gained += getTaskXP(task);
     } else if (penaltiesEnabled) {
-      lost += Math.round((isHV ? 10 : 5) * penaltyMult);
+      lost += Math.round(taskMissPenalty(task) * penaltyMult);
     }
   }
 

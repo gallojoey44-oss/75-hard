@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
 import { CHALLENGE_TEMPLATES, METRIC_LABELS } from '../data/challengeTemplates';
+import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
+import { FutureSelfLetterForm } from './FutureSelfLetter';
 
 const EVIDENCE_COLOR = {
   strong:       '#10B981',
@@ -257,18 +259,35 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
             </span>
           </div>
 
-          {/* Mode selector */}
-          <div className="tpl-detail-label" style={{ margin: '12px 0 6px' }}>Choose Mode</div>
-          <div className="tpl-variant-tabs" style={{ margin: '0 0 10px' }}>
-            {VARIANT_TABS.map(v => (
-              <button
-                key={v.key}
-                className={`tpl-variant-tab${variantTab === v.key ? ' active' : ''}`}
-                onClick={() => setVariantTab(v.key)}
-              >
-                {v.label}
-              </button>
-            ))}
+          {/* Difficulty selector */}
+          <div className="tpl-detail-label" style={{ margin: '12px 0 6px' }}>Choose Your Difficulty</div>
+          <div className="tpl-variant-tabs" style={{ margin: '0 0 8px' }}>
+            {VARIANT_TABS.map(v => {
+              const rec = DIFFICULTY_GUIDE[v.key]?.recommended;
+              return (
+                <button
+                  key={v.key}
+                  className={`tpl-variant-tab${variantTab === v.key ? ' active' : ''}`}
+                  onClick={() => setVariantTab(v.key)}
+                >
+                  {v.label}{rec ? ' ★' : ''}
+                </button>
+              );
+            })}
+          </div>
+          {DIFFICULTY_GUIDE[variantTab] && (
+            <div className="tpl-difficulty-guide">
+              <div className="tpl-difficulty-guide-title">
+                {DIFFICULTY_GUIDE[variantTab].label}
+                {DIFFICULTY_GUIDE[variantTab].recommended && <span className="tpl-recommended-tag">Recommended</span>}
+              </div>
+              <ul className="tpl-task-list program">
+                {DIFFICULTY_GUIDE[variantTab].points.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="tpl-philosophy">
+            <strong>{PHILOSOPHY.headline}.</strong> {PHILOSOPHY.body}
           </div>
           <VariantPanel variant={template.variants[variantTab]} template={template} />
 
@@ -312,7 +331,8 @@ export default function ChallengesView({ setView }) {
   } = useApp();
 
   const [showStartConfirm, setShowStartConfirm] = useState(false);
-  // { template, variant, durationDays } — variant-based start pending confirmation
+  // Start flow: { template, variant, durationDays, step, legacy75 }
+  // step: 'hardWarn' → 'letter'. Standard/Beginner skip straight to 'letter'.
   const [pendingStart, setPendingStart] = useState(null);
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
 
@@ -327,29 +347,30 @@ export default function ChallengesView({ setView }) {
     ? Array.from({ length: dayNum }, (_, i) => i + 1).filter(n => getDayCompletion(n) === 100).length
     : 0;
 
-  function handleStart75() {
-    startChallenge();
-    setShowStartConfirm(false);
-    setView('today');
-  }
-
-  function handleStartVariant() {
-    if (!pendingStart) return;
-    const { template, variant, durationDays } = pendingStart;
-    const variantDef = template.variants[variant];
-    startChallenge(undefined, {
-      challenge: {
-        templateId: template.id,
-        name: template.challenge_name,
-        emoji: template.emoji,
-        variant,
-        durationDays,
-        templateVersion: template.template_version || 1,
-        rewardXP: template.rewards?.xp || 0,
-        badgeId: template.rewards?.badge_id || null,
-      },
-      tasks: variantDef.start_tasks,
-    });
+  // Begin a challenge once difficulty is confirmed and the Future Self Letter
+  // is written. Handles both the variant flow and the legacy 75-day flow.
+  function beginChallenge(letter) {
+    const ps = pendingStart;
+    if (!ps) return;
+    if (ps.legacy75) {
+      startChallenge(undefined, { futureSelfLetter: letter });
+    } else {
+      const variantDef = ps.template.variants[ps.variant];
+      startChallenge(undefined, {
+        challenge: {
+          templateId: ps.template.id,
+          name: ps.template.challenge_name,
+          emoji: ps.template.emoji,
+          variant: ps.variant,
+          durationDays: ps.durationDays,
+          templateVersion: ps.template.template_version || 1,
+          rewardXP: ps.template.rewards?.xp || 0,
+          badgeId: ps.template.rewards?.badge_id || null,
+        },
+        tasks: variantDef.start_tasks,
+        futureSelfLetter: letter,
+      });
+    }
     setPendingStart(null);
     setView('today');
   }
@@ -439,7 +460,11 @@ export default function ChallengesView({ setView }) {
               setView={setView}
               onStart={(payload) => {
                 if (t.start_flow === 'variant' && payload) {
-                  setPendingStart({ template: t, ...payload });
+                  setPendingStart({
+                    template: t,
+                    ...payload,
+                    step: payload.variant === 'hard' ? 'hardWarn' : 'letter',
+                  });
                 } else if (t.id === '75_day_discipline_challenge' && !isRunning) {
                   setShowStartConfirm(true);
                 }
@@ -466,27 +491,34 @@ export default function ChallengesView({ setView }) {
         </div>
       )}
 
-      {/* Variant challenge start confirmation */}
-      {pendingStart && (
+      {/* Hard-mode confirmation */}
+      {pendingStart?.step === 'hardWarn' && (
         <div className="modal-overlay" onClick={() => setPendingStart(null)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h3>Start {pendingStart.template.challenge_name}?</h3>
-            <p>
-              Your current challenge will be archived first. Your historical data will remain available for Insights.
-            </p>
-            <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: -8 }}>
-              {pendingStart.durationDays} days · {capitalize(pendingStart.variant)} mode
-              {pendingStart.template.tagline ? ` — ${pendingStart.template.tagline.charAt(0).toLowerCase()}${pendingStart.template.tagline.slice(1)}` : ''}
-            </p>
+            <h3>{HARD_CONFIRM.title}</h3>
+            {HARD_CONFIRM.body.split('\n\n').map((para, i) => (
+              <p key={i} style={i > 0 ? { marginTop: -6 } : undefined}>{para}</p>
+            ))}
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setPendingStart(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleStartVariant}>Archive Current &amp; Start</button>
+              <button className="btn btn-ghost" onClick={() => setPendingStart(null)}>{HARD_CONFIRM.backLabel}</button>
+              <button className="btn btn-primary" onClick={() => setPendingStart(p => ({ ...p, step: 'letter' }))}>
+                {HARD_CONFIRM.continueLabel}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Start challenge confirmation */}
+      {/* Future Self Letter — required before a challenge begins */}
+      {pendingStart?.step === 'letter' && (
+        <FutureSelfLetterForm
+          challengeName={pendingStart.template?.challenge_name || '75-Day Discipline Challenge'}
+          onCancel={() => setPendingStart(null)}
+          onSubmit={(letter) => beginChallenge(letter)}
+        />
+      )}
+
+      {/* 75-day start confirmation → leads into the Future Self Letter */}
       {showStartConfirm && (
         <div className="modal-overlay" onClick={() => setShowStartConfirm(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
@@ -494,7 +526,15 @@ export default function ChallengesView({ setView }) {
             <p>Day 1 begins today. Your daily tasks and progress will be tracked automatically.</p>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setShowStartConfirm(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleStart75}>Start Today</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setShowStartConfirm(false);
+                  setPendingStart({ template: null, variant: null, durationDays: 75, step: 'letter', legacy75: true });
+                }}
+              >
+                Next: Your Why →
+              </button>
             </div>
           </div>
         </div>

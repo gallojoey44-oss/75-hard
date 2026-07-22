@@ -8,7 +8,7 @@ import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 import BuildBanner, { BUILD_VERSION } from './BuildBanner';
 import { computeTotalXP, computeLifetimeXP, getRankInfo, BADGE_DEFS } from '../utils/gamification';
 
-const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints', 'archives', 'notifPrefs'];
+const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints', 'archives', 'notifPrefs', 'weeklyReflections'];
 
 function exportData() {
   const data = {};
