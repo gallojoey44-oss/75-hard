@@ -332,7 +332,7 @@ export const CHALLENGE_TEMPLATES = [
     start_flow: 'variant', // start button with variant + duration selection
     // Bump when the variant task lists change, so active challenges can offer
     // a sync to the latest version without resetting progress.
-    template_version: 3,
+    template_version: 4,
     // All template-owned task ids share this prefix — used to tell template
     // tasks apart from user-added custom tasks on lists saved before tasks
     // carried an explicit source.
@@ -343,7 +343,7 @@ export const CHALLENGE_TEMPLATES = [
     // Keystone habit context for coaching ("Learn why this habit matters").
     keystone_why: {
       mt_mind: 'Mental Training is the foundation of this challenge. A few focused minutes of breathwork, meditation, or prayer each day is what actually rewires your baseline calm and self-control — everything else compounds on it.',
-      mt_reading: 'Reading feeds the mind you are training. Ten pages a day reinforces growth, sharpens focus, and gives your brain something better than a scroll.',
+      mt_reading: 'Reading feeds the mind you are training. Even a couple of pages a day reinforces growth, sharpens focus, and gives your brain something better than a scroll.',
       mt_prayer: 'Prayer lowers ego and restores focus. It anchors the day in something larger than mood.',
     },
     physical_examples: ['Pushups', 'Plank', 'Wall sit', 'Air squats', 'Shadowboxing', 'Mobility flow'],
@@ -365,12 +365,13 @@ export const CHALLENGE_TEMPLATES = [
     variants: {
       beginner: {
         difficulty: 'easy',
+        progression: 'Build the habit.',
         required_daily_tasks: [
-          '⭐⭐⭐ Mental Training — 5 min breathwork, meditation, or prayer (100 XP).',
-          '⭐⭐ Read 5 pages (40 XP).',
-          '⭐⭐ Prayer / stillness (40 XP).',
+          '⭐⭐⭐ Mental Training — 2 minutes (100 XP).',
+          '⭐⭐ Read 2 pages (40 XP).',
+          '⭐⭐ Prayer (40 XP).',
           '⭐ Write one gratitude (20 XP).',
-          '⭐ 20-minute phone-free focus block (20 XP).',
+          '⭐ 30-minute phone-free focus block (20 XP).',
           '⭐ Log mood (10 XP).',
           '⭐ Log stress (10 XP).',
           '⭐ Log energy (10 XP).',
@@ -379,11 +380,11 @@ export const CHALLENGE_TEMPLATES = [
           'A short physical discipline block.',
         ],
         start_tasks: [
-          { id: 'mt_mind',      name: 'Mental Training — 5 min breathwork/meditation/prayer', icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3 },
-          { id: 'mt_reading',   name: 'Read 5 pages',                        icon: '📚', color: '#74B9FF', xp: 40, keystone: 2 },
-          { id: 'mt_prayer',    name: 'Prayer / stillness',                  icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2 },
+          { id: 'mt_mind',      name: 'Mental Training — 2 minutes',         icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3 },
+          { id: 'mt_reading',   name: 'Read 2 pages',                        icon: '📚', color: '#74B9FF', xp: 40, keystone: 2 },
+          { id: 'mt_prayer',    name: 'Prayer',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2 },
           { id: 'mt_gratitude', name: 'Write one gratitude',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1 },
-          { id: 'mt_focus',     name: '20-min phone-free focus block',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1 },
+          { id: 'mt_focus',     name: '30-min phone-free focus block',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1 },
           { id: 'mt_mood',      name: 'Log mood',                            icon: '🙂', color: '#6BCB77', xp: 10, keystone: 1 },
           { id: 'mt_stress',    name: 'Log stress',                          icon: '🌡️', color: '#FF8FAB', xp: 10, keystone: 1 },
           { id: 'mt_energy',    name: 'Log energy',                          icon: '⚡', color: '#45B7D1', xp: 10, keystone: 1 },
@@ -391,9 +392,10 @@ export const CHALLENGE_TEMPLATES = [
       },
       standard: {
         difficulty: 'medium',
+        progression: 'Strengthen the habit.',
         required_daily_tasks: [
-          '⭐⭐⭐ Mental Training — 10 min breathwork, meditation, or prayer (100 XP).',
-          '⭐⭐ Read 10 pages (40 XP).',
+          '⭐⭐⭐ Mental Training — 5 minutes (100 XP).',
+          '⭐⭐ Read 5 pages (40 XP).',
           '⭐⭐ Prayer (40 XP).',
           '⭐ Write one gratitude (20 XP).',
           '⭐ 60-minute phone-free focus block (20 XP).',
@@ -406,8 +408,8 @@ export const CHALLENGE_TEMPLATES = [
           'A physical discipline block.',
         ],
         start_tasks: [
-          { id: 'mt_mind',      name: 'Mental Training — 10 min breathwork/meditation/prayer', icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3 },
-          { id: 'mt_reading',   name: 'Read 10 pages',                       icon: '📚', color: '#74B9FF', xp: 40, keystone: 2 },
+          { id: 'mt_mind',      name: 'Mental Training — 5 minutes',         icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3 },
+          { id: 'mt_reading',   name: 'Read 5 pages',                        icon: '📚', color: '#74B9FF', xp: 40, keystone: 2 },
           { id: 'mt_prayer',    name: 'Prayer',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2 },
           { id: 'mt_gratitude', name: 'Write one gratitude',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1 },
           { id: 'mt_focus',     name: '60-min phone-free focus block',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1 },
@@ -418,8 +420,9 @@ export const CHALLENGE_TEMPLATES = [
       },
       hard: {
         difficulty: 'hard',
+        progression: 'Optimize the habit.',
         required_daily_tasks: [
-          '⭐⭐⭐ Mental Training — 15–20 min breathwork, meditation, or prayer (100 XP).',
+          '⭐⭐⭐ Mental Training — 10 minutes (100 XP).',
           '⭐⭐ Read 10 pages (40 XP).',
           '⭐⭐ Prayer (40 XP).',
           '⭐ Write one gratitude (20 XP).',
@@ -433,7 +436,7 @@ export const CHALLENGE_TEMPLATES = [
           'A physical discipline block or cold shower finish.',
         ],
         start_tasks: [
-          { id: 'mt_mind',      name: 'Mental Training — 15–20 min breathwork/meditation/prayer', icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3 },
+          { id: 'mt_mind',      name: 'Mental Training — 10 minutes',        icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3 },
           { id: 'mt_reading',   name: 'Read 10 pages',                       icon: '📚', color: '#74B9FF', xp: 40, keystone: 2 },
           { id: 'mt_prayer',    name: 'Prayer',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2 },
           { id: 'mt_gratitude', name: 'Write one gratitude',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1 },

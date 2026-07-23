@@ -4258,3 +4258,11 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 /* Weekly reflection */
 .reflection-card { margin-bottom: 14px; }
 .reflection-hint { font-size: 12px; color: var(--text2); line-height: 1.5; margin-bottom: 10px; }
+
+/* ─── v3.15.0: Mental Training progression note ──────────────── */
+.tpl-progression {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent2);
+  margin-bottom: 6px;
+}

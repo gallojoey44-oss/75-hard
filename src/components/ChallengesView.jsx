@@ -281,6 +281,9 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
                 {DIFFICULTY_GUIDE[variantTab].label}
                 {DIFFICULTY_GUIDE[variantTab].recommended && <span className="tpl-recommended-tag">Recommended</span>}
               </div>
+              {template.variants[variantTab]?.progression && (
+                <div className="tpl-progression">{template.variants[variantTab].progression}</div>
+              )}
               <ul className="tpl-task-list program">
                 {DIFFICULTY_GUIDE[variantTab].points.map((p, i) => <li key={i}>{p}</li>)}
               </ul>
