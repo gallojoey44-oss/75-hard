@@ -330,7 +330,7 @@ export default function ChallengesView({ setView }) {
     profile, getChallengeMeta, getDayNumber, getDayCompletion,
     getStreak,
     startChallenge,
-    isChallengeTemplateOutdated, syncActiveChallengeWithTemplate,
+    isChallengeTemplateOutdated, syncActiveChallengeWithTemplate, isForgeDaily,
   } = useApp();
 
   const [showStartConfirm, setShowStartConfirm] = useState(false);
@@ -340,11 +340,14 @@ export default function ChallengesView({ setView }) {
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
 
   const meta      = getChallengeMeta();
+  const baseline  = isForgeDaily();
   const duration  = meta.durationDays || 75;
   const dayNum    = getDayNumber();
   const todayPct  = dayNum ? getDayCompletion(dayNum) : 0;
   const streak    = getStreak();
-  const isRunning = !!profile?.challengeStart;
+  // Forge Daily is the baseline, not a "challenge" — so the tab shows the
+  // no-active-challenge state and the library to start a real one.
+  const isRunning = !!profile?.challengeStart && !baseline;
 
   const totalDone = dayNum
     ? Array.from({ length: dayNum }, (_, i) => i + 1).filter(n => getDayCompletion(n) === 100).length
@@ -443,10 +446,12 @@ export default function ChallengesView({ setView }) {
           </div>
         ) : (
           <div className="no-active-challenge">
-            <div className="nac-icon">🎯</div>
-            <div className="nac-title">No active challenge</div>
+            <div className="nac-icon">{baseline ? '🔥' : '🎯'}</div>
+            <div className="nac-title">No Active Challenge</div>
             <p className="nac-body">
-              Pick a challenge below to get started. Your daily tasks, XP, and progress will track automatically.
+              {baseline
+                ? "You're on Forge Daily — keeping your streak alive with light daily habits. Pick a challenge below when you're ready for the next chapter."
+                : 'Pick a challenge below to get started. Your daily tasks, XP, and progress will track automatically.'}
             </p>
           </div>
         )}

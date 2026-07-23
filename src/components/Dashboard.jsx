@@ -8,6 +8,133 @@ import {
 } from '../utils/gamification';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
+import { NEXT_GOALS } from '../data/challengeTemplates';
+import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
+import { formatDateShort } from '../utils/dateUtils';
+
+// ── Challenge Complete screen ────────────────────────────────────────────────
+
+function capMode(v) {
+  return v ? v.charAt(0).toUpperCase() + v.slice(1) : '';
+}
+
+function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue }) {
+  const badgeDefs = (summary.badges || []).map(id => BADGE_DEFS.find(b => b.id === id)).filter(Boolean);
+  if (summary.badgeId && !badgeDefs.find(b => b.id === summary.badgeId)) {
+    const b = BADGE_DEFS.find(x => x.id === summary.badgeId);
+    if (b) badgeDefs.push(b);
+  }
+  const reflectionWeeks = Object.keys(summary.reflections || {}).map(Number).sort((a, b) => a - b);
+
+  return (
+    <div className="dashboard">
+      <BuildBanner />
+      <div className="challenge-complete-screen">
+        <div className="cc-trophy">🏆</div>
+        <h2 className="cc-title">Challenge Complete</h2>
+        <div className="cc-sub">
+          {summary.emoji} {summary.name}{summary.variant ? ` · ${capMode(summary.variant)}` : ''} · {summary.durationDays} days
+        </div>
+
+        <div className="cc-xp">+{(summary.xpEarned || 0).toLocaleString()} XP earned</div>
+
+        {badgeDefs.length > 0 && (
+          <div className="cc-badges">
+            {badgeDefs.map(b => (
+              <span key={b.id} className="cc-badge" title={b.desc}>{b.emoji} {b.label}</span>
+            ))}
+          </div>
+        )}
+
+        <div className="cc-stats-grid">
+          {summary.hasKeystones && (
+            <div className="cc-stat">
+              <div className="cc-stat-value">{summary.keystonePct}%</div>
+              <div className="cc-stat-label">Keystone habits</div>
+            </div>
+          )}
+          <div className="cc-stat">
+            <div className="cc-stat-value">{summary.perfectDays}</div>
+            <div className="cc-stat-label">Perfect days</div>
+          </div>
+          <div className="cc-stat">
+            <div className="cc-stat-value">{summary.daysLogged}</div>
+            <div className="cc-stat-label">Days logged</div>
+          </div>
+          <div className="cc-stat">
+            <div className="cc-stat-value">{summary.avgCompletion}%</div>
+            <div className="cc-stat-label">Avg completion</div>
+          </div>
+        </div>
+
+        {summary.improvements?.length > 0 && (
+          <div className="cc-section">
+            <div className="cc-section-title">Personal improvements</div>
+            <div className="cc-improvements">
+              {summary.improvements.map(im => (
+                <div key={im.label} className={`cc-improvement${im.improved ? ' up' : ''}`}>
+                  <span>{im.label}</span>
+                  <span>{im.delta > 0 ? '+' : ''}{im.delta} {im.improved ? '↑' : ''}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {reflectionWeeks.length > 0 && (
+          <div className="cc-section">
+            <div className="cc-section-title">Your weekly reflections</div>
+            {reflectionWeeks.map(w => {
+              const r = summary.reflections[w];
+              return (
+                <div key={w} className="cc-reflection">
+                  <div className="cc-reflection-week">Week {w}</div>
+                  {WEEKLY_REFLECTION_PROMPTS.filter(p => (r[p.key] || '').trim()).map(p => (
+                    <div key={p.key} className="cc-reflection-line"><em>{p.label}</em> {r[p.key]}</div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {summary.completionDate && (
+          <div className="cc-date">Completed {formatDateShort(summary.completionDate)}</div>
+        )}
+
+        <div className="cc-actions">
+          <button className="btn btn-primary btn-full" onClick={onStartNew}>Start New Challenge</button>
+          <button className="btn btn-ghost btn-full" onClick={onViewArchive}>View Challenge Archive</button>
+          <button className="btn btn-ghost btn-full" onClick={onContinue}>Continue with Forge Daily</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── "What's your next goal?" chooser ─────────────────────────────────────────
+
+function NextGoalChooser({ onPick, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card next-goal-modal" onClick={e => e.stopPropagation()}>
+        <h3>What&apos;s your next goal?</h3>
+        <p style={{ marginBottom: 12 }}>A new chapter — not starting from scratch. Pick what you want to build next.</p>
+        <div className="next-goal-grid">
+          {NEXT_GOALS.map(g => (
+            <button key={g.id} className="next-goal-btn" onClick={() => onPick(g)}>
+              <span className="next-goal-emoji">{g.emoji}</span>
+              <span className="next-goal-label">{g.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Not now</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CircleRing({ value, max, size = 120 }) {
   const r = (size - 16) / 2;
@@ -333,7 +460,7 @@ export default function Dashboard({ setView }) {
   const {
     activeProfile, profile, profiles, days, allDays, archives,
     getChallengeMeta, getDayNumber, getDayCompletion, getStreak, getLongestStreak,
-    startChallenge,
+    startChallenge, isForgeDaily, completeChallenge, dismissCompletion, startForgeDaily,
     setActiveProfile,
     startComeback, dismissComeback, completeComeback,
   } = useApp();
@@ -341,11 +468,13 @@ export default function Dashboard({ setView }) {
   const [showSwitch, setShowSwitch] = useState(false);
   const [showRankDetails, setShowRankDetails] = useState(false);
   const [showRankLadder, setShowRankLadder] = useState(false);
+  const [showNextGoal, setShowNextGoal] = useState(false);
   const [xpAnim, setXpAnim] = useState(null);
   const prevXpRef = useRef(null);
 
-  const meta      = getChallengeMeta();
-  const duration  = meta.durationDays || 75;
+  const meta        = getChallengeMeta();
+  const isBaseline  = isForgeDaily();
+  const duration    = meta.durationDays || 75;
   const dayNum    = getDayNumber();
   const streak    = getStreak();
   const longest   = getLongestStreak();
@@ -374,9 +503,14 @@ export default function Dashboard({ setView }) {
     }
   }
   if (lifetimeXP >= 7500) badgeIds.add('true_warrior_rank');
-  const challengeDone = !!(dayNum && dayNum >= duration);
+  const challengeDone = !!(dayNum && !isBaseline && dayNum >= duration);
   if (challengeDone && meta.badgeId) badgeIds.add(meta.badgeId);
   const badges = BADGE_DEFS.filter(b => badgeIds.has(b.id));
+
+  function pickNextGoal(goal) {
+    setShowNextGoal(false);
+    setView('challenges');
+  }
 
   // Top insight preview — highest-priority bottleneck from the last 7 days
   // (merged across archived + active challenges, same data Insights uses)
@@ -403,6 +537,21 @@ export default function Dashboard({ setView }) {
     prevXpRef.current = lifetimeXP;
   }, [lifetimeXP]);
 
+  // Challenge Complete screen takes priority — shown once after a challenge ends
+  if (profile?.lastCompletion) {
+    return (
+      <>
+        <ChallengeComplete
+          summary={profile.lastCompletion}
+          onStartNew={() => setShowNextGoal(true)}
+          onViewArchive={() => setView('settings')}
+          onContinue={() => dismissCompletion()}
+        />
+        {showNextGoal && <NextGoalChooser onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
+      </>
+    );
+  }
+
   if (!profile?.challengeStart) {
     return (
       <div className="dashboard">
@@ -412,7 +561,7 @@ export default function Dashboard({ setView }) {
             <span className="dash-emoji">{profile?.emoji}</span>
             <div>
               <h2>{profile?.name}</h2>
-              <p className="text-muted">No active challenge</p>
+              <p className="text-muted">No Active Challenge</p>
             </div>
           </div>
           <button className="dash-switch-btn" onClick={() => setActiveProfile(otherProfile)}>
@@ -422,22 +571,22 @@ export default function Dashboard({ setView }) {
 
         <div className="start-challenge">
           <div className="start-challenge-emoji">🔥</div>
-          <h2>Start a Challenge</h2>
-          <p>
-            Begin your 75-Day Discipline Challenge. Day 1 starts today — tasks, XP, and progress track automatically.
-          </p>
-          <button className="btn btn-primary btn-full" onClick={() => startChallenge()}>
-            Start 75-Day Discipline Challenge
+          <h2>No Active Challenge</h2>
+          <p>Continue building yourself with Forge Daily — light daily habits that keep your streak alive.</p>
+          <button className="btn btn-primary btn-full" onClick={() => setShowNextGoal(true)}>
+            Start New Challenge
           </button>
-          <button className="btn btn-ghost btn-full" style={{ marginTop: 8 }} onClick={() => setView('challenges')}>
-            Browse All Challenges
+          <button className="btn btn-ghost btn-full" style={{ marginTop: 8 }} onClick={() => startForgeDaily()}>
+            🔥 Start Forge Daily
           </button>
         </div>
+        {showNextGoal && <NextGoalChooser onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
       </div>
     );
   }
 
-  const isDone = dayNum >= duration;
+  const isDone = !isBaseline && dayNum >= duration;
+  const isFinalDay = !isBaseline && dayNum === duration;
   const prevDay = dayNum ? dayNum - 1 : null;
   const prevPct = prevDay ? getDayCompletion(prevDay) : 100;
   const showWarning = prevDay && prevPct < 100 && prevDay > 0;
@@ -451,8 +600,9 @@ export default function Dashboard({ setView }) {
           <div>
             <h2>{profile.name}</h2>
             <p className="text-muted dash-challenge-label">
-              {meta.emoji} Active Challenge: {meta.name}
-              {meta.variant ? ` · ${meta.variant.charAt(0).toUpperCase() + meta.variant.slice(1)}` : ''}
+              {isBaseline
+                ? `${meta.emoji} Forge Daily`
+                : `${meta.emoji} Active Challenge: ${meta.name}${meta.variant ? ` · ${capMode(meta.variant)}` : ''}`}
             </p>
           </div>
         </div>
@@ -460,6 +610,16 @@ export default function Dashboard({ setView }) {
           Switch
         </button>
       </div>
+
+      {/* No Active Challenge banner (Forge Daily baseline) */}
+      {isBaseline && (
+        <div className="no-challenge-banner">
+          <div className="ncb-text">
+            <strong>No Active Challenge.</strong> Continue building yourself with Forge Daily.
+          </div>
+          <button className="btn btn-primary" onClick={() => setShowNextGoal(true)}>Start New Challenge</button>
+        </div>
+      )}
 
       {/* XP / Rank widget with animation */}
       <div style={{ position: 'relative' }}>
@@ -531,51 +691,79 @@ export default function Dashboard({ setView }) {
         />
       )}
 
-      {/* Hero Ring */}
-      <div className="hero-card">
-        <div className="hero-ring-wrap">
-          <CircleRing value={dayNum || 0} max={duration} size={120} />
-          <div className="hero-ring-text">
-            <span className="hero-day-num">{isDone ? duration : (dayNum || '—')}</span>
-            <span className="hero-of-75">of {duration}</span>
-          </div>
-        </div>
-        <div className="hero-stats">
-          <div className="hero-stat-row">
-            <span className="hero-stat-label">🔥 Streak</span>
-            <span className={`hero-stat-value${streak > 0 ? ' streak' : ''}`}>{streak}d</span>
-          </div>
-          <div className="hero-stat-row">
-            <span className="hero-stat-label">Today</span>
-            <span className="hero-stat-value">{todayPct}%</span>
-          </div>
-        </div>
-      </div>
+      {/* Final-day: let the user finish the challenge now */}
+      {isFinalDay && (
+        <button className="btn btn-primary btn-full" style={{ marginBottom: 14 }} onClick={() => completeChallenge()}>
+          🏁 Finish Challenge
+        </button>
+      )}
 
-      {/* Challenge progress bar */}
-      <div className="section-card" style={{ marginBottom: 14 }}>
-        <div className="prog-bar-wrap">
-          <div className="prog-bar-label">
-            <span>Challenge progress</span>
-            <span>{totalDone}/{Math.min(dayNum || 0, duration)} perfect days</span>
+      {/* Hero Ring — challenge day count (baseline shows a simpler tile) */}
+      {isBaseline ? (
+        <div className="hero-card">
+          <div className="forge-daily-day">
+            <span className="hero-day-num">Day {dayNum || 1}</span>
+            <span className="hero-of-75">Forge Daily</span>
           </div>
-          <div className="prog-bar-track">
-            <div className="prog-bar-fill" style={{ width: `${((dayNum || 0) / duration) * 100}%` }} />
-          </div>
-        </div>
-        <div className="prog-bar-wrap">
-          <div className="prog-bar-label">
-            <span>Today</span>
-            <span>{todayPct}%</span>
-          </div>
-          <div className="prog-bar-track">
-            <div
-              className={`prog-bar-fill${todayPct === 100 ? ' success' : ''}`}
-              style={{ width: `${todayPct}%` }}
-            />
+          <div className="hero-stats">
+            <div className="hero-stat-row">
+              <span className="hero-stat-label">🔥 Streak</span>
+              <span className={`hero-stat-value${streak > 0 ? ' streak' : ''}`}>{streak}d</span>
+            </div>
+            <div className="hero-stat-row">
+              <span className="hero-stat-label">Today</span>
+              <span className="hero-stat-value">{todayPct}%</span>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="hero-card">
+          <div className="hero-ring-wrap">
+            <CircleRing value={dayNum || 0} max={duration} size={120} />
+            <div className="hero-ring-text">
+              <span className="hero-day-num">{isDone ? duration : (dayNum || '—')}</span>
+              <span className="hero-of-75">of {duration}</span>
+            </div>
+          </div>
+          <div className="hero-stats">
+            <div className="hero-stat-row">
+              <span className="hero-stat-label">🔥 Streak</span>
+              <span className={`hero-stat-value${streak > 0 ? ' streak' : ''}`}>{streak}d</span>
+            </div>
+            <div className="hero-stat-row">
+              <span className="hero-stat-label">Today</span>
+              <span className="hero-stat-value">{todayPct}%</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Challenge progress bar — only for fixed-duration challenges */}
+      {!isBaseline && (
+        <div className="section-card" style={{ marginBottom: 14 }}>
+          <div className="prog-bar-wrap">
+            <div className="prog-bar-label">
+              <span>Challenge progress</span>
+              <span>{totalDone}/{Math.min(dayNum || 0, duration)} perfect days</span>
+            </div>
+            <div className="prog-bar-track">
+              <div className="prog-bar-fill" style={{ width: `${((dayNum || 0) / duration) * 100}%` }} />
+            </div>
+          </div>
+          <div className="prog-bar-wrap">
+            <div className="prog-bar-label">
+              <span>Today</span>
+              <span>{todayPct}%</span>
+            </div>
+            <div className="prog-bar-track">
+              <div
+                className={`prog-bar-fill${todayPct === 100 ? ' success' : ''}`}
+                style={{ width: `${todayPct}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="stats-grid">
@@ -608,6 +796,8 @@ export default function Dashboard({ setView }) {
       <button className="btn btn-primary btn-full" onClick={() => setView('today')}>
         ✅ Log Today →
       </button>
+
+      {showNextGoal && <NextGoalChooser onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
     </div>
   );
 }

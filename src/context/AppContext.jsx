@@ -3,8 +3,9 @@ import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../util
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges } from '../utils/gamification';
-import { getTemplateById } from '../data/challengeTemplates';
+import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
+import { isKeystone } from '../utils/gamification';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -400,12 +401,27 @@ export function AppProvider({ children }) {
     return profiles[profId]?.activeChallenge || DEFAULT_CHALLENGE_META;
   }, [activeProfile, profiles]);
 
+  // Raw days since the challenge/baseline began — uncapped. Used to detect
+  // when a fixed-duration challenge has run past its final day.
+  const getRawDayNumber = useCallback((profId = activeProfile) => {
+    const start = profiles[profId]?.challengeStart;
+    if (!start) return null;
+    return getDayNumberFromStart(start);
+  }, [activeProfile, profiles]);
+
+  const isForgeDaily = useCallback((profId = activeProfile) => {
+    return profiles[profId]?.activeChallenge?.templateId === 'forge_daily';
+  }, [activeProfile, profiles]);
+
   const getDayNumber = useCallback((profId = activeProfile) => {
     const start = profiles[profId]?.challengeStart;
     if (!start) return null;
     const n = getDayNumberFromStart(start);
-    const duration = (profiles[profId]?.activeChallenge?.durationDays) || 75;
-    return Math.min(n, duration);
+    // Forge Daily (durationDays null) is open-ended — the day number tracks
+    // the real calendar date and is never capped, so Today never freezes.
+    const duration = profiles[profId]?.activeChallenge?.durationDays;
+    if (duration == null && profiles[profId]?.activeChallenge) return Math.max(1, n);
+    return Math.min(n, duration || 75);
   }, [activeProfile, profiles]);
 
   const getDayData = useCallback((dayNumber) => {
@@ -525,6 +541,8 @@ export function AppProvider({ children }) {
       if (date >= prof.challengeStart && date <= endDate) challengeQuotes[date] = q;
     }
 
+    const completed = meta.durationDays != null && dayNum >= meta.durationDays;
+
     return {
       id: `arch_${Date.now()}`,
       archivedAt: getTodayStr(),
@@ -532,16 +550,19 @@ export function AppProvider({ children }) {
       challengeStart: prof.challengeStart,
       endDayNum: dayNum,
       endDate,
+      completed,
+      completionDate: completed ? getTodayStr() : null,
       tasks: prof.tasks || [],
       days: profDays,
       quoteData: challengeQuotes,
+      weeklyReflections: { ...(weeklyReflections[profId] || {}) },
       xpEarned: Math.max(0, xpData.rawTotal),
       badges,
       comebackHistory: prof.comebackHistory || [],
       xpOffset: prof.xpOffset ?? 0,
       xpStartDay: prof.xpStartDay ?? 1,
     };
-  }, [profiles, allDays, quoteData, getDayCompletion]);
+  }, [profiles, allDays, quoteData, weeklyReflections, getDayCompletion]);
 
   /**
    * Start a new challenge. The current challenge (if any) is archived first —
@@ -577,9 +598,141 @@ export function AppProvider({ children }) {
         xpStartDay: 1,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
         comebackHistory: [],
+        lastCompletion: null,
       },
     }));
     setAllDays(prev => ({ ...prev, [profId]: {} }));
+    setWeeklyReflectionsState(prev => {
+      const next = { ...prev, [profId]: {} };
+      saveLS('weeklyReflections', next);
+      return next;
+    });
+  }, [activeProfile, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+
+  // Build the Challenge Complete summary shown after a challenge finishes.
+  function buildCompletionSummary(entry) {
+    const days = entry.days || {};
+    const tasks = entry.tasks || [];
+    const keystoneTasks = tasks.filter(isKeystone);
+    let perfectDays = 0, compSum = 0, compCount = 0, ksTotal = 0, ksDone = 0, daysLogged = 0;
+    const logged = [];
+    for (let i = 1; i <= entry.endDayNum; i++) {
+      const d = days[i];
+      const hasActivity = d && (Object.values(d.tasks || {}).some(Boolean) || (d.notes || '').trim());
+      if (hasActivity) { daysLogged++; logged.push(d); }
+      const done = d ? tasks.filter(t => d.tasks?.[t.id]).length : 0;
+      const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+      compSum += pct; compCount++;
+      if (tasks.length && done === tasks.length) perfectDays++;
+      if (d) for (const kt of keystoneTasks) { ksTotal++; if (d.tasks?.[kt.id]) ksDone++; }
+    }
+    // Personal improvements: first vs last few logged days for key ratings
+    const avg = (arr, key) => {
+      const vals = arr.map(d => d[key] || 0).filter(v => v > 0);
+      return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+    };
+    const first = logged.slice(0, 3), last = logged.slice(-3);
+    const improvements = [
+      { key: 'mood', label: 'Mood', higherBetter: true },
+      { key: 'energy', label: 'Energy', higherBetter: true },
+      { key: 'confidence', label: 'Confidence', higherBetter: true },
+      { key: 'stress', label: 'Stress', higherBetter: false },
+    ].map(({ key, label, higherBetter }) => {
+      const a = avg(first, key), b = avg(last, key);
+      if (a == null || b == null) return null;
+      const delta = Math.round((b - a) * 10) / 10;
+      return { label, delta, improved: higherBetter ? delta > 0 : delta < 0 };
+    }).filter(Boolean);
+
+    return {
+      name: entry.challenge?.name,
+      emoji: entry.challenge?.emoji,
+      variant: entry.challenge?.variant,
+      durationDays: entry.challenge?.durationDays,
+      completionDate: entry.completionDate || getTodayStr(),
+      xpEarned: entry.xpEarned,
+      badges: entry.badges || [],
+      badgeId: entry.challenge?.badgeId || null,
+      daysLogged,
+      perfectDays,
+      avgCompletion: compCount ? Math.round(compSum / compCount) : 0,
+      keystonePct: ksTotal ? Math.round((ksDone / ksTotal) * 100) : 0,
+      hasKeystones: keystoneTasks.length > 0,
+      reflections: entry.weeklyReflections || {},
+      letter: entry.challenge?.futureSelfLetter || null,
+      improvements,
+    };
+  }
+
+  /**
+   * Complete the active challenge: archive it (with completion metadata), store
+   * a Challenge Complete summary, and automatically return to Forge Daily so
+   * the app never stays frozen on the final day. Lifetime data is preserved.
+   */
+  const completeChallenge = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    if (!prof?.challengeStart) return;
+    if (prof.activeChallenge?.templateId === 'forge_daily') return; // baseline never "completes"
+
+    const entry = buildArchiveEntry(profId);
+    const summary = entry ? buildCompletionSummary(entry) : null;
+    if (entry) {
+      setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
+    }
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: {
+        ...prev[profId],
+        challengeStart: getTodayStr(),
+        activeChallenge: { ...FORGE_DAILY_META },
+        tasks: FORGE_DAILY_TASKS.map((t, i) => ({ ...t, source: 'template', order: i })),
+        lastCompletion: summary,
+        xpOffset: 0,
+        xpStartDay: 1,
+        comebackMode: { active: false, dayStart: null, dismissedAt: null },
+        comebackHistory: [],
+      },
+    }));
+    setAllDays(prev => ({ ...prev, [profId]: {} }));
+    setWeeklyReflectionsState(prev => {
+      const next = { ...prev, [profId]: {} };
+      saveLS('weeklyReflections', next);
+      return next;
+    });
+  }, [activeProfile, profiles, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+
+  /** Dismiss the Challenge Complete screen (stay on Forge Daily). */
+  const dismissCompletion = useCallback((profId = activeProfile) => {
+    setProfiles(prev => ({ ...prev, [profId]: { ...prev[profId], lastCompletion: null } }));
+  }, [activeProfile, setProfiles]);
+
+  /**
+   * Activate Forge Daily — the permanent baseline. Archives any running
+   * challenge with logged data first (no loss). Used from the No Active
+   * Challenge state.
+   */
+  const startForgeDaily = useCallback((profId = activeProfile) => {
+    const entry = buildArchiveEntry(profId);
+    if (entry) setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: {
+        ...prev[profId],
+        challengeStart: getTodayStr(),
+        activeChallenge: { ...FORGE_DAILY_META },
+        tasks: FORGE_DAILY_TASKS.map((t, i) => ({ ...t, source: 'template', order: i })),
+        xpOffset: 0,
+        xpStartDay: 1,
+        comebackMode: { active: false, dayStart: null, dismissedAt: null },
+        comebackHistory: [],
+      },
+    }));
+    setAllDays(prev => ({ ...prev, [profId]: {} }));
+    setWeeklyReflectionsState(prev => {
+      const next = { ...prev, [profId]: {} };
+      saveLS('weeklyReflections', next);
+      return next;
+    });
   }, [activeProfile, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   /**
@@ -919,7 +1072,8 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       activeProfile, profile, profiles, days, allDays,
       setActiveProfile,
-      getChallengeMeta, getDayNumber, getDayData, getTodayData,
+      getChallengeMeta, getDayNumber, getRawDayNumber, isForgeDaily, getDayData, getTodayData,
+      completeChallenge, dismissCompletion, startForgeDaily,
       getDayCompletion, getStreak, getLongestStreak,
       updateDay, toggleTask,
       startChallenge, setChallengeStart, updateProfile,

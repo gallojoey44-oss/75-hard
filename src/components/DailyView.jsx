@@ -41,6 +41,10 @@ function GfTaskCard({ task, checked, onToggle, index }) {
 
 function DaySelector({ selected, current, onChange, duration = 75 }) {
   const isOtherDay = current && selected !== current;
+  // Forge Daily (duration null) is open-ended — no fixed max, can't plan ahead
+  // past today, and shows no "of N" so Today never reads "Day N of N" frozen.
+  const openEnded = duration == null;
+  const maxDay = openEnded ? (current || selected) : duration;
   return (
     <div className="day-selector">
       <button
@@ -51,7 +55,7 @@ function DaySelector({ selected, current, onChange, duration = 75 }) {
       >‹</button>
       <div className="day-sel-center">
         <span className="day-sel-num">
-          Day {selected} <span className="day-sel-of">of {duration}</span>
+          Day {selected}{!openEnded && <span className="day-sel-of"> of {duration}</span>}
         </span>
         {isOtherDay && (
           <button className="day-sel-today-link" onClick={() => onChange(current)}>
@@ -61,8 +65,8 @@ function DaySelector({ selected, current, onChange, duration = 75 }) {
       </div>
       <button
         className="day-sel-btn"
-        onClick={() => onChange(Math.min(duration, selected + 1))}
-        disabled={selected >= duration}
+        onClick={() => onChange(Math.min(maxDay, selected + 1))}
+        disabled={selected >= maxDay}
         aria-label="Next day"
       >›</button>
     </div>
@@ -472,7 +476,7 @@ export default function DailyView({ editDayNum, setView }) {
         selected={selectedDayNum}
         current={currentDayNum}
         onChange={setSelectedDayNum}
-        duration={getChallengeMeta().durationDays || 75}
+        duration={getChallengeMeta().durationDays}
       />
 
       {/* Comeback banner */}

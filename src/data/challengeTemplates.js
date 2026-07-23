@@ -19,6 +19,43 @@ export function getTemplateById(id) {
   return CHALLENGE_TEMPLATES.find(t => t.id === id) || null;
 }
 
+// Forge Daily — the permanent baseline mode. It is active whenever no
+// challenge is running: open-ended (no duration), lighter tasks, smaller XP,
+// so users keep a streak alive without feeling overwhelmed. Challenges
+// temporarily replace it; when a challenge ends, the app returns here.
+export const FORGE_DAILY_META = {
+  templateId: 'forge_daily',
+  name: 'Forge Daily',
+  emoji: '🔥',
+  variant: null,
+  durationDays: null, // open-ended, never "completes"
+  isBaseline: true,
+};
+
+export const FORGE_DAILY_TASKS = [
+  { id: 'fd_sleep', name: 'Hit sleep goal',   icon: '😴', color: '#A78BFA', xp: 8,  keystone: 0 },
+  { id: 'fd_move',  name: 'Move your body',   icon: '🏃', color: '#FF6B6B', xp: 8,  keystone: 0 },
+  { id: 'fd_mind',  name: 'Mental Training',  icon: '🧘', color: '#8B5CF6', xp: 12, keystone: 1 },
+  { id: 'fd_read',  name: 'Read',             icon: '📚', color: '#74B9FF', xp: 6,  keystone: 0 },
+  { id: 'fd_pray',  name: 'Pray',             icon: '🙏', color: '#A8E6CF', xp: 6,  keystone: 0 },
+  { id: 'fd_grat',  name: 'Gratitude',        icon: '📝', color: '#F9E04B', xp: 5,  keystone: 0 },
+  { id: 'fd_water', name: 'Drink water',      icon: '💧', color: '#45B7D1', xp: 5,  keystone: 0 },
+];
+
+// The "what's your next goal?" menu shown after a challenge completes.
+// startableTemplateId maps to a real template when one exists; others open
+// the Challenges tab so the user can explore.
+export const NEXT_GOALS = [
+  { id: 'mental',   label: 'Mental Training',       emoji: '🧠', templateId: 'mental_training_phase' },
+  { id: 'sleep',    label: 'Sleep',                 emoji: '😴', templateId: 'sleep_reset_challenge' },
+  { id: 'fatloss',  label: 'Fat Loss',              emoji: '⚡', templateId: 'fat_loss_phase' },
+  { id: 'strength', label: 'Strength',              emoji: '💪', templateId: 'strength_phase' },
+  { id: 'recovery', label: 'Recovery',              emoji: '🔋', templateId: 'recovery_phase' },
+  { id: 'skin',     label: 'Skin Health',           emoji: '✨', templateId: null },
+  { id: 'hormone',  label: "Women's Hormone Health", emoji: '🌸', templateId: null },
+  { id: 'custom',   label: 'Custom',                emoji: '🎯', templateId: 'custom_challenge_framework' },
+];
+
 export const CHALLENGE_TEMPLATES = [
   {
     id: 'sleep_reset_challenge',

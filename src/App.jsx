@@ -98,6 +98,33 @@ function NotificationScheduler() {
   return null;
 }
 
+// Challenge lifecycle: when a fixed-duration challenge has run past its final
+// day, auto-complete it (archive + return to Forge Daily) so the app never
+// stays frozen on "Day N of N". Checks on mount and every minute (to catch a
+// date rollover while the app is open).
+function ChallengeLifecycle() {
+  const { activeProfile, profile, getRawDayNumber, getChallengeMeta, completeChallenge } = useApp();
+
+  useEffect(() => {
+    if (!activeProfile || !profile?.challengeStart) return undefined;
+
+    function check() {
+      const meta = getChallengeMeta();
+      const duration = meta.durationDays;
+      if (duration == null) return;                 // Forge Daily never completes
+      if (meta.templateId === 'forge_daily') return;
+      const raw = getRawDayNumber();
+      if (raw != null && raw > duration) completeChallenge();
+    }
+
+    check();
+    const id = setInterval(check, 60 * 1000);
+    return () => clearInterval(id);
+  }, [activeProfile, profile?.challengeStart, profile?.activeChallenge, getRawDayNumber, getChallengeMeta, completeChallenge]);
+
+  return null;
+}
+
 function AppContent() {
   const { activeProfile } = useApp();
   const [view, setView] = useState('home');
@@ -151,6 +178,7 @@ export default function App() {
       {/* Banner lives outside AppContent so it renders on every screen */}
       <UpdateBanner />
       <NotificationScheduler />
+      <ChallengeLifecycle />
       <AppContent />
     </AppProvider>
   );
