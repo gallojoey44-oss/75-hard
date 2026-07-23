@@ -8,7 +8,7 @@ import {
 } from '../utils/gamification';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
-import { NEXT_GOALS } from '../data/challengeTemplates';
+import { visibleNextGoals } from '../data/challengeTemplates';
 import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { formatDateShort } from '../utils/dateUtils';
 
@@ -114,14 +114,15 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue }) {
 
 // ── "What's your next goal?" chooser ─────────────────────────────────────────
 
-function NextGoalChooser({ onPick, onClose }) {
+function NextGoalChooser({ profileId, onPick, onClose }) {
+  const goals = visibleNextGoals(profileId);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card next-goal-modal" onClick={e => e.stopPropagation()}>
         <h3>What&apos;s your next goal?</h3>
         <p style={{ marginBottom: 12 }}>A new chapter — not starting from scratch. Pick what you want to build next.</p>
         <div className="next-goal-grid">
-          {NEXT_GOALS.map(g => (
+          {goals.map(g => (
             <button key={g.id} className="next-goal-btn" onClick={() => onPick(g)}>
               <span className="next-goal-emoji">{g.emoji}</span>
               <span className="next-goal-label">{g.label}</span>
@@ -547,7 +548,7 @@ export default function Dashboard({ setView }) {
           onViewArchive={() => setView('settings')}
           onContinue={() => dismissCompletion()}
         />
-        {showNextGoal && <NextGoalChooser onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
+        {showNextGoal && <NextGoalChooser profileId={activeProfile} onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
       </>
     );
   }
@@ -580,7 +581,7 @@ export default function Dashboard({ setView }) {
             🔥 Start Forge Daily
           </button>
         </div>
-        {showNextGoal && <NextGoalChooser onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
+        {showNextGoal && <NextGoalChooser profileId={activeProfile} onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
       </div>
     );
   }
@@ -797,7 +798,7 @@ export default function Dashboard({ setView }) {
         ✅ Log Today →
       </button>
 
-      {showNextGoal && <NextGoalChooser onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
+      {showNextGoal && <NextGoalChooser profileId={activeProfile} onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
     </div>
   );
 }

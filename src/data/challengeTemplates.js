@@ -52,9 +52,34 @@ export const NEXT_GOALS = [
   { id: 'strength', label: 'Strength',              emoji: '💪', templateId: 'strength_phase' },
   { id: 'recovery', label: 'Recovery',              emoji: '🔋', templateId: 'recovery_phase' },
   { id: 'skin',     label: 'Skin Health',           emoji: '✨', templateId: null },
-  { id: 'hormone',  label: "Women's Hormone Health", emoji: '🌸', templateId: null },
+  { id: 'hormone',  label: "Women's Hormone Health", emoji: '🌸', templateId: null, audience: 'female' },
   { id: 'custom',   label: 'Custom',                emoji: '🎯', templateId: 'custom_challenge_framework' },
 ];
+
+// ── Profile-specific visibility ──────────────────────────────────────────────
+// Challenges and goals can carry an `audience` ('all' | 'male' | 'female').
+// Anything without one is visible to everyone. This single helper is used by
+// every screen that lists challenges/goals, so adding another profile-specific
+// challenge later only means tagging it — no screen changes required.
+
+export function profileAudience(profileId) {
+  // The two example profiles map to audiences by their stable ids.
+  return profileId === 'girlfriend' ? 'female' : 'male';
+}
+
+export function isVisibleForProfile(item, profileId) {
+  const aud = item?.audience;
+  if (!aud || aud === 'all') return true;
+  return aud === profileAudience(profileId);
+}
+
+export function visibleChallenges(profileId) {
+  return CHALLENGE_TEMPLATES.filter(t => isVisibleForProfile(t, profileId));
+}
+
+export function visibleNextGoals(profileId) {
+  return NEXT_GOALS.filter(g => isVisibleForProfile(g, profileId));
+}
 
 export const CHALLENGE_TEMPLATES = [
   {

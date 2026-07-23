@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
-import { CHALLENGE_TEMPLATES, METRIC_LABELS } from '../data/challengeTemplates';
+import { METRIC_LABELS, visibleChallenges } from '../data/challengeTemplates';
 import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
 import { FutureSelfLetterForm } from './FutureSelfLetter';
 
@@ -327,11 +327,17 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
 
 export default function ChallengesView({ setView }) {
   const {
+    activeProfile,
     profile, getChallengeMeta, getDayNumber, getDayCompletion,
     getStreak,
     startChallenge,
     isChallengeTemplateOutdated, syncActiveChallengeWithTemplate, isForgeDaily,
   } = useApp();
+
+  // Challenge library filtered by the active profile (e.g. Women's Hormone
+  // Health is female-only). Centralized in visibleChallenges — future
+  // profile-specific challenges only need an `audience` tag.
+  const libraryChallenges = visibleChallenges(activeProfile);
 
   const [showStartConfirm, setShowStartConfirm] = useState(false);
   // Start flow: { template, variant, durationDays, step, legacy75 }
@@ -459,7 +465,7 @@ export default function ChallengesView({ setView }) {
         {/* Template library */}
         <div className="challenges-section-title">Challenge Library</div>
         <div className="challenges-list">
-          {CHALLENGE_TEMPLATES.map(t => (
+          {libraryChallenges.map(t => (
             <ChallengeCard
               key={t.id}
               template={t}
