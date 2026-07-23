@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import ProfileSelector from './components/ProfileSelector';
 import Dashboard from './components/Dashboard';
@@ -9,7 +9,8 @@ import SettingsView from './components/SettingsView';
 import BottomNav from './components/BottomNav';
 import { applyUpdate } from './utils/swUtils.js';
 import { getTodayStr } from './utils/dateUtils';
-import { getDueReminders, getNotificationSupport, showNotification, markFired } from './utils/notificationUtils';
+import { getDueReminders, getNotificationSupport, showNotification, markFired, syncPushSchedule } from './utils/notificationUtils';
+import { getTimezone } from './utils/installId';
 import { computeTotalXP, computeLifetimeXP, getMWDComplete } from './utils/gamification';
 import { buildTimeline, entriesInLastNDays } from './utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from './utils/insightsUtils';
@@ -51,17 +52,33 @@ function NotificationScheduler() {
     getChallengeMeta, getDayNumber, getDayCompletion,
   } = useApp();
 
+  // Signature of the last schedule pushed to the server — avoids redundant
+  // /api/push/sync calls when nothing relevant changed between ticks.
+  const lastSyncSig = useRef('');
+
   useEffect(() => {
     if (!activeProfile) return undefined;
 
     function tick() {
       const prefs = notifPrefs[activeProfile];
-      if (!prefs?.masterEnabled) return;
-      const support = getNotificationSupport();
-      if (!support.supported || support.permission !== 'granted') return;
+      if (!prefs) return;
 
       const dayNum = getDayNumber();
       if (!dayNum) return;
+      const todayStr0 = getTodayStr();
+
+      // When notifications are off there is nothing to deliver and no dynamic
+      // content to render. Still push a "cleared" schedule once (so the server
+      // stops considering this profile), then skip the heavier computation.
+      if (!prefs.masterEnabled) {
+        const sig = JSON.stringify({ off: true, tz: getTimezone(), date: todayStr0 });
+        if (sig !== lastSyncSig.current) {
+          lastSyncSig.current = sig;
+          syncPushSchedule(activeProfile, prefs, { profileId: activeProfile, tasks: [] }, todayStr0);
+        }
+        return;
+      }
+
       const dayData = (allDays[activeProfile] || {})[dayNum] || null;
       const meta = getChallengeMeta();
       const xpData = computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum);
@@ -83,7 +100,33 @@ function NotificationScheduler() {
         bottleneckLabel: bottleneck?.bottleneck ? bottleneck.label : null,
       };
 
-      const todayStr = getTodayStr();
+      const todayStr = todayStr0;
+
+      // Keep the server's background schedule in step with fresh local state.
+      // Task completion only changes from inside the app, so re-syncing here
+      // means the server's pre-rendered reminder copy is never staler than the
+      // user's last in-app action. Throttled by a change signature.
+      const sig = JSON.stringify({
+        prefs,
+        tz: getTimezone(),
+        date: todayStr,
+        done: (profile?.tasks || []).filter(t => dayData?.tasks?.[t.id]).map(t => t.id),
+        mwd: ctx.isMWD,
+        cn: ctx.challengeName,
+        cb: ctx.comebackActive,
+        bl: ctx.bottleneckLabel,
+        // bucket lifetime XP so only meaningful milestone changes re-sync
+        xpB: Math.floor((lifetimeXP || 0) / 50),
+      });
+      if (sig !== lastSyncSig.current) {
+        lastSyncSig.current = sig;
+        syncPushSchedule(activeProfile, prefs, ctx, todayStr);
+      }
+
+      // In-app delivery (while the app is open). Background delivery of the
+      // time-based reminders is handled by the server from the synced schedule.
+      const support = getNotificationSupport();
+      if (!support.supported || support.permission !== 'granted') return;
       for (const reminder of getDueReminders(prefs, ctx, todayStr)) {
         showNotification(reminder);
         markFired(activeProfile, reminder.type, todayStr);

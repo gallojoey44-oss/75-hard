@@ -10,6 +10,7 @@
 //   Never claim closed-app delivery works before that is configured.
 
 import { HIGH_VALUE_TASK_IDS, MWD_TASKS, getRankInfo, getTaskXP, topIncompleteKeystone } from './gamification';
+import { getInstallId, getTimezone } from './installId';
 
 // A keystone task's display name without its duration suffix ("Mental
 // Training — 10 min…" → "Mental Training").
@@ -33,6 +34,22 @@ export const REMINDER_DEFS = [
   { id: 'insights',    label: 'Insights recommendation alert',  hasTime: true,  defaultTime: '12:00' },
   { id: 'milestone',   label: 'Rank / XP milestone alert',      hasTime: false },
 ];
+
+// Background-delivery capability.
+//
+// Time-based reminders (hasTime) can be delivered by the server while the app
+// is closed: the app pre-renders each one's copy at its current (fresh) state
+// and syncs it, so the server never fabricates values. Event-based reminders
+// fire the instant a live local condition becomes true and have no scheduled
+// time, so they remain app-active-only (the server would have to invent the
+// triggering state). This is the honest line between the two tiers.
+export function isBackgroundReminder(type) {
+  const def = REMINDER_DEFS.find(d => d.id === type);
+  return !!def?.hasTime;
+}
+
+export const BACKGROUND_REMINDER_IDS = REMINDER_DEFS.filter(d => d.hasTime).map(d => d.id);
+export const APP_ACTIVE_ONLY_IDS = REMINDER_DEFS.filter(d => !d.hasTime).map(d => d.id);
 
 export function makeDefaultNotifPrefs() {
   const reminders = {};
@@ -128,7 +145,7 @@ export async function subscribeToPush(profileId) {
     const res = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profileId, subscription: sub.toJSON() }),
+      body: JSON.stringify({ installId: getInstallId(), profileId, subscription: sub.toJSON() }),
     });
     return { ok: res.ok, reason: res.ok ? null : 'server-error' };
   } catch {
@@ -144,13 +161,84 @@ export async function unsubscribeFromPush(profileId) {
       await fetch('/api/push/unsubscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId, endpoint: sub.endpoint }),
+        body: JSON.stringify({ installId: getInstallId(), profileId, endpoint: sub.endpoint }),
       }).catch(() => {});
       await sub.unsubscribe();
     }
     return { ok: true };
   } catch {
     return { ok: false };
+  }
+}
+
+// ─── Server-side schedule sync + background test + diagnostics ───────────────
+
+/**
+ * Sync the minimal reminder-scheduling data to the server so it can deliver
+ * background reminders while the app is closed. The app pre-renders each
+ * enabled background-capable reminder's copy at its CURRENT (fresh) state via
+ * buildReminder, so the server never fabricates dynamic values. Only time-based
+ * reminders are synced; event-based ones stay app-active-only.
+ *
+ * Returns { ok, reason }.
+ */
+export async function syncPushSchedule(profileId, prefs, ctx, todayStr) {
+  if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) return { ok: false, reason: 'no-vapid-key' };
+  try {
+    const reminders = {};
+    if (prefs?.masterEnabled) {
+      for (const def of REMINDER_DEFS) {
+        if (!def.hasTime) continue;                       // background-capable only
+        const setting = prefs.reminders?.[def.id];
+        if (!setting?.enabled) continue;
+        const payload = buildReminder(def.id, ctx);       // null when not applicable
+        reminders[def.id] = { time: setting.time || def.defaultTime, payload };
+      }
+    }
+    const res = await fetch('/api/push/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        installId: getInstallId(),
+        profileId,
+        timezone: getTimezone(),
+        localDate: todayStr,
+        masterEnabled: !!prefs?.masterEnabled,
+        quietHours: prefs?.quietHours || { start: '22:30', end: '07:00' },
+        reminders,
+      }),
+    });
+    return { ok: res.ok, reason: res.ok ? null : 'server-error' };
+  } catch {
+    return { ok: false, reason: 'sync-failed' };
+  }
+}
+
+/** Trigger a real server-originated push to this install/profile's stored subs. */
+export async function backgroundTestPush(profileId) {
+  try {
+    const res = await fetch('/api/push/test-background', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ installId: getInstallId(), profileId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, ...data };
+  } catch {
+    return { ok: false, reason: 'request-failed' };
+  }
+}
+
+/** Read the server-side push diagnostics for this install/profile. */
+export async function getPushStatus(profileId) {
+  try {
+    const params = new URLSearchParams({ installId: getInstallId(), profileId });
+    const res = await fetch(`/api/push/status?${params.toString()}`);
+    if (!res.ok && res.status !== 400) return { ok: false, status: res.status };
+    const data = await res.json().catch(() => ({}));
+    return { ok: true, ...data };
+  } catch {
+    return { ok: false, reason: 'request-failed' };
   }
 }
 

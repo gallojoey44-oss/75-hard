@@ -1,5 +1,5 @@
 // Cache version — bump this string to invalidate ALL old caches on next deploy
-const CACHE_VER  = '75hard-v23';
+const CACHE_VER  = '75hard-v24';
 const ASSET_CACHE = `${CACHE_VER}-assets`;  // hashed JS/CSS — cache-first (immutable)
 const HTML_CACHE  = `${CACHE_VER}-html`;    // index.html — network-first (always fresh)
 const STATIC_CACHE = `${CACHE_VER}-static`; // icons, manifest — stale-while-revalidate

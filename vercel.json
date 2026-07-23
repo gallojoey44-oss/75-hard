@@ -2,6 +2,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "crons": [
+    { "path": "/api/cron/dispatch", "schedule": "* * * * *" }
+  ],
   "headers": [
     {
       "source": "/sw.js",
