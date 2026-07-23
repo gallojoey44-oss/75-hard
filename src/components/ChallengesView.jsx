@@ -5,12 +5,6 @@ import { METRIC_LABELS, visibleChallenges } from '../data/challengeTemplates';
 import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
 import { FutureSelfLetterForm } from './FutureSelfLetter';
 
-const EVIDENCE_COLOR = {
-  strong:       '#10B981',
-  moderate:     '#F59E0B',
-  anecdotal:    '#9090B8',
-  user_defined: '#8B5CF6',
-};
 // Overall challenge difficulty — fixed per challenge, independent of the
 // Beginner/Standard/Hard mode chosen inside it.
 const DIFFICULTY_COLOR = {
@@ -20,7 +14,6 @@ const DIFFICULTY_COLOR = {
   'Hard':        '#EF4444',
   'You decide':  '#8B5CF6',
 };
-const LEVEL_LABEL = { user_defined: 'You decide' };
 
 function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
@@ -31,10 +24,6 @@ const VARIANT_TABS = [
   { key: 'standard', label: 'Standard' },
   { key: 'hard',     label: 'Hard' },
 ];
-
-function levelText(v) {
-  return LEVEL_LABEL[v] || v;
-}
 
 function durationText(days) {
   if (!days?.length) return '';
@@ -165,7 +154,7 @@ function ProgramSections({ program, category }) {
 
 function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) {
   const [expanded, setExpanded] = useState(false);
-  const [variantTab, setVariantTab] = useState('standard');
+  const [variantTab, setVariantTab] = useState(isActive && activeVariant ? activeVariant : 'standard');
   const isVariantStart = template.start_flow === 'variant';
   const isCustom = template.id === 'custom_challenge_framework';
   const defaultDuration = template.duration_options_days[Math.floor((template.duration_options_days.length - 1) / 2)];
@@ -189,13 +178,9 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
             ) : (
               <>
                 {durationText(template.duration_options_days)}
-                {' · '}
+                {' • '}
                 <span style={{ color: DIFFICULTY_COLOR[template.overall_difficulty] }}>
-                  {template.overall_difficulty} challenge
-                </span>
-                {' · '}
-                <span style={{ color: EVIDENCE_COLOR[template.evidence_level] }}>
-                  {levelText(template.evidence_level)} evidence
+                  {template.overall_difficulty} Challenge
                 </span>
               </>
             )}
@@ -203,9 +188,7 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
         </div>
         <div className="challenge-card-badges">
           {isActive && (
-            <span className="challenge-active-badge">
-              Active{activeVariant ? ` · ${capitalize(activeVariant)} mode` : ''}
-            </span>
+            <span className="challenge-active-badge">Current Challenge</span>
           )}
           <span className="challenge-expand-icon">{expanded ? '▲' : '▼'}</span>
         </div>
@@ -253,10 +236,12 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
             <span className="tpl-level-value" style={{ color: DIFFICULTY_COLOR[template.overall_difficulty] }}>
               {template.overall_difficulty}
             </span>
-            <span className="tpl-detail-label" style={{ marginLeft: 14 }}>Evidence</span>
-            <span className="tpl-level-value" style={{ color: EVIDENCE_COLOR[template.evidence_level] }}>
-              {levelText(template.evidence_level)}
-            </span>
+            {isActive && activeVariant && (
+              <>
+                <span className="tpl-detail-label" style={{ marginLeft: 14 }}>Your mode</span>
+                <span className="tpl-level-value">{capitalize(activeVariant)}</span>
+              </>
+            )}
           </div>
 
           {/* Difficulty selector */}
