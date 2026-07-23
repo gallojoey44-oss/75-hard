@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useApp } from '../context/AppContext';
+import { useState, useEffect, useRef } from 'react';
+import { useApp, dayHasLoggedMetric } from '../context/AppContext';
 import { formatDateLong, getDateForDayNumber } from '../utils/dateUtils';
 import CheckItem from './CheckItem';
 import MentalTraining from './MentalTraining';
@@ -282,6 +282,8 @@ export default function DailyView({ editDayNum, setView }) {
   } = useApp();
 
   const [showLetter, setShowLetter] = useState(false);
+  const logRef = useRef(null);
+  const scrollToLog = () => logRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const currentDayNum = getDayNumber();
 
@@ -367,6 +369,14 @@ export default function DailyView({ editDayNum, setView }) {
     if (updates.faithReflection) merged.faithReflection = { ...dayData?.faithReflection, ...updates.faithReflection };
     if (updates.mwdTasks)        merged.mwdTasks        = { ...dayData?.mwdTasks,        ...updates.mwdTasks };
     if (updates.gratitude)       merged.gratitude       = { ...dayData?.gratitude,       ...updates.gratitude };
+
+    // Unified Daily Log: saving at least one valid metric completes the Daily
+    // Log task exactly once for the day (never per-metric). Completion persists.
+    const hasDailyLogTask = (profile?.tasks || []).some(t => t.id === 'daily_log');
+    if (hasDailyLogTask && !merged.tasks?.daily_log && dayHasLoggedMetric(merged)) {
+      merged.tasks = { ...merged.tasks, daily_log: true };
+    }
+
     setDayData(merged);
     updateDay(selectedDayNum, merged);
 
@@ -603,7 +613,7 @@ export default function DailyView({ editDayNum, setView }) {
                   key={task.id}
                   task={task}
                   checked={!!dayData?.tasks?.[task.id]}
-                  onToggle={() => handleToggleTask(task.id)}
+                  onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
                   keystone={getTaskKeystone(task)}
                   xp={getTaskXP(task)}
                 />
@@ -677,7 +687,7 @@ export default function DailyView({ editDayNum, setView }) {
                 task={task}
                 index={i}
                 checked={!!dayData?.tasks?.[task.id]}
-                onToggle={() => handleToggleTask(task.id)}
+                onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
               />
             ))}
           </div>
@@ -740,8 +750,19 @@ export default function DailyView({ editDayNum, setView }) {
       )}
 
       {/* Daily Log — both profiles */}
-      <div className="section-card">
-        <div className="section-title">📓 Daily Log</div>
+      <div className="section-card" ref={logRef}>
+        <div className="section-title" style={{ justifyContent: 'space-between' }}>
+          <span>📊 Daily Log</span>
+          {dayData?.tasks?.daily_log ? (
+            <span className="daily-log-done" style={{ fontSize: 13, color: '#6BCB77', fontWeight: 600 }}>
+              ✓ Logged · +20 XP
+            </span>
+          ) : (
+            <span className="daily-log-hint" style={{ fontSize: 12, opacity: 0.6 }}>
+              Save one metric to complete · 20 XP
+            </span>
+          )}
+        </div>
         <textarea
           className="log-textarea"
           rows={3}

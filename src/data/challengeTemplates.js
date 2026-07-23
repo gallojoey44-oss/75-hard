@@ -19,6 +19,46 @@ export function getTemplateById(id) {
   return CHALLENGE_TEMPLATES.find(t => t.id === id) || null;
 }
 
+// ── Unified Daily Log ────────────────────────────────────────────────────────
+// A single support task that replaces every separate metric-logging task
+// (Log mood / stress / energy / sleep, etc.). It is completed once the user
+// saves at least one metric for the day, awards 20 XP once, and is NOT a
+// keystone habit — it renders below the action tasks with no keystone stars.
+export const DAILY_LOG_TASK = {
+  id: 'daily_log',
+  name: 'Complete Daily Log',
+  icon: '📊',
+  color: '#8B9DC3',
+  xp: 20,
+  keystone: 0,
+};
+
+// The Forge-owned metric-logging task ids the Daily Log consolidates. Only
+// these built-in ids are ever merged — never genuine custom tasks, even if a
+// user names one "mood" or "energy".
+export const METRIC_LOG_TASK_IDS = new Set([
+  'mt_mood', 'mt_stress', 'mt_energy', // Mental Training Phase
+  'sleep_log',                          // 75-Day default (Male)
+]);
+
+/**
+ * Replace any built-in metric-logging tasks in a task list with a single
+ * Daily Log task (placed last, below the action tasks). Custom tasks and other
+ * template tasks are preserved in their existing relative order.
+ * Returns { tasks, changed }. Idempotent: once a list has the Daily Log task
+ * and no metric-log tasks, it is returned unchanged (changed = false).
+ */
+export function consolidateDailyLogTasks(tasks) {
+  const list = Array.isArray(tasks) ? tasks : [];
+  const hadMetricLog = list.some(t => METRIC_LOG_TASK_IDS.has(t.id));
+  const kept = list.filter(t => !METRIC_LOG_TASK_IDS.has(t.id));
+  const hasDailyLog = kept.some(t => t.id === 'daily_log');
+  const next = hasDailyLog ? kept : [...kept, { ...DAILY_LOG_TASK, source: 'template' }];
+  const changed = hadMetricLog || !hasDailyLog;
+  if (!changed) return { tasks: list, changed: false };
+  return { tasks: next.map((t, i) => ({ ...t, order: i })), changed: true };
+}
+
 // Forge Daily — the permanent baseline mode. It is active whenever no
 // challenge is running: open-ended (no duration), lighter tasks, smaller XP,
 // so users keep a streak alive without feeling overwhelmed. Challenges
@@ -40,6 +80,7 @@ export const FORGE_DAILY_TASKS = [
   { id: 'fd_pray',  name: 'Pray',             icon: '🙏', color: '#A8E6CF', xp: 6,  keystone: 0 },
   { id: 'fd_grat',  name: 'Gratitude',        icon: '📝', color: '#F9E04B', xp: 5,  keystone: 0 },
   { id: 'fd_water', name: 'Drink water',      icon: '💧', color: '#45B7D1', xp: 5,  keystone: 0 },
+  { ...DAILY_LOG_TASK },
 ];
 
 // The "what's your next goal?" menu shown after a challenge completes.
@@ -157,7 +198,7 @@ export const CHALLENGE_TEMPLATES = [
     emoji: '⚡',
     startable: true,
     start_flow: 'variant',
-    template_version: 2,
+    template_version: 3,
     task_id_prefix: 'fl_',
     challenge_name: 'Fat Loss Challenge',
     category: 'Body Composition',
@@ -237,6 +278,7 @@ export const CHALLENGE_TEMPLATES = [
           'Eat mostly whole foods (80%+).',
           'Hit water goal.',
           'Sleep 7.5+ hours.',
+          'Complete Daily Log.',
         ],
         weekly_requirements: [
           'Lift 3x',
@@ -253,6 +295,7 @@ export const CHALLENGE_TEMPLATES = [
           { id: 'fl_whole',   name: 'Eat mostly whole foods (80%+)',       icon: '🥗', color: '#6BCB77' },
           { id: 'fl_water',   name: 'Hit water goal',                      icon: '💧', color: '#45B7D1' },
           { id: 'fl_sleep',   name: 'Sleep 7.5+ hours',                    icon: '😴', color: '#A78BFA' },
+          { ...DAILY_LOG_TASK },
         ],
       },
       standard: {
@@ -265,6 +308,7 @@ export const CHALLENGE_TEMPLATES = [
           'Eat mostly whole foods (90%).',
           'Hit water goal.',
           'Sleep 7.5–9 hours.',
+          'Complete Daily Log.',
         ],
         weekly_requirements: [
           'Lift 3x',
@@ -281,6 +325,7 @@ export const CHALLENGE_TEMPLATES = [
           { id: 'fl_whole',   name: 'Eat mostly whole foods (90%)',        icon: '🥗', color: '#6BCB77' },
           { id: 'fl_water',   name: 'Hit water goal',                      icon: '💧', color: '#45B7D1' },
           { id: 'fl_sleep',   name: 'Sleep 7.5–9 hours',                   icon: '😴', color: '#A78BFA' },
+          { ...DAILY_LOG_TASK },
         ],
       },
       hard: {
@@ -294,6 +339,7 @@ export const CHALLENGE_TEMPLATES = [
           'Eat mostly whole foods (~90% of intake).',
           'Hit water goal.',
           'Sleep 7.5–9 hours.',
+          'Complete Daily Log.',
         ],
         weekly_requirements: [
           'Lift 3x per week',
@@ -313,6 +359,7 @@ export const CHALLENGE_TEMPLATES = [
           { id: 'fl_whole',   name: 'Eat mostly whole foods (~90%)',       icon: '🥗', color: '#6BCB77' },
           { id: 'fl_water',   name: 'Hit water goal',                      icon: '💧', color: '#45B7D1' },
           { id: 'fl_sleep',   name: 'Sleep 7.5–9 hours',                   icon: '😴', color: '#A78BFA' },
+          { ...DAILY_LOG_TASK },
         ],
       },
     },
@@ -394,7 +441,7 @@ export const CHALLENGE_TEMPLATES = [
     start_flow: 'variant', // start button with variant + duration selection
     // Bump when the variant task lists change, so active challenges can offer
     // a sync to the latest version without resetting progress.
-    template_version: 4,
+    template_version: 5,
     // All template-owned task ids share this prefix — used to tell template
     // tasks apart from user-added custom tasks on lists saved before tasks
     // carried an explicit source.
@@ -434,9 +481,7 @@ export const CHALLENGE_TEMPLATES = [
           '⭐⭐ Prayer (40 XP).',
           '⭐ Write one gratitude (20 XP).',
           '⭐ 30-minute phone-free focus block (20 XP).',
-          '⭐ Log mood (10 XP).',
-          '⭐ Log stress (10 XP).',
-          '⭐ Log energy (10 XP).',
+          '📊 Complete Daily Log (20 XP).',
         ],
         optional_tasks: [
           'A short physical discipline block.',
@@ -447,9 +492,7 @@ export const CHALLENGE_TEMPLATES = [
           { id: 'mt_prayer',    name: 'Prayer',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2 },
           { id: 'mt_gratitude', name: 'Write one gratitude',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1 },
           { id: 'mt_focus',     name: '30-min phone-free focus block',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1 },
-          { id: 'mt_mood',      name: 'Log mood',                            icon: '🙂', color: '#6BCB77', xp: 10, keystone: 1 },
-          { id: 'mt_stress',    name: 'Log stress',                          icon: '🌡️', color: '#FF8FAB', xp: 10, keystone: 1 },
-          { id: 'mt_energy',    name: 'Log energy',                          icon: '⚡', color: '#45B7D1', xp: 10, keystone: 1 },
+          { ...DAILY_LOG_TASK },
         ],
       },
       standard: {
@@ -461,9 +504,7 @@ export const CHALLENGE_TEMPLATES = [
           '⭐⭐ Prayer (40 XP).',
           '⭐ Write one gratitude (20 XP).',
           '⭐ 60-minute phone-free focus block (20 XP).',
-          '⭐ Log mood (10 XP).',
-          '⭐ Log stress (10 XP).',
-          '⭐ Log energy (10 XP).',
+          '📊 Complete Daily Log (20 XP).',
         ],
         optional_tasks: [
           'Do one thing you were avoiding.',
@@ -475,9 +516,7 @@ export const CHALLENGE_TEMPLATES = [
           { id: 'mt_prayer',    name: 'Prayer',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2 },
           { id: 'mt_gratitude', name: 'Write one gratitude',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1 },
           { id: 'mt_focus',     name: '60-min phone-free focus block',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1 },
-          { id: 'mt_mood',      name: 'Log mood',                            icon: '🙂', color: '#6BCB77', xp: 10, keystone: 1 },
-          { id: 'mt_stress',    name: 'Log stress',                          icon: '🌡️', color: '#FF8FAB', xp: 10, keystone: 1 },
-          { id: 'mt_energy',    name: 'Log energy',                          icon: '⚡', color: '#45B7D1', xp: 10, keystone: 1 },
+          { ...DAILY_LOG_TASK },
         ],
       },
       hard: {
@@ -489,9 +528,7 @@ export const CHALLENGE_TEMPLATES = [
           '⭐⭐ Prayer (40 XP).',
           '⭐ Write one gratitude (20 XP).',
           '⭐ 90-minute phone-free focus block (20 XP).',
-          '⭐ Log mood (10 XP).',
-          '⭐ Log stress (10 XP).',
-          '⭐ Log energy (10 XP).',
+          '📊 Complete Daily Log (20 XP).',
         ],
         optional_tasks: [
           'No phone 30 minutes before bed.',
@@ -503,9 +540,7 @@ export const CHALLENGE_TEMPLATES = [
           { id: 'mt_prayer',    name: 'Prayer',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2 },
           { id: 'mt_gratitude', name: 'Write one gratitude',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1 },
           { id: 'mt_focus',     name: '90-min phone-free focus block',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1 },
-          { id: 'mt_mood',      name: 'Log mood',                            icon: '🙂', color: '#6BCB77', xp: 10, keystone: 1 },
-          { id: 'mt_stress',    name: 'Log stress',                          icon: '🌡️', color: '#FF8FAB', xp: 10, keystone: 1 },
-          { id: 'mt_energy',    name: 'Log energy',                          icon: '⚡', color: '#45B7D1', xp: 10, keystone: 1 },
+          { ...DAILY_LOG_TASK },
         ],
       },
     },

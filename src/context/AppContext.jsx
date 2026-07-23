@@ -3,7 +3,7 @@ import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../util
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges } from '../utils/gamification';
-import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS } from '../data/challengeTemplates';
+import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { isKeystone } from '../utils/gamification';
 
@@ -23,8 +23,8 @@ const DEFAULT_TASKS_ME = [
   { id: 'water',     name: 'Water goal hit',             icon: '💧',  order: 2 },
   { id: 'reading',   name: '10 pages read',              icon: '📚',  order: 3 },
   { id: 'photo',     name: 'Progress photo taken',       icon: '📸',  order: 4 },
-  { id: 'sleep_log', name: 'Sleep/energy logged',        icon: '😴',  order: 5 },
-  { id: 'mental',    name: 'Mental training complete',   icon: '🧠',  order: 6 },
+  { id: 'mental',    name: 'Mental training complete',   icon: '🧠',  order: 5 },
+  { ...DAILY_LOG_TASK, order: 6 },
 ];
 
 const DEFAULT_TASKS_GF = [
@@ -40,6 +40,7 @@ const DEFAULT_TASKS_GF = [
   { id: 'gf_read',    name: 'Read a few pages or listen to a podcast', color: '#DDA0DD', order: 9 },
   { id: 'gf_meals',   name: 'Prep meals for tomorrow',               color: '#F9E04B', order: 10 },
   { id: 'gf_screen',  name: 'Limit screen time 30 min before bed',   color: '#A8E6CF', order: 11 },
+  { ...DAILY_LOG_TASK, order: 12 },
 ];
 
 // Legacy profiles (before v3.4.0) have no activeChallenge descriptor —
@@ -275,8 +276,63 @@ function migrateProfiles(stored) {
     }
   }
 
+  // Unified Daily Log — replace built-in metric-logging tasks (Log mood/stress/
+  // energy, Sleep/energy logged) with a single Daily Log task. Only Forge-owned
+  // metric ids are touched; custom tasks are always preserved. Idempotent.
+  // templateVersion is intentionally left as-is: an active challenge started
+  // from an older template still needs its normal sync to pick up the rest of
+  // that version's tasks, so we must not falsely mark it up to date here.
+  for (const profId of ['me', 'girlfriend']) {
+    const { tasks: consolidated, changed: taskChanged } = consolidateDailyLogTasks(profiles[profId].tasks || []);
+    if (taskChanged) {
+      profiles[profId] = { ...profiles[profId], tasks: consolidated };
+      changed = true;
+    }
+  }
+
   if (changed) saveLS('profiles', profiles);
   return profiles;
+}
+
+const DAILY_LOG_METRIC_FIELDS = ['mood', 'confidence', 'sleep', 'energy', 'recovery', 'workoutEffort', 'stress', 'hoursSlept'];
+
+/**
+ * True when a day record has at least one logged metric (a rating > 0 or hours
+ * slept > 0). Used to decide whether the unified Daily Log counts as complete.
+ */
+export function dayHasLoggedMetric(dayData) {
+  return DAILY_LOG_METRIC_FIELDS.some(f => (dayData?.[f] || 0) > 0);
+}
+
+/**
+ * Backfill the unified Daily Log completion onto historical days. A day is
+ * marked daily_log = true when it already had metric logging — either one of
+ * the old separate metric-log tasks was completed, or any numeric metric was
+ * recorded. Existing metric data is never removed; XP is never duplicated
+ * (the old per-metric task flags simply stop counting once their task
+ * definitions are gone, and daily_log awards its 20 XP once). Idempotent.
+ */
+function migrateAllDays(stored) {
+  const all = { ...stored };
+  let changed = false;
+  for (const profId of Object.keys(all)) {
+    const profDays = all[profId] || {};
+    let profChanged = false;
+    const nextDays = {};
+    for (const [k, d] of Object.entries(profDays)) {
+      if (!d || d.tasks?.daily_log) { nextDays[k] = d; continue; }
+      const hadMetricTask = !!(d.tasks && (d.tasks.mt_mood || d.tasks.mt_stress || d.tasks.mt_energy || d.tasks.sleep_log));
+      if (hadMetricTask || dayHasLoggedMetric(d)) {
+        nextDays[k] = { ...d, tasks: { ...d.tasks, daily_log: true } };
+        profChanged = true;
+      } else {
+        nextDays[k] = d;
+      }
+    }
+    if (profChanged) { all[profId] = nextDays; changed = true; }
+  }
+  if (changed) saveLS('allDays', all);
+  return all;
 }
 
 const AppContext = createContext(null);
@@ -286,7 +342,7 @@ export function AppProvider({ children }) {
   const [profiles, setProfilesState] = useState(() =>
     migrateProfiles(loadLS('profiles', makeDefaultProfiles()))
   );
-  const [allDays, setAllDaysState] = useState(() => loadLS('allDays', { me: {}, girlfriend: {} }));
+  const [allDays, setAllDaysState] = useState(() => migrateAllDays(loadLS('allDays', { me: {}, girlfriend: {} })));
   // Per-date quote data: { me: { '2024-01-15': { cycleOffset, reflectionNotes, reflectionComplete } }, girlfriend: {} }
   const [quoteData, setQuoteDataState] = useState(() => loadLS('quoteData', { me: {}, girlfriend: {} }));
   // Experiments: { me: [...], girlfriend: [...] }
