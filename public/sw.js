@@ -1,23 +1,32 @@
 // Cache version — bump this string to invalidate ALL old caches on next deploy
-const CACHE_VER  = '75hard-v25';
+const CACHE_VER  = '75hard-v26';
 const ASSET_CACHE = `${CACHE_VER}-assets`;  // hashed JS/CSS — cache-first (immutable)
 const HTML_CACHE  = `${CACHE_VER}-html`;    // index.html — network-first (always fresh)
 const STATIC_CACHE = `${CACHE_VER}-static`; // icons, manifest — stale-while-revalidate
 
 const ALL_CACHES = [ASSET_CACHE, HTML_CACHE, STATIC_CACHE];
 
-// ── Install: skipWaiting immediately so this SW takes over from any old version
+// ── Install: precache the static shell. We intentionally do NOT call
+//    skipWaiting() here. On a device that already has an active SW, this new
+//    worker stays in the "waiting" state until the app explicitly asks it to
+//    activate (via the SKIP_WAITING message from the update banner / Check for
+//    Updates). Keeping the worker in "waiting" is what makes update detection
+//    reliable — registration.waiting is a real, observable signal instead of
+//    being skipped past instantly. (The very first SW on a page has no active
+//    worker to wait behind, so it still activates immediately for new users.)
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then(c =>
       c.addAll(['/manifest.json', '/icon.svg', '/icon-apple.svg'])
     )
   );
-  self.skipWaiting();
 });
 
-// ── Activate: delete every cache that doesn't belong to this version,
-//    claim all clients, then notify them to reload so they get fresh HTML/assets
+// ── Activate: delete every cache that doesn't belong to this version, then
+//    claim all clients so this worker controls the open pages immediately.
+//    The page reloads itself on 'controllerchange' (see swUtils) only when the
+//    user initiated the update, so claiming here never causes a surprise reload
+//    on first install.
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -27,10 +36,6 @@ self.addEventListener('activate', event => {
           .map(k => caches.delete(k))
       )
     ).then(() => self.clients.claim())
-      .then(() => self.clients.matchAll({ type: 'window' }))
-      .then(clients => {
-        clients.forEach(client => client.postMessage({ type: 'SW_UPDATED' }));
-      })
   );
 });
 
@@ -62,7 +67,9 @@ self.addEventListener('fetch', event => {
   event.respondWith(staleWhileRevalidate(event.request, STATIC_CACHE));
 });
 
-// ── Message: app can send SKIP_WAITING to activate the waiting SW
+// ── Message: the ONLY place skipWaiting() is called. The app sends
+//    SKIP_WAITING from the intended update path (update banner tap /
+//    "Apply Update" in Settings) to activate the waiting worker on demand.
 self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
