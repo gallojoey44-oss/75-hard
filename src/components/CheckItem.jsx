@@ -1,4 +1,5 @@
 export default function CheckItem({ task, checked, onToggle, disabled, keystone = 0, xp }) {
+  const desc = task.desc;
   return (
     <div
       className={`check-item${disabled ? ' disabled' : ''}${keystone ? ` keystone keystone-${keystone}` : ''}`}
@@ -13,6 +14,7 @@ export default function CheckItem({ task, checked, onToggle, disabled, keystone 
       <span className={`check-name${checked ? ' done' : ''}`}>
         {task.name}
         {keystone > 0 && <span className="keystone-stars">{'⭐'.repeat(keystone)}</span>}
+        {desc && <span className="check-desc">{desc}</span>}
       </span>
       {typeof xp === 'number' && <span className="check-xp">{xp} XP</span>}
     </div>

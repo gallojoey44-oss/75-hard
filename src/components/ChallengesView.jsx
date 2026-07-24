@@ -34,7 +34,6 @@ function durationText(days) {
 
 function VariantPanel({ variant, template }) {
   if (!variant) return null;
-  const hasColdShower = variant.required_daily_tasks.some(t => /cold shower/i.test(t));
   return (
     <div className="tpl-variant-panel">
       <div className="tpl-variant-section-label">Daily tasks</div>
@@ -70,15 +69,22 @@ function VariantPanel({ variant, template }) {
       )}
       {template.physical_examples?.length > 0 && (
         <div className="tpl-panel-note">
-          <strong>Physical discipline block</strong> — short and scalable, not a full workout.
-          Pick one: {template.physical_examples.join(', ').toLowerCase()}.
+          <strong>Short Physical Reset</strong> — any intentional movement counts, even a walk.
+          Pick whatever fits: {template.physical_examples.join(', ').toLowerCase()}. No hard workout required.
         </div>
       )}
-      {hasColdShower && (
-        <div className="tpl-panel-note">
-          <strong>Cold shower finish</strong> — optional if you have a medical reason, feel
-          lightheaded, or react poorly to cold. Keep it brief. It&apos;s a discipline cue, not an endurance test.
-        </div>
+      {template.bonus_missions?.length > 0 && (
+        <>
+          <div className="tpl-variant-section-label">🎯 Bonus Missions (optional)</div>
+          <ul className="tpl-task-list optional">
+            {template.bonus_missions.map(bm => (
+              <li key={bm.id}>{bm.icon} {bm.name} — +{bm.xp} bonus XP</li>
+            ))}
+          </ul>
+          <div className="tpl-panel-note">
+            Bonus Missions are optional. They add bonus XP but are never required to complete the day.
+          </div>
+        </>
       )}
     </div>
   );
@@ -365,6 +371,7 @@ export default function ChallengesView({ setView }) {
           badgeId: ps.template.rewards?.badge_id || null,
         },
         tasks: variantDef.start_tasks,
+        bonusMissions: ps.template.bonus_missions || [],
         futureSelfLetter: letter,
       });
     }

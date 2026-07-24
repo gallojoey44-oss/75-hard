@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useApp, dayHasLoggedMetric } from '../context/AppContext';
 import { formatDateLong, getDateForDayNumber } from '../utils/dateUtils';
 import CheckItem from './CheckItem';
+import BonusMissions from './BonusMissions';
 import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
@@ -748,6 +749,9 @@ export default function DailyView({ editDayNum, setView }) {
           </div>
         </>
       )}
+
+      {/* Bonus Missions — optional, below required tasks, above the Daily Log */}
+      <BonusMissions dayNumber={selectedDayNum} isEditable />
 
       {/* Daily Log — both profiles */}
       <div className="section-card" ref={logRef}>

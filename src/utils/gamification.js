@@ -132,7 +132,24 @@ function hasAnyActivity(dayData) {
                        (dayData.recovery || 0) > 0;
   const hasNotes     = (dayData.notes || '').trim().length > 0;
   const hasMWD       = dayData.isMWD && Object.values(dayData.mwdTasks || {}).some(Boolean);
-  return hasTasksDone || hasRatings || hasNotes || hasMWD;
+  const hasBonus     = Object.keys(dayData.bonusDone || {}).length > 0;
+  return hasTasksDone || hasRatings || hasNotes || hasMWD || hasBonus;
+}
+
+/**
+ * Bonus XP earned from optional Bonus Missions for a day. Each completed
+ * mission stores the XP it awarded in dayData.bonusDone[missionId], so the
+ * amount is self-contained per day: awarded once, removed on uncheck, and
+ * never double-counted after reopening. Bonus XP is separate from required-task
+ * XP and never affects required completion.
+ */
+export function getBonusXP(dayData) {
+  return Object.values(dayData?.bonusDone || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+}
+
+/** Count of completed Bonus Missions for a day. */
+export function getBonusCount(dayData) {
+  return Object.keys(dayData?.bonusDone || {}).length;
 }
 
 /**
@@ -182,6 +199,9 @@ export function computeDayXP(dayData, tasks, profId, dayNum, currentDayNum, pena
 
   // MWD complete (+25)
   if (mwdDone) gained += 25;
+
+  // Bonus Missions (optional) — extra XP that never affects required completion.
+  gained += getBonusXP(dayData);
 
   // Cap per-day loss to 80 XP
   lost = Math.min(lost, 80);

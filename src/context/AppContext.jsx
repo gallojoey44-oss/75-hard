@@ -67,6 +67,7 @@ function makeDefaultProfiles() {
       emoji: '💪',
       challengeStart: null,
       tasks: DEFAULT_TASKS_ME,
+      bonusMissions: [],
       quoteSettings: { ...DEFAULT_QUOTE_SETTINGS },
       customQuotes: [],
     },
@@ -76,6 +77,7 @@ function makeDefaultProfiles() {
       emoji: '🌸',
       challengeStart: null,
       tasks: DEFAULT_TASKS_GF,
+      bonusMissions: [],
       quoteSettings: { ...DEFAULT_QUOTE_SETTINGS },
       customQuotes: [],
     },
@@ -103,6 +105,10 @@ function emptyDay(date, dayNumber) {
     validated: false,
     isMWD: false,
     mwdTasks: {},
+    // Bonus Missions (optional): bonusDone maps missionId → XP awarded that day;
+    // bonusOneTime holds missions added just for this date.
+    bonusDone: {},
+    bonusOneTime: [],
   };
 }
 
@@ -290,6 +296,48 @@ function migrateProfiles(stored) {
     }
   }
 
+  // Bonus Missions + Short Physical Reset (Mental Training v6).
+  for (const profId of ['me', 'girlfriend']) {
+    // Every profile carries a bonusMissions list (defs for recurring missions).
+    if (!Array.isArray(profiles[profId].bonusMissions)) {
+      profiles[profId] = { ...profiles[profId], bonusMissions: [] };
+      changed = true;
+    }
+
+    const meta = profiles[profId].activeChallenge;
+    if (meta?.templateId !== 'mental_training_phase') continue;
+    const tpl = getTemplateById('mental_training_phase');
+
+    // Add the required Short Physical Reset task to active MT challenges without
+    // it — inserted just before the Daily Log, preserving custom tasks. The
+    // task's XP/duration match the challenge's variant. templateVersion is left
+    // as-is so the normal sync can still align anything else.
+    const tasks = profiles[profId].tasks || [];
+    if (!tasks.some(t => t.id === 'mt_physical')) {
+      const variantDef = tpl?.variants?.[meta.variant] || tpl?.variants?.standard;
+      const physical = (variantDef?.start_tasks || []).find(t => t.id === 'mt_physical');
+      if (physical) {
+        const dailyIdx = tasks.findIndex(t => t.id === 'daily_log');
+        const next = [...tasks];
+        const insertAt = dailyIdx >= 0 ? dailyIdx : next.length;
+        next.splice(insertAt, 0, { ...physical, source: 'template' });
+        profiles[profId] = { ...profiles[profId], tasks: next.map((t, i) => ({ ...t, order: i })) };
+        changed = true;
+      }
+    }
+
+    // Seed the challenge's default Bonus Missions if none are present yet
+    // (converts the old built-in optional cold-shower / phone-before-bed items
+    // into real Bonus Missions). Never touches user-created custom tasks.
+    if ((profiles[profId].bonusMissions || []).length === 0 && tpl?.bonus_missions?.length) {
+      profiles[profId] = {
+        ...profiles[profId],
+        bonusMissions: tpl.bonus_missions.map((m, i) => ({ ...m, source: 'template', recurring: true, order: i })),
+      };
+      changed = true;
+    }
+  }
+
   if (changed) saveLS('profiles', profiles);
   return profiles;
 }
@@ -312,22 +360,35 @@ export function dayHasLoggedMetric(dayData) {
  * (the old per-metric task flags simply stop counting once their task
  * definitions are gone, and daily_log awards its 20 XP once). Idempotent.
  */
-function migrateAllDays(stored) {
+function migrateAllDays(stored, profiles = {}) {
   const all = { ...stored };
   let changed = false;
   for (const profId of Object.keys(all)) {
     const profDays = all[profId] || {};
+    // Short Physical Reset (Mental Training v6) is grandfathered onto the active
+    // MT challenge's existing days so adding the new required task never
+    // retroactively marks a prior date as failed. Days logged before it existed
+    // are treated as satisfied; only new days going forward require it.
+    const isMT = profiles[profId]?.activeChallenge?.templateId === 'mental_training_phase';
     let profChanged = false;
     const nextDays = {};
     for (const [k, d] of Object.entries(profDays)) {
-      if (!d || d.tasks?.daily_log) { nextDays[k] = d; continue; }
-      const hadMetricTask = !!(d.tasks && (d.tasks.mt_mood || d.tasks.mt_stress || d.tasks.mt_energy || d.tasks.sleep_log));
-      if (hadMetricTask || dayHasLoggedMetric(d)) {
-        nextDays[k] = { ...d, tasks: { ...d.tasks, daily_log: true } };
-        profChanged = true;
-      } else {
-        nextDays[k] = d;
+      if (!d) { nextDays[k] = d; continue; }
+      let day = d;
+      // Daily Log backfill (unchanged).
+      if (!day.tasks?.daily_log) {
+        const hadMetricTask = !!(day.tasks && (day.tasks.mt_mood || day.tasks.mt_stress || day.tasks.mt_energy || day.tasks.sleep_log));
+        if (hadMetricTask || dayHasLoggedMetric(day)) {
+          day = { ...day, tasks: { ...day.tasks, daily_log: true } };
+          profChanged = true;
+        }
       }
+      // Short Physical Reset grandfather (MT only).
+      if (isMT && !(day.tasks && 'mt_physical' in day.tasks)) {
+        day = { ...day, tasks: { ...day.tasks, mt_physical: true } };
+        profChanged = true;
+      }
+      nextDays[k] = day;
     }
     if (profChanged) { all[profId] = nextDays; changed = true; }
   }
@@ -342,7 +403,7 @@ export function AppProvider({ children }) {
   const [profiles, setProfilesState] = useState(() =>
     migrateProfiles(loadLS('profiles', makeDefaultProfiles()))
   );
-  const [allDays, setAllDaysState] = useState(() => migrateAllDays(loadLS('allDays', { me: {}, girlfriend: {} })));
+  const [allDays, setAllDaysState] = useState(() => migrateAllDays(loadLS('allDays', { me: {}, girlfriend: {} }), profiles));
   // Per-date quote data: { me: { '2024-01-15': { cycleOffset, reflectionNotes, reflectionComplete } }, girlfriend: {} }
   const [quoteData, setQuoteDataState] = useState(() => loadLS('quoteData', { me: {}, girlfriend: {} }));
   // Experiments: { me: [...], girlfriend: [...] }
@@ -650,6 +711,8 @@ export function AppProvider({ children }) {
         challengeStart: getTodayStr(),
         activeChallenge: meta,
         ...(options?.tasks ? { tasks: options.tasks.map((t, i) => ({ ...t, source: 'template', order: i })) } : {}),
+        // Bonus Missions are per-challenge: seed from the new challenge (or clear).
+        bonusMissions: (options?.bonusMissions || []).map((m, i) => ({ ...m, source: 'template', recurring: true, order: i })),
         xpOffset: 0,
         xpStartDay: 1,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
@@ -742,6 +805,7 @@ export function AppProvider({ children }) {
         challengeStart: getTodayStr(),
         activeChallenge: { ...FORGE_DAILY_META },
         tasks: FORGE_DAILY_TASKS.map((t, i) => ({ ...t, source: 'template', order: i })),
+        bonusMissions: [],
         lastCompletion: summary,
         xpOffset: 0,
         xpStartDay: 1,
@@ -777,6 +841,7 @@ export function AppProvider({ children }) {
         challengeStart: getTodayStr(),
         activeChallenge: { ...FORGE_DAILY_META },
         tasks: FORGE_DAILY_TASKS.map((t, i) => ({ ...t, source: 'template', order: i })),
+        bonusMissions: [],
         xpOffset: 0,
         xpStartDay: 1,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
@@ -953,6 +1018,104 @@ export function AppProvider({ children }) {
   const reorderTasks = useCallback((newTasks) => {
     updateProfile({ tasks: newTasks.map((t, i) => ({ ...t, order: i })) });
   }, [updateProfile]);
+
+  // ── Bonus Mission actions ───────────────────────────────────────────────
+  // Bonus Missions are optional. They award bonus XP but are never required,
+  // never counted in required progress, and never affect challenge/streak/MWD
+  // completion. Completion + the XP awarded are stored per profile and date in
+  // dayData.bonusDone (missionId → XP), so XP is awarded once, removed on
+  // uncheck, and never double-counted after reopening.
+
+  const toggleBonusMission = useCallback((dayNumber, mission) => {
+    if (!activeProfile || !mission?.id || !dayNumber) return;
+    setAllDays(prev => {
+      const profDays = prev[activeProfile] || {};
+      const existing = profDays[dayNumber] || emptyDay(null, dayNumber);
+      const bonusDone = { ...(existing.bonusDone || {}) };
+      if (bonusDone[mission.id] != null) delete bonusDone[mission.id];
+      else bonusDone[mission.id] = Number(mission.xp) || 0;
+      return { ...prev, [activeProfile]: { ...profDays, [dayNumber]: { ...existing, bonusDone } } };
+    });
+  }, [activeProfile, setAllDays]);
+
+  // Add a Bonus Mission. Recurring missions live on the profile (appear every
+  // day); one-time missions live on a single day's record.
+  const addBonusMission = useCallback((def, opts = {}) => {
+    if (!activeProfile || !def?.name) return;
+    const mission = {
+      id: def.id || `bm_custom_${Date.now()}`,
+      icon: def.icon || '🎯',
+      name: def.name,
+      xp: Number(def.xp) || 0,
+      desc: def.desc || '',
+      source: def.source || 'custom',
+    };
+    if (opts.recurring) {
+      setProfiles(prev => {
+        const cur = prev[activeProfile]?.bonusMissions || [];
+        if (cur.some(m => m.id === mission.id)) return prev; // no duplicates
+        return {
+          ...prev,
+          [activeProfile]: {
+            ...prev[activeProfile],
+            bonusMissions: [...cur, { ...mission, recurring: true, order: cur.length }],
+          },
+        };
+      });
+    } else {
+      const dayNumber = opts.dayNumber;
+      if (!dayNumber) return;
+      setAllDays(prev => {
+        const profDays = prev[activeProfile] || {};
+        const existing = profDays[dayNumber] || emptyDay(null, dayNumber);
+        const oneTime = existing.bonusOneTime || [];
+        if (oneTime.some(m => m.id === mission.id)) return prev;
+        return {
+          ...prev,
+          [activeProfile]: { ...profDays, [dayNumber]: { ...existing, bonusOneTime: [...oneTime, { ...mission, recurring: false }] } },
+        };
+      });
+    }
+  }, [activeProfile, setProfiles, setAllDays]);
+
+  // Remove a Bonus Mission. Recurring defs are removed from the profile;
+  // one-time missions from the day. The given day's completion for that mission
+  // is cleared so today's count/XP update; earned XP on PAST days is preserved.
+  const removeBonusMission = useCallback((missionId, opts = {}) => {
+    if (!activeProfile || !missionId) return;
+    if (opts.recurring) {
+      setProfiles(prev => {
+        const cur = prev[activeProfile]?.bonusMissions || [];
+        return {
+          ...prev,
+          [activeProfile]: {
+            ...prev[activeProfile],
+            bonusMissions: cur.filter(m => m.id !== missionId).map((m, i) => ({ ...m, order: i })),
+          },
+        };
+      });
+    }
+    const dayNumber = opts.dayNumber;
+    if (dayNumber) {
+      setAllDays(prev => {
+        const profDays = prev[activeProfile] || {};
+        const existing = profDays[dayNumber];
+        if (!existing) return prev;
+        const bonusDone = { ...(existing.bonusDone || {}) };
+        delete bonusDone[missionId];
+        const bonusOneTime = (existing.bonusOneTime || []).filter(m => m.id !== missionId);
+        return { ...prev, [activeProfile]: { ...profDays, [dayNumber]: { ...existing, bonusDone, bonusOneTime } } };
+      });
+    }
+  }, [activeProfile, setProfiles, setAllDays]);
+
+  const reorderBonusMissions = useCallback((newList) => {
+    if (!activeProfile) return;
+    setProfiles(prev => ({
+      ...prev,
+      [activeProfile]: { ...prev[activeProfile], bonusMissions: (newList || []).map((m, i) => ({ ...m, order: i })) },
+    }));
+  }, [activeProfile, setProfiles]);
 
   // ── Quote actions ──────────────────────────────────────────────────────
 
@@ -1142,6 +1305,8 @@ export function AppProvider({ children }) {
       // Weekly reflection
       weeklyReflections, saveWeeklyReflection,
       addTask, updateTask, deleteTask, reorderTasks,
+      // Bonus Missions
+      toggleBonusMission, addBonusMission, removeBonusMission, reorderBonusMissions,
       MENTAL_OPTIONS,
       // Quote
       quoteData,

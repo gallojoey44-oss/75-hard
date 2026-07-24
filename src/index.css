@@ -563,8 +563,10 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 }
 
 .check-icon { font-size: 1.1rem; flex-shrink: 0; width: 22px; text-align: center; }
-.check-name { font-size: 15px; font-weight: 500; flex: 1; }
+.check-name { font-size: 15px; font-weight: 500; flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .check-name.done { text-decoration: line-through; color: var(--text2); }
+.check-desc { flex-basis: 100%; font-size: 11px; font-weight: 400; color: var(--text3); text-decoration: none; line-height: 1.35; }
+.check-name.done .check-desc { text-decoration: none; color: var(--text3); }
 
 /* ─── Mental Training ────────────────────────────────────────── */
 .mental-section { margin-bottom: 14px; }
@@ -4371,3 +4373,58 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 }
 .next-goal-btn:hover { border-color: var(--accent); }
 .next-goal-emoji { font-size: 18px; }
+
+/* ── Bonus Missions ─────────────────────────────────────────────────────── */
+.bonus-card { border: 1px solid var(--accent2, #FFB347); }
+.bonus-summary { font-size: 12px; font-weight: 600; color: var(--text2); }
+.bonus-xp-label { color: var(--accent2, #FFB347); }
+.bonus-subtitle { font-size: 12px; color: var(--text2); margin: 2px 0 10px; }
+.bonus-empty { font-size: 12px; color: var(--text3); margin: 6px 0; }
+.bonus-list { display: flex; flex-direction: column; gap: 6px; }
+.bonus-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 10px; background: var(--card2);
+  border: 1px solid transparent;
+}
+.bonus-item.done { border-color: rgba(255,179,71,0.4); background: rgba(255,179,71,0.08); }
+.bonus-item .check-box { flex-shrink: 0; cursor: pointer; }
+.bonus-item-icon { font-size: 18px; flex-shrink: 0; }
+.bonus-item-body { flex: 1; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-width: 0; }
+.bonus-item-name { font-size: 14px; font-weight: 500; }
+.bonus-item-name.done { text-decoration: line-through; color: var(--text2); }
+.bonus-item-desc { font-size: 11px; color: var(--text3); line-height: 1.35; }
+.bonus-item-xp {
+  font-size: 12px; font-weight: 700; color: var(--accent2, #FFB347);
+  flex-shrink: 0; font-variant-numeric: tabular-nums;
+}
+.bonus-item-manage { display: flex; gap: 4px; flex-shrink: 0; }
+.bonus-mini-btn {
+  width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border);
+  background: var(--card); color: var(--text2); font-size: 13px; cursor: pointer;
+}
+.bonus-mini-btn:disabled { opacity: 0.35; }
+.bonus-mini-btn.remove { color: #EF4444; }
+.bonus-actions { display: flex; gap: 8px; margin-top: 10px; }
+.bonus-action-btn { flex: 1; font-size: 13px; }
+.bonus-add { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.bonus-add-label { font-size: 12px; font-weight: 700; color: var(--text2); margin: 6px 0; }
+.bonus-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.bonus-suggestion-chip {
+  font-size: 12px; padding: 6px 10px; border-radius: 16px;
+  border: 1px solid var(--border); background: var(--card2); color: var(--text); cursor: pointer;
+}
+.bonus-suggestion-chip:hover { border-color: var(--accent2, #FFB347); }
+.bonus-suggestion-xp { color: var(--accent2, #FFB347); font-weight: 700; }
+.bonus-add-form { display: flex; flex-direction: column; gap: 8px; }
+.bonus-icon-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.bonus-icon-choice {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--card2); font-size: 16px; cursor: pointer;
+}
+.bonus-icon-choice.active { border-color: var(--accent2, #FFB347); background: rgba(255,179,71,0.15); }
+.bonus-add-row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.bonus-add-xp { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text2); }
+.bonus-add-xp .inline-input { width: 70px; }
+.bonus-recurring-toggle { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.bonus-seg { padding: 7px 12px; font-size: 12px; background: var(--card2); color: var(--text2); border: none; cursor: pointer; }
+.bonus-seg.active { background: var(--accent2, #FFB347); color: #1a1a1a; font-weight: 700; }

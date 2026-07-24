@@ -441,11 +441,22 @@ export const CHALLENGE_TEMPLATES = [
     start_flow: 'variant', // start button with variant + duration selection
     // Bump when the variant task lists change, so active challenges can offer
     // a sync to the latest version without resetting progress.
-    template_version: 5,
+    template_version: 6,
     // All template-owned task ids share this prefix — used to tell template
     // tasks apart from user-added custom tasks on lists saved before tasks
     // carried an explicit source.
     task_id_prefix: 'mt_',
+    // Optional Bonus Missions seeded when the challenge starts. They award bonus
+    // XP but are never required, never counted in required progress, and never
+    // affect challenge/streak/MWD completion. Cold exposure stays optional.
+    bonus_missions: [
+      { id: 'bm_cold',    icon: '🚿', name: 'Cold shower or cold finish',          xp: 20, desc: 'Optional and brief. Skip if you have any medical reason — never required.' },
+      { id: 'bm_nophone', icon: '📵', name: 'No phone for 30 minutes before bed',  xp: 20 },
+      { id: 'bm_avoided', icon: '🧱', name: 'Do one thing you were avoiding',      xp: 20 },
+      { id: 'bm_outside', icon: '🌤️', name: 'Spend 10 minutes outside',            xp: 15 },
+      { id: 'bm_read5',   icon: '📚', name: 'Read 5 extra pages',                  xp: 15 },
+      { id: 'bm_help',    icon: '🤝', name: 'Perform one helpful act for someone', xp: 15 },
+    ],
     challenge_name: 'Mental Training Phase',
     purpose: 'Train the mind through action. Build focus, calm under pressure, and self-control with short daily mental and physical discipline work.',
     tagline: 'Physical discipline sharpens mental control. Do the hard small thing.',
@@ -455,7 +466,7 @@ export const CHALLENGE_TEMPLATES = [
       mt_reading: 'Reading feeds the mind you are training. Even a couple of pages a day reinforces growth, sharpens focus, and gives your brain something better than a scroll.',
       mt_prayer: 'Prayer lowers ego and restores focus. It anchors the day in something larger than mood.',
     },
-    physical_examples: ['Pushups', 'Plank', 'Wall sit', 'Air squats', 'Shadowboxing', 'Mobility flow'],
+    physical_examples: ['Short walk', 'Mobility', 'Stretching', 'Push-ups', 'Air squats', 'Plank', 'Wall sit', 'Shadowboxing', 'Light bodyweight circuit'],
     duration_options_days: [7, 14, 21],
     metrics_targeted: ['stress_rating', 'confidence_rating', 'mood_rating', 'energy_rating'],
     insights_triggers: {
@@ -481,17 +492,17 @@ export const CHALLENGE_TEMPLATES = [
           '⭐⭐ Prayer (40 XP).',
           '⭐ Write one gratitude (20 XP).',
           '⭐ 30-minute phone-free focus block (20 XP).',
+          '🚶 Short Physical Reset — 5 minutes (20 XP).',
           '📊 Complete Daily Log (20 XP).',
         ],
-        optional_tasks: [
-          'A short physical discipline block.',
-        ],
+        optional_tasks: [],
         start_tasks: [
           { id: 'mt_mind',      name: 'Mental Training — 2 minutes',         icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3 },
           { id: 'mt_reading',   name: 'Read 2 pages',                        icon: '📚', color: '#74B9FF', xp: 40, keystone: 2 },
           { id: 'mt_prayer',    name: 'Prayer',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2 },
           { id: 'mt_gratitude', name: 'Write one gratitude',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1 },
           { id: 'mt_focus',     name: '30-min phone-free focus block',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1 },
+          { id: 'mt_physical',  name: 'Short Physical Reset — 5 minutes',    icon: '🚶', color: '#4ECDC4', xp: 20, keystone: 0, desc: 'Any intentional movement counts — even a walk.' },
           { ...DAILY_LOG_TASK },
         ],
       },
@@ -504,18 +515,17 @@ export const CHALLENGE_TEMPLATES = [
           '⭐⭐ Prayer (40 XP).',
           '⭐ Write one gratitude (20 XP).',
           '⭐ 60-minute phone-free focus block (20 XP).',
+          '🚶 Short Physical Reset — 10 minutes (30 XP).',
           '📊 Complete Daily Log (20 XP).',
         ],
-        optional_tasks: [
-          'Do one thing you were avoiding.',
-          'A physical discipline block.',
-        ],
+        optional_tasks: [],
         start_tasks: [
           { id: 'mt_mind',      name: 'Mental Training — 5 minutes',         icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3 },
           { id: 'mt_reading',   name: 'Read 5 pages',                        icon: '📚', color: '#74B9FF', xp: 40, keystone: 2 },
           { id: 'mt_prayer',    name: 'Prayer',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2 },
           { id: 'mt_gratitude', name: 'Write one gratitude',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1 },
           { id: 'mt_focus',     name: '60-min phone-free focus block',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1 },
+          { id: 'mt_physical',  name: 'Short Physical Reset — 10 minutes',   icon: '🚶', color: '#4ECDC4', xp: 30, keystone: 0, desc: 'Any intentional movement counts — even a walk.' },
           { ...DAILY_LOG_TASK },
         ],
       },
@@ -528,18 +538,17 @@ export const CHALLENGE_TEMPLATES = [
           '⭐⭐ Prayer (40 XP).',
           '⭐ Write one gratitude (20 XP).',
           '⭐ 90-minute phone-free focus block (20 XP).',
+          '🚶 Short Physical Reset — 15 minutes (40 XP).',
           '📊 Complete Daily Log (20 XP).',
         ],
-        optional_tasks: [
-          'No phone 30 minutes before bed.',
-          'A physical discipline block or cold shower finish.',
-        ],
+        optional_tasks: [],
         start_tasks: [
           { id: 'mt_mind',      name: 'Mental Training — 10 minutes',        icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3 },
           { id: 'mt_reading',   name: 'Read 10 pages',                       icon: '📚', color: '#74B9FF', xp: 40, keystone: 2 },
           { id: 'mt_prayer',    name: 'Prayer',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2 },
           { id: 'mt_gratitude', name: 'Write one gratitude',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1 },
           { id: 'mt_focus',     name: '90-min phone-free focus block',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1 },
+          { id: 'mt_physical',  name: 'Short Physical Reset — 15 minutes',   icon: '🚶', color: '#4ECDC4', xp: 40, keystone: 0, desc: 'Any intentional movement counts — even a walk.' },
           { ...DAILY_LOG_TASK },
         ],
       },
