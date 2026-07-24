@@ -1,9 +1,14 @@
 // GET/POST /api/cron/dispatch — the scheduled sender.
 //
-// Runs from Vercel Cron every minute (see vercel.json). For each synced
-// schedule it computes the user's *local* time from their IANA timezone
-// (DST-aware), and delivers any reminder whose time has arrived, that is not in
-// quiet hours, and that has not already been sent for the local date.
+// Invoked by Vercel Cron (see vercel.json). NOTE: Vercel's Hobby plan limits
+// cron jobs to once per day, so vercel.json uses a daily schedule to keep
+// deployments valid on Hobby. For true minute-level delivery, upgrade to Vercel
+// Pro and set the schedule to "* * * * *", or hit this endpoint every minute
+// from an external cron (e.g. cron-job.org / GitHub Actions) with
+// ?key=$CRON_SECRET. For each synced schedule it computes the user's *local*
+// time from their IANA timezone (DST-aware), and delivers any reminder whose
+// time has arrived, that is not in quiet hours, and that has not already been
+// sent for the local date.
 //
 // Security: requires CRON_SECRET. Vercel Cron automatically sends
 // `Authorization: Bearer $CRON_SECRET`; an external cron may instead pass
