@@ -372,18 +372,31 @@ export function dayHasLoggedMetric(dayData) {
 function migrateAllDays(stored, profiles = {}) {
   const all = { ...stored };
   let changed = false;
+
+  // One-time repair: an earlier build grandfathered Short Physical Reset onto
+  // EVERY existing MT day — including today and future days — which auto-checked
+  // the task before the user did anything. Undo that once for today/future so
+  // the current day starts unchecked. Guarded by a flag so it runs a single
+  // time and never clobbers a completion the user makes later.
+  const REPAIR_KEY = 'forge_mt_physical_repair_v1';
+  let doRepair = false;
+  try { doRepair = !localStorage.getItem(REPAIR_KEY); } catch { /* ignore */ }
+
   for (const profId of Object.keys(all)) {
+    const prof = profiles[profId];
+    const isMT = prof?.activeChallenge?.templateId === 'mental_training_phase';
+    // Current (uncapped) day number for the active MT challenge. Grandfathering
+    // applies ONLY to days strictly before today so history is never
+    // retroactively failed; today and future days must start unchecked.
+    const curDay = isMT && prof?.challengeStart ? getDayNumberFromStart(prof.challengeStart) : null;
+
     const profDays = all[profId] || {};
-    // Short Physical Reset (Mental Training v6) is grandfathered onto the active
-    // MT challenge's existing days so adding the new required task never
-    // retroactively marks a prior date as failed. Days logged before it existed
-    // are treated as satisfied; only new days going forward require it.
-    const isMT = profiles[profId]?.activeChallenge?.templateId === 'mental_training_phase';
     let profChanged = false;
     const nextDays = {};
     for (const [k, d] of Object.entries(profDays)) {
       if (!d) { nextDays[k] = d; continue; }
       let day = d;
+
       // Daily Log backfill (unchanged).
       if (!day.tasks?.daily_log) {
         const hadMetricTask = !!(day.tasks && (day.tasks.mt_mood || day.tasks.mt_stress || day.tasks.mt_energy || day.tasks.sleep_log));
@@ -392,15 +405,34 @@ function migrateAllDays(stored, profiles = {}) {
           profChanged = true;
         }
       }
-      // Short Physical Reset grandfather (MT only).
-      if (isMT && !(day.tasks && 'mt_physical' in day.tasks)) {
-        day = { ...day, tasks: { ...day.tasks, mt_physical: true } };
-        profChanged = true;
+
+      // Short Physical Reset (Mental Training v6).
+      if (isMT && curDay != null) {
+        const dayNum = Number(k);
+        const hasKey = !!(day.tasks && 'mt_physical' in day.tasks);
+        if (dayNum >= curDay) {
+          // Today / future: must start unchecked. One-time repair clears the
+          // erroneously auto-set completion from the earlier build.
+          if (doRepair && hasKey) {
+            const rest = { ...day.tasks };
+            delete rest.mt_physical;
+            day = { ...day, tasks: rest };
+            profChanged = true;
+          }
+        } else if (!hasKey) {
+          // Strictly-past day logged before the task existed → grandfather it so
+          // the new required task doesn't retroactively fail that date.
+          day = { ...day, tasks: { ...day.tasks, mt_physical: true } };
+          profChanged = true;
+        }
       }
+
       nextDays[k] = day;
     }
     if (profChanged) { all[profId] = nextDays; changed = true; }
   }
+
+  if (doRepair) { try { localStorage.setItem(REPAIR_KEY, '1'); } catch { /* ignore */ } }
   if (changed) saveLS('allDays', all);
   return all;
 }
