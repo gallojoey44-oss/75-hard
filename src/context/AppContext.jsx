@@ -5,7 +5,7 @@ import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges } from '../utils/gamification';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
-import { isKeystone } from '../utils/gamification';
+import { isKeystone, RANKS } from '../utils/gamification';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -68,6 +68,7 @@ function makeDefaultProfiles() {
       challengeStart: null,
       tasks: DEFAULT_TASKS_ME,
       bonusMissions: [],
+      rankHistory: [],
       quoteSettings: { ...DEFAULT_QUOTE_SETTINGS },
       customQuotes: [],
     },
@@ -78,6 +79,7 @@ function makeDefaultProfiles() {
       challengeStart: null,
       tasks: DEFAULT_TASKS_GF,
       bonusMissions: [],
+      rankHistory: [],
       quoteSettings: { ...DEFAULT_QUOTE_SETTINGS },
       customQuotes: [],
     },
@@ -301,6 +303,13 @@ function migrateProfiles(stored) {
     // Every profile carries a bonusMissions list (defs for recurring missions).
     if (!Array.isArray(profiles[profId].bonusMissions)) {
       profiles[profId] = { ...profiles[profId], bonusMissions: [] };
+      changed = true;
+    }
+    // Rank history (Hall of Legends). highestRank is intentionally left unset so
+    // the app seeds it silently from the user's current lifetime rank on first
+    // load — existing users never get a retroactive rank-up ceremony.
+    if (!Array.isArray(profiles[profId].rankHistory)) {
+      profiles[profId] = { ...profiles[profId], rankHistory: [] };
       changed = true;
     }
 
@@ -1117,6 +1126,49 @@ export function AppProvider({ children }) {
     }));
   }, [activeProfile, setProfiles]);
 
+  // ── Rank actions (Lifetime Rank ceremony + Hall of Legends) ──────────────
+  // rankHistory records every rank ever reached: { rank, name, philosophy,
+  // date, lifetimeXP }. highestRank is the max rank number reached and gates
+  // the once-per-rank ceremony (it never replays a previously earned rank).
+
+  function rankHistoryEntry(rank, date, lifetimeXP) {
+    const meta = RANKS[rank - 1] || {};
+    return { rank, name: meta.name, philosophy: meta.philosophy, date, lifetimeXP };
+  }
+
+  // Silent one-time baseline for existing users: seed highestRank + backfill
+  // history for ranks already earned WITHOUT triggering a ceremony. Dates are
+  // unknown for pre-existing ranks (recorded as null → shown as "Earned").
+  const initRankBaseline = useCallback((profId, currentRank) => {
+    setProfiles(prev => {
+      const p = prev[profId];
+      if (!p || p.highestRank != null) return prev; // already initialized
+      const history = [];
+      for (let r = 1; r <= currentRank; r++) {
+        history.push(rankHistoryEntry(r, null, RANKS[r - 1]?.minXP ?? 0));
+      }
+      return { ...prev, [profId]: { ...p, highestRank: currentRank, rankHistory: history } };
+    });
+  }, [setProfiles]);
+
+  // Record a genuine rank-up: append history for every newly crossed rank and
+  // raise highestRank. Idempotent — ranks already in history are not duplicated.
+  const recordRankUp = useCallback((profId, fromRank, toRank, lifetimeXP) => {
+    setProfiles(prev => {
+      const p = prev[profId];
+      if (!p || toRank <= (p.highestRank ?? 0)) return prev;
+      const have = new Set((p.rankHistory || []).map(h => h.rank));
+      const additions = [];
+      for (let r = (p.highestRank ?? fromRank) + 1; r <= toRank; r++) {
+        if (!have.has(r)) additions.push(rankHistoryEntry(r, getTodayStr(), lifetimeXP));
+      }
+      return {
+        ...prev,
+        [profId]: { ...p, highestRank: toRank, rankHistory: [...(p.rankHistory || []), ...additions] },
+      };
+    });
+  }, [setProfiles]);
+
   // ── Quote actions ──────────────────────────────────────────────────────
 
   const updateQuoteSettings = useCallback((updates) => {
@@ -1307,6 +1359,8 @@ export function AppProvider({ children }) {
       addTask, updateTask, deleteTask, reorderTasks,
       // Bonus Missions
       toggleBonusMission, addBonusMission, removeBonusMission, reorderBonusMissions,
+      // Rank ceremony / Hall of Legends
+      initRankBaseline, recordRankUp,
       MENTAL_OPTIONS,
       // Quote
       quoteData,

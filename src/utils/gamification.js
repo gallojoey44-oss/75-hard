@@ -16,16 +16,49 @@ export function getMWDComplete(dayData) {
 
 // ─── Ranks ──────────────────────────────────────────────────────────────────
 
+// XP thresholds and names are frozen — never change them (rank history and
+// user progression depend on them). `philosophy` is a short identity line shown
+// in the rank-up ceremony and on the XP Ladder.
 export const RANKS = [
-  { rank: 1, name: 'Initiate',      minXP: 0,     desc: 'You began.' },
-  { rank: 2, name: 'Apprentice',    minXP: 250,   desc: 'You are learning consistency.' },
-  { rank: 3, name: 'Disciplined',   minXP: 750,   desc: 'You keep promises more often.' },
-  { rank: 4, name: 'Resilient',     minXP: 1500,  desc: 'You return after setbacks.' },
-  { rank: 5, name: 'Warrior',       minXP: 3000,  desc: 'You execute under pressure.' },
-  { rank: 6, name: 'Elite Warrior', minXP: 5000,  desc: 'Discipline is becoming identity.' },
-  { rank: 7, name: 'True Warrior',  minXP: 7500,  desc: 'You act from principle, not mood.' },
-  { rank: 8, name: 'Unbreakable',   minXP: 10000, desc: 'You are hard to derail.' },
+  { rank: 1, name: 'Initiate',      minXP: 0,     desc: 'You began.',                        philosophy: 'You chose to begin.' },
+  { rank: 2, name: 'Apprentice',    minXP: 250,   desc: 'You are learning consistency.',     philosophy: 'You are learning to show up.' },
+  { rank: 3, name: 'Disciplined',   minXP: 750,   desc: 'You keep promises more often.',     philosophy: 'You learned to show up.' },
+  { rank: 4, name: 'Resilient',     minXP: 1500,  desc: 'You return after setbacks.',        philosophy: 'You continue even when motivation disappears.' },
+  { rank: 5, name: 'Warrior',       minXP: 3000,  desc: 'You execute under pressure.',       philosophy: 'You execute under pressure.' },
+  { rank: 6, name: 'Elite Warrior', minXP: 5000,  desc: 'Discipline is becoming identity.',  philosophy: 'You protect your standards.' },
+  { rank: 7, name: 'True Warrior',  minXP: 7500,  desc: 'You act from principle, not mood.', philosophy: 'You act from principle, not mood.' },
+  { rank: 8, name: 'Unbreakable',   minXP: 10000, desc: 'You are hard to derail.',           philosophy: 'Your habits now define you.' },
 ];
+
+// ─── Rank rewards ─────────────────────────────────────────────────────────────
+// Each rank permanently unlocks one cosmetic/achievement. Purely additive and
+// keyed by rank number so future cosmetics only need a new entry here. Unlocked
+// rewards are derived from the highest rank ever reached (persisted), so they
+// are permanent and survive new challenges.
+export const RANK_REWARDS = {
+  1: { type: 'achievement',   icon: '🔥', label: 'Forge Initiate',        desc: 'Your journey begins.' },
+  2: { type: 'badge',         icon: '🥉', label: 'Apprentice Badge',      desc: 'Consistency badge unlocked.' },
+  3: { type: 'quoteCategory', icon: '📜', label: 'Discipline Quotes',     desc: 'A new quote category is unlocked.' },
+  4: { type: 'banner',        icon: '🌄', label: 'Resilient Banner',      desc: 'A new profile banner accent.' },
+  5: { type: 'iconAccent',    icon: '⚔️', label: 'Warrior Accent',        desc: 'A gold accent for your rank badge.' },
+  6: { type: 'badge',         icon: '💠', label: 'Elite Badge',           desc: 'Elite Warrior badge unlocked.' },
+  7: { type: 'banner',        icon: '👑', label: 'True Warrior Banner',   desc: 'A premium banner accent.' },
+  8: { type: 'achievement',   icon: '🏛', label: 'Unbreakable',           desc: 'The final rank achievement.' },
+};
+
+export function getRankReward(rank) {
+  return RANK_REWARDS[rank] || null;
+}
+
+/** All rewards unlocked up to and including the highest rank reached. */
+export function getUnlockedRewards(highestRank) {
+  const out = [];
+  for (let r = 1; r <= (highestRank || 0); r++) {
+    const reward = RANK_REWARDS[r];
+    if (reward) out.push({ rank: r, name: RANKS[r - 1]?.name, ...reward });
+  }
+  return out;
+}
 
 export function getRankInfo(xp) {
   let current = RANKS[0];
@@ -41,6 +74,94 @@ export function getRankInfo(xp) {
     ? Math.round(((xp - current.minXP) / (next.minXP - current.minXP)) * 100)
     : 100;
   return { current, next, progress, xp };
+}
+
+// ─── Growth summary ("You Have Grown") ───────────────────────────────────────
+// Builds evidence of change from a merged, date-sorted timeline of logged days
+// (see archiveUtils.buildTimeline). Only metrics with enough real data are
+// returned; anything without sufficient history is omitted so nothing is faked.
+
+function fmtHours(h) {
+  const hrs = Math.floor(h);
+  const m = Math.round((h - hrs) * 60);
+  return `${hrs}h ${String(m).padStart(2, '0')}m`;
+}
+
+/**
+ * @param timeline entries: { date, data, tasks, source }
+ * @param opts { streak }
+ * Returns an ordered array of { icon, label, before?, after?, value? }.
+ */
+export function computeGrowthSummary(timeline, opts = {}) {
+  const entries = timeline || [];
+  const out = [];
+
+  // Before/after for a numeric rating field (mood/confidence/hoursSlept).
+  const beforeAfter = (key) => {
+    const vals = entries.filter(e => (e.data?.[key] || 0) > 0);
+    if (vals.length < 4) return null; // not enough history to be meaningful
+    const half = Math.min(3, Math.floor(vals.length / 2));
+    const avg = arr => arr.reduce((s, e) => s + e.data[key], 0) / arr.length;
+    return { before: avg(vals.slice(0, half)), after: avg(vals.slice(-half)) };
+  };
+
+  const mood = beforeAfter('mood');
+  if (mood) out.push({ icon: '📈', label: 'Mood', before: mood.before.toFixed(1), after: mood.after.toFixed(1) });
+
+  const conf = beforeAfter('confidence');
+  if (conf) out.push({ icon: '💪', label: 'Confidence', before: conf.before.toFixed(1), after: conf.after.toFixed(1) });
+
+  const sleep = beforeAfter('hoursSlept');
+  if (sleep) out.push({ icon: '😴', label: 'Average Sleep', before: fmtHours(sleep.before), after: fmtHours(sleep.after) });
+
+  const mental = entries.filter(e => e.data?.mentalTraining?.completed).length;
+  if (mental > 0) out.push({ icon: '🧠', label: 'Mental Training Sessions', value: String(mental) });
+
+  const bonus = entries.reduce((s, e) => s + Object.keys(e.data?.bonusDone || {}).length, 0);
+  if (bonus > 0) out.push({ icon: '🏆', label: 'Bonus Missions Completed', value: String(bonus) });
+
+  const streak = opts.streak || 0;
+  if (streak > 0) out.push({ icon: '🔥', label: 'Current Streak', value: `${streak} ${streak === 1 ? 'day' : 'days'}` });
+
+  return out;
+}
+
+// ─── Future Self message ─────────────────────────────────────────────────────
+// A short encouraging message shown after the growth summary. When the user
+// wrote a Future Self letter it is composed FROM their own words (quoted, never
+// modified). This is a deterministic, offline generator — a PWA has no LLM
+// backend — so it always works and never sends user data anywhere.
+
+function firstSentence(text) {
+  const t = (text || '').trim().replace(/\s+/g, ' ');
+  const m = t.match(/^(.{0,140}?[.!?])(\s|$)/);
+  let s = m ? m[1] : t.slice(0, 140);
+  if (!m && t.length > 140) s += '…';
+  return s;
+}
+
+export function buildFutureSelfMessage(letter) {
+  const why = (letter?.why || '').trim();
+  if (!why) {
+    return {
+      hasLetter: false,
+      title: 'A word from Forge',
+      lines: [
+        'The version of you that started this is proud.',
+        'Discipline is becoming who you are.',
+        'Keep going.',
+      ],
+    };
+  }
+  return {
+    hasLetter: true,
+    title: 'A message from your past self',
+    lines: [
+      'Remember why you started.',
+      `You wrote: “${firstSentence(why)}”`,
+      'The person who wrote that knew this would be hard. Keep going.',
+    ],
+  };
 }
 
 // ─── Badges ─────────────────────────────────────────────────────────────────

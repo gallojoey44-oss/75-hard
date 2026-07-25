@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
 import QuoteOfTheDay from './QuoteOfTheDay';
+import RankUpCeremony from './RankUpCeremony';
 import {
   computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
+  getRankReward, getUnlockedRewards, computeGrowthSummary, buildFutureSelfMessage,
 } from '../utils/gamification';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
@@ -196,7 +198,9 @@ function XPWidget({ rankInfo, challengeXP, todayXP, onToggleDetails, showDetails
   );
 }
 
-function RankLadderCard({ rankInfo }) {
+function RankLadderCard({ rankInfo, rankHistory = [], highestRank = 0 }) {
+  const legends = [...rankHistory].sort((a, b) => a.rank - b.rank);
+  const rewards = getUnlockedRewards(highestRank);
   return (
     <div className="rank-ladder-card">
       <div className="rank-details-title">🪜 Rank Ladder</div>
@@ -241,6 +245,7 @@ function RankLadderCard({ rankInfo }) {
               </span>
               <div className="rank-ladder-info">
                 <div className="rank-ladder-name">{r.name}</div>
+                <div className="rank-ladder-phil">{r.philosophy}</div>
                 <div className="rank-ladder-desc">{r.desc}</div>
               </div>
               <span className="rank-ladder-xp">{r.minXP.toLocaleString()} XP</span>
@@ -248,6 +253,49 @@ function RankLadderCard({ rankInfo }) {
           );
         })}
       </div>
+
+      {/* 🏛 Hall of Legends — every rank ever earned, permanently recorded */}
+      <div className="hall-of-legends">
+        <div className="rank-details-title">🏛 Hall of Legends</div>
+        {legends.length === 0 ? (
+          <p className="hall-empty">Your earned ranks will be recorded here forever.</p>
+        ) : (
+          <div className="hall-list">
+            {legends.map(h => (
+              <div key={h.rank} className="hall-row">
+                <span className="hall-rank">#{h.rank}</span>
+                <div className="hall-info">
+                  <div className="hall-name">{h.name}</div>
+                  {h.philosophy && <div className="hall-phil">{h.philosophy}</div>}
+                </div>
+                <div className="hall-meta">
+                  <div className="hall-date">{h.date ? formatDateShort(h.date) : 'Earned'}</div>
+                  <div className="hall-xp">{(h.lifetimeXP || 0).toLocaleString()} XP</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 🎁 Rewards unlocked (permanent, derived from highest rank reached) */}
+      {rewards.length > 0 && (
+        <div className="rank-rewards">
+          <div className="rank-details-title">🎁 Rewards Unlocked</div>
+          <div className="rank-rewards-list">
+            {rewards.map(rw => (
+              <div key={rw.rank} className="rank-reward-row">
+                <span className="rank-reward-icon">{rw.icon}</span>
+                <div className="rank-reward-info">
+                  <div className="rank-reward-label">{rw.label}</div>
+                  <div className="rank-reward-desc">{rw.desc}</div>
+                </div>
+                <span className="rank-reward-rank">{rw.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -464,6 +512,7 @@ export default function Dashboard({ setView }) {
     startChallenge, isForgeDaily, completeChallenge, dismissCompletion, startForgeDaily,
     setActiveProfile,
     startComeback, dismissComeback, completeComeback,
+    initRankBaseline, recordRankUp,
   } = useApp();
 
   const [showSwitch, setShowSwitch] = useState(false);
@@ -471,7 +520,9 @@ export default function Dashboard({ setView }) {
   const [showRankLadder, setShowRankLadder] = useState(false);
   const [showNextGoal, setShowNextGoal] = useState(false);
   const [xpAnim, setXpAnim] = useState(null);
+  const [rankCeremony, setRankCeremony] = useState(null);
   const prevXpRef = useRef(null);
+  const rankHandledRef = useRef({}); // { [profileId]: rank } — guards duplicate triggers this session
 
   const meta        = getChallengeMeta();
   const isBaseline  = isForgeDaily();
@@ -538,6 +589,32 @@ export default function Dashboard({ setView }) {
     prevXpRef.current = lifetimeXP;
   }, [lifetimeXP]);
 
+  // Lifetime Rank detection → ceremony. Existing users are baselined silently on
+  // first load (no retroactive ceremony); only a genuine new rank triggers it,
+  // and the persisted highestRank guarantees it never replays.
+  useEffect(() => {
+    if (!activeProfile) return;
+    const cur = rankInfo.current.rank;
+    const stored = profile?.highestRank;
+    if (stored == null) { initRankBaseline(activeProfile, cur); return; }
+    if (cur > stored && rankHandledRef.current[activeProfile] !== cur) {
+      rankHandledRef.current[activeProfile] = cur;
+      recordRankUp(activeProfile, stored, cur, lifetimeXP);
+      const growth = computeGrowthSummary(timeline, { streak });
+      const letter = meta.futureSelfLetter
+        || [...profileArchives].reverse().map(a => a.challenge?.futureSelfLetter).find(Boolean)
+        || null;
+      setRankCeremony({
+        fromRank: stored,
+        toRank: cur,
+        growth,
+        futureSelf: buildFutureSelfMessage(letter),
+        reward: getRankReward(cur),
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProfile, rankInfo.current.rank, profile?.highestRank, lifetimeXP]);
+
   // Challenge Complete screen takes priority — shown once after a challenge ends
   if (profile?.lastCompletion) {
     return (
@@ -595,6 +672,16 @@ export default function Dashboard({ setView }) {
   return (
     <div className="dashboard">
       <BuildBanner />
+      {rankCeremony && (
+        <RankUpCeremony
+          fromRank={rankCeremony.fromRank}
+          toRank={rankCeremony.toRank}
+          growth={rankCeremony.growth}
+          futureSelf={rankCeremony.futureSelf}
+          reward={rankCeremony.reward}
+          onClose={() => setRankCeremony(null)}
+        />
+      )}
       <div className="dash-top">
         <div className="dash-profile-info">
           <span className="dash-emoji">{profile.emoji}</span>
@@ -639,7 +726,13 @@ export default function Dashboard({ setView }) {
       </div>
 
       {/* Rank ladder (expandable) */}
-      {showRankLadder && <RankLadderCard rankInfo={rankInfo} />}
+      {showRankLadder && (
+        <RankLadderCard
+          rankInfo={rankInfo}
+          rankHistory={profile.rankHistory || []}
+          highestRank={profile.highestRank ?? rankInfo.current.rank}
+        />
+      )}
 
       {/* Rank details (expandable) */}
       {showRankDetails && (

@@ -4428,3 +4428,138 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .bonus-recurring-toggle { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .bonus-seg { padding: 7px 12px; font-size: 12px; background: var(--card2); color: var(--text2); border: none; cursor: pointer; }
 .bonus-seg.active { background: var(--accent2, #FFB347); color: #1a1a1a; font-weight: 700; }
+
+/* ── Rank-Up Ceremony ───────────────────────────────────────────────────── */
+.rankup-overlay {
+  position: fixed; inset: 0; z-index: 4000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  background: radial-gradient(circle at 50% 40%, rgba(40,20,70,0.92), rgba(8,6,16,0.97));
+  animation: rankup-fadein 420ms ease;
+  overflow: hidden;
+}
+@keyframes rankup-fadein { from { opacity: 0; } to { opacity: 1; } }
+
+.rankup-particles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.rankup-ember {
+  position: absolute; bottom: -20px; border-radius: 50%;
+  background: radial-gradient(circle, #b98bff 0%, #7c3aed 60%, rgba(124,58,237,0) 100%);
+  box-shadow: 0 0 10px 2px rgba(147,90,255,0.55);
+  animation-name: rankup-rise; animation-timing-function: ease-out; animation-iteration-count: infinite;
+  opacity: 0;
+}
+.rankup-ember.gold {
+  background: radial-gradient(circle, #ffe08a 0%, #f5b23a 60%, rgba(245,178,58,0) 100%);
+  box-shadow: 0 0 10px 2px rgba(245,178,58,0.6);
+}
+@keyframes rankup-rise {
+  0%   { transform: translateY(0) scale(1); opacity: 0; }
+  15%  { opacity: 0.9; }
+  100% { transform: translateY(-108vh) scale(0.4); opacity: 0; }
+}
+.rankup-spark {
+  position: absolute; width: 3px; height: 3px; border-radius: 50%;
+  background: #ffe9b0; box-shadow: 0 0 8px 2px rgba(255,215,120,0.9);
+  animation-name: rankup-spark; animation-timing-function: ease-out; animation-iteration-count: infinite;
+  opacity: 0;
+}
+@keyframes rankup-spark {
+  0% { transform: scale(0); opacity: 0; }
+  40% { transform: scale(1.6); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+.rankup-skip {
+  position: absolute; top: 16px; right: 16px; z-index: 2;
+  background: rgba(255,255,255,0.08); color: #cbb8ff; border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.rankup-content {
+  position: relative; z-index: 1; width: 100%; max-width: 420px;
+  text-align: center; color: #f4f0ff;
+  max-height: 92vh; overflow-y: auto;
+}
+.rankup-phase { animation: rankup-phasein 500ms ease both; }
+@keyframes rankup-phasein { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+.rankup-title {
+  font-size: 26px; font-weight: 900; letter-spacing: 1px; margin-bottom: 18px;
+  background: linear-gradient(90deg, #c4a0ff, #ffd47a); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.rankup-transition { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.rankup-oldrank { font-size: 16px; color: #9a8fc0; animation: rankup-oldfade 900ms ease both; }
+@keyframes rankup-oldfade { 0% { opacity: 1; } 100% { opacity: 0.35; } }
+.rankup-arrow { font-size: 20px; color: #8a7fb5; }
+.rankup-badge {
+  width: 104px; height: 104px; border-radius: 50%; margin: 6px auto;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 35% 30%, #a06bff, #6d28d9 70%);
+  border: 3px solid #ffd47a;
+  box-shadow: 0 0 26px 6px rgba(160,107,255,0.55), inset 0 0 18px rgba(255,212,122,0.4);
+  animation: rankup-badgein 900ms cubic-bezier(0.2, 0.9, 0.2, 1.2) both, rankup-pulse 2.4s ease-in-out 0.9s infinite;
+}
+.rankup-badge-num { font-size: 44px; font-weight: 900; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+@keyframes rankup-badgein { 0% { transform: scale(0.2); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes rankup-pulse { 0%,100% { box-shadow: 0 0 26px 6px rgba(160,107,255,0.5), inset 0 0 18px rgba(255,212,122,0.4); } 50% { box-shadow: 0 0 40px 12px rgba(160,107,255,0.75), inset 0 0 22px rgba(255,212,122,0.6); } }
+.rankup-newrank {
+  font-size: 30px; font-weight: 900; margin-top: 6px;
+  background: linear-gradient(90deg, #d9c4ff, #ffde96); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.rankup-philosophy { font-size: 15px; color: #d7ccff; margin: 10px 0 4px; font-style: italic; }
+
+.rankup-xpbar { height: 8px; border-radius: 6px; background: rgba(255,255,255,0.12); overflow: hidden; margin: 16px auto; max-width: 260px; }
+.rankup-xpbar-fill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #7c3aed, #ffd47a);
+  border-radius: 6px; animation: rankup-fill 1400ms ease-out 0.3s forwards;
+}
+@keyframes rankup-fill { from { width: 0; } to { width: 100%; } }
+
+.rankup-reward {
+  margin: 14px auto; max-width: 320px;
+  background: rgba(255,212,122,0.08); border: 1px solid rgba(255,212,122,0.3); border-radius: 12px; padding: 12px;
+}
+.rankup-reward-head { font-size: 13px; font-weight: 800; color: #ffd47a; margin-bottom: 8px; letter-spacing: 0.5px; }
+.rankup-reward-item { display: flex; align-items: center; gap: 10px; text-align: left; }
+.rankup-reward-icon { font-size: 26px; }
+.rankup-reward-text { display: flex; flex-direction: column; }
+.rankup-reward-desc { font-size: 12px; color: #b9addb; }
+.rankup-quote { font-size: 15px; line-height: 1.6; color: #efe9ff; margin: 16px auto; max-width: 320px; }
+.rankup-btn { margin-top: 8px; min-width: 200px; }
+
+.rankup-heading { font-size: 22px; font-weight: 800; margin-bottom: 16px; color: #f4f0ff; }
+.rankup-growth-grid { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.rankup-growth-item { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px 14px; text-align: left; }
+.rankup-growth-label { font-size: 13px; color: #c8bce8; margin-bottom: 4px; }
+.rankup-growth-value { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+.rankup-growth-before { color: #9a8fc0; }
+.rankup-growth-arrow { color: #ffd47a; }
+.rankup-growth-after { color: #fff; }
+.rankup-growth-empty { color: #b9addb; font-size: 14px; margin-bottom: 18px; }
+.rankup-futureself { font-size: 16px; line-height: 1.7; color: #efe9ff; margin-bottom: 20px; }
+.rankup-futureself p { margin: 10px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rankup-overlay, .rankup-phase, .rankup-badge, .rankup-xpbar-fill, .rankup-oldrank { animation: none !important; }
+  .rankup-xpbar-fill { width: 100%; }
+}
+
+/* ── Rank Ladder additions: philosophy, Hall of Legends, Rewards ─────────── */
+.rank-ladder-phil { font-size: 12px; color: var(--accent2, #FFB347); font-style: italic; margin: 1px 0; }
+.hall-of-legends, .rank-rewards { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.hall-empty { font-size: 13px; color: var(--text3); }
+.hall-list, .rank-rewards-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.hall-row { display: flex; align-items: center; gap: 10px; background: var(--card2); border-radius: 10px; padding: 8px 10px; }
+.hall-rank { font-weight: 800; color: var(--accent, #7c3aed); font-size: 13px; min-width: 28px; }
+.hall-info { flex: 1; min-width: 0; }
+.hall-name { font-weight: 600; font-size: 14px; }
+.hall-phil { font-size: 11px; color: var(--text3); font-style: italic; }
+.hall-meta { text-align: right; flex-shrink: 0; }
+.hall-date { font-size: 12px; color: var(--text2); }
+.hall-xp { font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; }
+.rank-reward-row { display: flex; align-items: center; gap: 10px; background: var(--card2); border-radius: 10px; padding: 8px 10px; }
+.rank-reward-icon { font-size: 22px; flex-shrink: 0; }
+.rank-reward-info { flex: 1; min-width: 0; }
+.rank-reward-label { font-weight: 600; font-size: 14px; }
+.rank-reward-desc { font-size: 11px; color: var(--text3); }
+.rank-reward-rank { font-size: 11px; color: var(--text2); flex-shrink: 0; }
