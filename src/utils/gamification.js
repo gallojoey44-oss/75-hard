@@ -1,3 +1,5 @@
+import { getDayNumberFromStart } from './dateUtils.js';
+
 // ─── Minimum Warrior Day ────────────────────────────────────────────────────
 
 export const MWD_TASKS = [
@@ -277,13 +279,22 @@ export function getBonusCount(dayData) {
  * Compute XP gained and lost for a single day.
  * Returns { gained, lost } — both non-negative.
  * dayNum > currentDayNum: no XP (future days).
+ *
+ * Miss penalties are only ever charged for a STRICTLY-PAST day
+ * (dayNum < currentRawDay). The current, in-progress day awards earned XP
+ * immediately but is never penalised for unchecked tasks — it has not been
+ * finalised yet (that happens once the local calendar day ends). `currentRawDay`
+ * is the uncapped local day number; it defaults to currentDayNum so callers that
+ * only track a single "today" still get correct (penalty-free) current-day XP.
  */
-export function computeDayXP(dayData, tasks, profId, dayNum, currentDayNum, penaltiesEnabled) {
+export function computeDayXP(dayData, tasks, profId, dayNum, currentDayNum, penaltiesEnabled, currentRawDay = currentDayNum) {
   if (dayNum > currentDayNum) return { gained: 0, lost: 0 };
+  const isPast = dayNum < currentRawDay;
 
-  // Entire day missed (past day with zero activity)
+  // Entire day missed — only a finalised (past) day incurs the flat penalty.
+  // An untouched current day stays neutral (nothing missed yet).
   if (!hasAnyActivity(dayData)) {
-    return { gained: 0, lost: penaltiesEnabled ? 25 : 0 };
+    return { gained: 0, lost: (penaltiesEnabled && isPast) ? 25 : 0 };
   }
 
   let gained = 0;
@@ -294,11 +305,12 @@ export function computeDayXP(dayData, tasks, profId, dayNum, currentDayNum, pena
 
   // Task XP — per-task weighting when the task carries an xp value, otherwise
   // the flat high-value scheme. Keystone habits earn significantly more.
+  // Unchecked tasks only cost XP once the day is finalised (isPast).
   for (const task of tasks) {
     const done = !!dayData.tasks?.[task.id];
     if (done) {
       gained += getTaskXP(task);
-    } else if (penaltiesEnabled) {
+    } else if (penaltiesEnabled && isPast) {
       lost += Math.round(taskMissPenalty(task) * penaltyMult);
     }
   }
@@ -345,7 +357,7 @@ const STREAK_MILESTONES = [
  * Each new streak that hits a milestone earns the bonus (can be earned multiple times).
  * Break penalty (-30) fires once per streak break, only if streak was ≥ 3.
  */
-export function computeStreakEvents(allDays, profId, getDayCompletion, dayNum, penaltiesEnabled) {
+export function computeStreakEvents(allDays, profId, getDayCompletion, dayNum, penaltiesEnabled, currentRawDay = dayNum + 1) {
   const profDays = allDays[profId] || {};
   let gained = 0;
   let lost   = 0;
@@ -365,7 +377,9 @@ export function computeStreakEvents(allDays, profId, getDayCompletion, dayNum, p
         }
       }
     } else {
-      if (penaltiesEnabled && streak >= 3) {
+      // A streak break only costs XP for a finalised (past) day. Today being
+      // incomplete does not break — and penalise — a streak before it ends.
+      if (penaltiesEnabled && streak >= 3 && i < currentRawDay) {
         lost += 30;
         events.push({ day: i, type: 'streak_break', xp: -30, label: 'Streak broken' });
       }
@@ -423,25 +437,43 @@ function scoreDayRequired(dayData, tasks) {
 }
 
 /**
- * Weighted required-XP Challenge Score over elapsed days. Returns null for
- * open-ended baselines (Forge Daily) or when there is nothing scorable yet.
+ * Weighted required-XP Challenge Score. Returns null for open-ended baselines
+ * (Forge Daily) or when there is nothing scorable yet.
+ *
+ * Current-day-neutral rule: `currentRawDay` is the user's uncapped local day
+ * number. Every day strictly before it is FINALISED — its full required-XP
+ * slate is in the denominator and unchecked tasks count as missed. The current
+ * (in-progress) day is NEUTRAL — only COMPLETED tasks add to both the numerator
+ * and the denominator, so the score never drops merely because today's tasks
+ * are still unchecked. When the day ends and `currentRawDay` advances, that day
+ * finalises automatically (this is a pure derived value, so finalisation is
+ * idempotent and needs no stored record — it re-derives from the local date
+ * every render, correct across reloads, timezones, and DST).
  */
-export function computeChallengeScore(allDays, profiles, profId, dayNum) {
+export function computeChallengeScore(allDays, profiles, profId, currentRawDay) {
   const prof = profiles[profId];
   const meta = prof?.activeChallenge;
   const duration = meta?.durationDays;
   const tasks = prof?.tasks || [];
-  if (!duration || !dayNum || tasks.length === 0) return null;
+  if (!duration || !currentRawDay || tasks.length === 0) return null;
   const profDays = allDays[profId] || {};
-  const elapsed = Math.min(dayNum, duration);
   const keystoneTasks = tasks.filter(isKeystone);
+  const fullDayAvail = tasks.reduce((s, t) => s + getTaskXP(t), 0);
+
+  // Today (in progress) counts completed tasks only; every earlier day is
+  // finalised. Once the challenge overruns its duration there is no in-progress
+  // day — everything is finalised.
+  const inProgressDay = currentRawDay <= duration ? currentRawDay : null;
+  const finalizedThrough = Math.min(currentRawDay - 1, duration);
 
   let earned = 0, available = 0, ksDone = 0, ksTotal = 0;
-  let completedDays = 0, missedDays = 0, scoredDays = 0, mwdDays = 0;
-  for (let i = 1; i <= elapsed; i++) {
+  let completedDays = 0, missedDays = 0, finalizedDays = 0, mwdDays = 0;
+
+  // ── Finalised (past) days — full slate in the denominator; unchecked = missed.
+  for (let i = 1; i <= finalizedThrough; i++) {
     const d = profDays[i];
     if (d?.isMWD) { mwdDays++; continue; } // protected — excluded from scoring
-    scoredDays++;
+    finalizedDays++;
     const s = scoreDayRequired(d, tasks);
     earned += s.earned; available += s.available;
     const doneCount = d ? tasks.filter(t => d.tasks?.[t.id]).length : 0;
@@ -449,13 +481,49 @@ export function computeChallengeScore(allDays, profiles, profId, dayNum) {
     if (!d || doneCount === 0) missedDays++;
     for (const kt of keystoneTasks) { ksTotal++; if (d?.tasks?.[kt.id]) ksDone++; }
   }
+
+  // ── In-progress day (today) — NEUTRAL. Only completed tasks move the score;
+  // unchecked tasks are not counted (not yet missed) on either side.
+  let todayEvaluated = 0, todayScored = false, hasInProgress = false;
+  if (inProgressDay && inProgressDay > finalizedThrough) {
+    const d = profDays[inProgressDay];
+    if (d?.isMWD) {
+      mwdDays++;
+    } else if (d) {
+      hasInProgress = true;
+      for (const t of tasks) {
+        if (d.tasks?.[t.id]) { const xp = getTaskXP(t); earned += xp; available += xp; todayEvaluated += xp; }
+      }
+      // Keystone adherence stays neutral too — today's keystones only count once
+      // completed; an unchecked keystone today is not held against the user yet.
+      for (const kt of keystoneTasks) { if (d.tasks?.[kt.id]) { ksTotal++; ksDone++; } }
+      if (todayEvaluated > 0) todayScored = true;
+      const doneCount = tasks.filter(t => d.tasks?.[t.id]).length;
+      if (tasks.length && doneCount === tasks.length) completedDays++;
+    }
+  }
+
+  const scoredDays = finalizedDays + (todayScored ? 1 : 0);
   const score = available > 0 ? Math.round((earned / available) * 100) : 0;
   const keystoneAdherence = ksTotal > 0 ? Math.round((ksDone / ksTotal) * 100) : 100;
+
+  // Required XP still to be evaluated before the challenge ends: today's
+  // not-yet-completed slate + every full future day (an estimate input only).
+  const todayRemaining = hasInProgress ? Math.max(0, fullDayAvail - todayEvaluated) : (inProgressDay ? fullDayAvail : 0);
+  const futureDays = inProgressDay ? Math.max(0, duration - inProgressDay) : 0;
+  const remainingAvailable = todayRemaining + futureDays * fullDayAvail;
+  const elapsed = Math.min(currentRawDay, duration);
+
   return {
     score, requiredEarned: earned, requiredAvailable: available,
     keystoneAdherence, keystoneCount: keystoneTasks.length,
-    completedDays, missedDays, scoredDays, mwdDays, elapsed, duration,
+    completedDays, missedDays, scoredDays, finalizedDays, mwdDays,
+    inProgressDay: (inProgressDay && inProgressDay > finalizedThrough) ? inProgressDay : null,
+    elapsed, duration, remainingAvailable, fullDayAvail,
     hasData: scoredDays > 0 && available > 0,
+    // A confirmed score requires at least one finalised day. Before that (the
+    // very first day), the score is "still building" rather than a real figure.
+    hasConfirmed: finalizedDays > 0,
   };
 }
 
@@ -480,22 +548,32 @@ export function getPerformanceStatus(score) {
   return PERF_STATUS.needs;
 }
 
-/** Per-task completion % across elapsed (non-MWD) days. */
-export function computeTaskBreakdown(allDays, profiles, profId, dayNum) {
+/**
+ * Per-task completion % across finalised (non-MWD) days, plus the in-progress
+ * day counted neutrally: a completed task today adds to both done and total; an
+ * unchecked task today is skipped so it never drags the task's percentage before
+ * the day ends. Mirrors the current-day-neutral rule in computeChallengeScore.
+ */
+export function computeTaskBreakdown(allDays, profiles, profId, currentRawDay) {
   const prof = profiles[profId];
   const meta = prof?.activeChallenge;
   const duration = meta?.durationDays;
   const tasks = prof?.tasks || [];
-  if (!duration || !dayNum || !tasks.length) return [];
+  if (!duration || !currentRawDay || !tasks.length) return [];
   const profDays = allDays[profId] || {};
-  const elapsed = Math.min(dayNum, duration);
+  const inProgressDay = currentRawDay <= duration ? currentRawDay : null;
+  const finalizedThrough = Math.min(currentRawDay - 1, duration);
   return tasks.map(t => {
     let done = 0, total = 0;
-    for (let i = 1; i <= elapsed; i++) {
+    for (let i = 1; i <= finalizedThrough; i++) {
       const d = profDays[i];
       if (d?.isMWD) continue;
       total++;
       if (d?.tasks?.[t.id]) done++;
+    }
+    if (inProgressDay && inProgressDay > finalizedThrough) {
+      const d = profDays[inProgressDay];
+      if (d && !d.isMWD && d.tasks?.[t.id]) { done++; total++; }
     }
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     return { id: t.id, name: t.name, done, total, pct, keystone: getTaskKeystone(t) };
@@ -510,10 +588,14 @@ export function computeTaskBreakdown(allDays, profiles, profId, dayNum) {
 export function projectFinalScore(scoreObj, meta) {
   if (!scoreObj || !scoreObj.hasData) return null;
   const cfg = getPassingConfig(meta);
-  const perDayAvail = scoreObj.scoredDays > 0 ? scoreObj.requiredAvailable / scoreObj.scoredDays : 0;
+  // Required XP still to be evaluated (today's unfinished slate + full future
+  // days) comes straight from the score object so the projection never treats
+  // an in-progress day as finished at 0%.
+  const remainingAvail = scoreObj.remainingAvailable ?? 0;
   const remainingDays = Math.max(0, scoreObj.duration - scoreObj.elapsed);
+  // Estimate future performance at the current confirmed rate (neutral — not an
+  // assumption that today ends at 0%).
   const rate = scoreObj.requiredAvailable > 0 ? scoreObj.requiredEarned / scoreObj.requiredAvailable : 0;
-  const remainingAvail = Math.round(perDayAvail * remainingDays);
   const projEarned = scoreObj.requiredEarned + rate * remainingAvail;
   const projAvail = scoreObj.requiredAvailable + remainingAvail;
   const projected = projAvail > 0 ? Math.round((projEarned / projAvail) * 100) : scoreObj.score;
@@ -526,6 +608,8 @@ export function projectFinalScore(scoreObj, meta) {
     remainingAvailable: remainingAvail,
     needRemaining: Math.min(needRemaining, remainingAvail),
     passingScore: cfg.passingScore,
+    // Too little confirmed history to project meaningfully (no finalised day yet).
+    insufficient: (scoreObj.finalizedDays ?? 0) === 0,
   };
 }
 
@@ -539,13 +623,16 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
   const penaltiesOn    = profiles[profId]?.xpPenalties !== false;
   const xpStartDay     = profiles[profId]?.xpStartDay ?? 1;
   const xpOffset       = profiles[profId]?.xpOffset ?? 0;
+  // Uncapped local day — the boundary between finalised past days (which can
+  // incur miss penalties) and the neutral, penalty-free current day.
+  const rawDay         = getDayNumberFromStart(profiles[profId]?.challengeStart) ?? currentDayNum ?? dayNum;
 
   let totalGained = 0;
   let totalLost   = 0;
 
   // Day-level XP (only days within the active range)
   for (let i = xpStartDay; i <= dayNum; i++) {
-    const { gained, lost } = computeDayXP(profDays[i], tasks, profId, i, currentDayNum, penaltiesOn);
+    const { gained, lost } = computeDayXP(profDays[i], tasks, profId, i, currentDayNum, penaltiesOn, rawDay);
     totalGained += gained;
     totalLost   += lost;
   }
@@ -554,7 +641,7 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
   const { gained: sG, lost: sL } = computeStreakEvents(
     allDays, profId,
     (n, p) => (n >= xpStartDay ? getDayCompletion(n, p) : 0),
-    dayNum, penaltiesOn
+    dayNum, penaltiesOn, rawDay
   );
   totalGained += sG;
   totalLost   += sL;
@@ -571,7 +658,7 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
   if (meta?.durationDays && dayNum >= meta.durationDays) {
     const cfg = getPassingConfig(meta);
     if (cfg.completionBonus > 0) {
-      const sc = computeChallengeScore(allDays, profiles, profId, dayNum);
+      const sc = computeChallengeScore(allDays, profiles, profId, rawDay);
       if (isChallengePassed(sc, meta)) totalGained += cfg.completionBonus;
     }
   }

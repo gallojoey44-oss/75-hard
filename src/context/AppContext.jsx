@@ -707,8 +707,12 @@ export function AppProvider({ children }) {
     const completed = meta.durationDays != null && dayNum >= meta.durationDays;
 
     // Challenge Performance snapshot (percentage score, pass/fail, bonus).
+    // Use the RAW (uncapped) local day so a finished challenge finalises every
+    // day (no in-progress day left neutral); a mid-challenge archive still gets
+    // the fair current-day-neutral score.
+    const rawDay = getDayNumberFromStart(prof.challengeStart) || 1;
     const cfg = getPassingConfig(meta);
-    const scoreObj = computeChallengeScore(allDays, profiles, profId, dayNum);
+    const scoreObj = computeChallengeScore(allDays, profiles, profId, rawDay);
     const passed = scoreObj ? isChallengePassed(scoreObj, meta) : null;
     const bonusEarned = !!(passed && cfg.completionBonus > 0);
     const totalXP = Math.max(0, xpData.rawTotal);

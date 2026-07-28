@@ -41,14 +41,17 @@ function ScoreRing({ score, passing, color }) {
 }
 
 export default function ChallengePerformance({ setView }) {
-  const { activeProfile, profile, profiles, allDays, getChallengeMeta, getDayNumber, isForgeDaily } = useApp();
+  const { activeProfile, profile, profiles, allDays, getChallengeMeta, getDayNumber, getRawDayNumber, isForgeDaily } = useApp();
   const [expanded, setExpanded] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const prevScoreRef = useRef(null);
 
   const meta = getChallengeMeta();
   const dayNum = getDayNumber();
-  const score = computeChallengeScore(allDays, profiles, activeProfile, dayNum);
+  // Score off the RAW local day so today counts neutrally: unchecked current-day
+  // tasks never drag the confirmed score, completing one raises it live.
+  const rawDay = getRawDayNumber();
+  const score = computeChallengeScore(allDays, profiles, activeProfile, rawDay);
   const cfg = getPassingConfig(meta);
 
   // Daily change feedback — meaningful updates only (crossing the passing line,
@@ -88,11 +91,19 @@ export default function ChallengePerformance({ setView }) {
   const todayData = (allDays[activeProfile] || {})[dayNum];
   const todayReq = dailyRequired(todayData, tasks);
   const todayBonus = getBonusXP(todayData);
-  const breakdown = expanded ? computeTaskBreakdown(allDays, profiles, activeProfile, dayNum) : [];
+  const breakdown = expanded ? computeTaskBreakdown(allDays, profiles, activeProfile, rawDay) : [];
 
-  const statusLine = keystoneShort
-    ? 'Passing score reached, but Keystone requirement not met.'
-    : status.message;
+  // "Building" — the very first day, before any day has finalised and before
+  // anything is completed today. There is no confirmed score to show yet.
+  const building = !score.hasConfirmed && score.requiredEarned === 0;
+  // Today is still in progress if there's an active current day with tasks left.
+  const todayInProgress = score.inProgressDay != null && todayReq.pct < 100;
+
+  const statusLine = building
+    ? 'Your Challenge Score will appear as you complete tasks and finish days.'
+    : keystoneShort
+      ? 'Passing score reached, but Keystone requirement not met.'
+      : status.message;
 
   return (
     <div className="perf-card">
@@ -106,7 +117,7 @@ export default function ChallengePerformance({ setView }) {
       <div className="perf-main">
         <ScoreRing score={score.score} passing={cfg.passingScore} color={color} />
         <div className="perf-main-info">
-          <div className="perf-row"><span>Current Score</span><strong style={{ color }}>{score.score}%</strong></div>
+          <div className="perf-row"><span>Current Score</span><strong style={{ color }}>{building ? '—' : `${score.score}%`}</strong></div>
           <div className="perf-row"><span>Passing Score</span><strong>{cfg.passingScore}%</strong></div>
           <div className="perf-passbar">
             <div className="perf-passbar-track">
@@ -118,9 +129,25 @@ export default function ChallengePerformance({ setView }) {
         </div>
       </div>
 
+      {todayInProgress && !building && (
+        <div className="perf-inprogress">
+          Today is still in progress. This is your confirmed score so far — complete
+          high-value tasks to strengthen it. Unchecked tasks today are not counted against you yet.
+        </div>
+      )}
+
       {feedback && <div key={feedback.key} className="perf-feedback">{feedback.text}</div>}
 
-      {projection && (
+      {projection && projection.insufficient && (
+        <div className="perf-projection">
+          <div className="perf-proj-row">
+            <span>📊 Projected Final Score <em>(estimate)</em></span>
+          </div>
+          <div className="perf-proj-guide">Projection will update as more days are completed.</div>
+        </div>
+      )}
+
+      {projection && !projection.insufficient && (
         <div className="perf-projection">
           <div className="perf-proj-row">
             <span>📊 Projected Final Score <em>(estimate)</em></span>
