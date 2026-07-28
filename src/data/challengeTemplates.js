@@ -635,6 +635,9 @@ export const CHALLENGE_TEMPLATES = [
     },
     success_threshold: 'complete the 75-day challenge with consistent logging and task completion',
     rewards: { xp: 2500, badge_id: 'forged_elite' },
+    // Stricter completion rules for the flagship long challenge (configurable).
+    passing_score: 80,
+    keystone_requirement: 70,
     safety_flags: {
       contraindications: ['acute injury', 'severe burnout', 'medical advice to avoid intense challenges'],
       notes: 'Use Minimum Day or Comeback Mode when needed. The goal is resilience, not self-punishment.',

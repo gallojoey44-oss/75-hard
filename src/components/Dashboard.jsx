@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
 import QuoteOfTheDay from './QuoteOfTheDay';
 import RankUpCeremony from './RankUpCeremony';
+import ChallengePerformance from './ChallengePerformance';
 import {
   computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
@@ -10,7 +11,7 @@ import {
 } from '../utils/gamification';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
-import { visibleNextGoals } from '../data/challengeTemplates';
+import { visibleNextGoals, getTemplateById } from '../data/challengeTemplates';
 import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { formatDateShort } from '../utils/dateUtils';
 
@@ -20,25 +21,53 @@ function capMode(v) {
   return v ? v.charAt(0).toUpperCase() + v.slice(1) : '';
 }
 
-function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue }) {
+function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onRetry }) {
   const badgeDefs = (summary.badges || []).map(id => BADGE_DEFS.find(b => b.id === id)).filter(Boolean);
   if (summary.badgeId && !badgeDefs.find(b => b.id === summary.badgeId)) {
     const b = BADGE_DEFS.find(x => x.id === summary.badgeId);
     if (b) badgeDefs.push(b);
   }
   const reflectionWeeks = Object.keys(summary.reflections || {}).map(Number).sort((a, b) => a - b);
+  const passed = summary.passed === true;
+  const scored = summary.scoreAvailable;
 
   return (
     <div className="dashboard">
       <BuildBanner />
       <div className="challenge-complete-screen">
-        <div className="cc-trophy">🏆</div>
-        <h2 className="cc-title">Challenge Complete</h2>
+        <div className="cc-trophy">{passed ? '🏆' : '🎗️'}</div>
+        <h2 className="cc-title">{scored ? (passed ? 'Challenge Passed' : 'Challenge Complete') : 'Challenge Complete'}</h2>
         <div className="cc-sub">
           {summary.emoji} {summary.name}{summary.variant ? ` · ${capMode(summary.variant)}` : ''} · {summary.durationDays} days
         </div>
 
-        <div className="cc-xp">+{(summary.xpEarned || 0).toLocaleString()} XP earned</div>
+        {/* Challenge Performance result */}
+        {scored ? (
+          <div className={`cc-perf ${passed ? 'pass' : 'fail'}`}>
+            <div className="cc-perf-scorebig">{summary.finalScore}%</div>
+            <div className="cc-perf-line"><span>Final Score</span><strong>{summary.finalScore}%</strong></div>
+            <div className="cc-perf-line"><span>Passing Score</span><strong>{summary.passingScore}%</strong></div>
+            {summary.keystoneAdherence != null && (
+              <div className="cc-perf-line"><span>Keystone adherence</span><strong>{summary.keystoneAdherence}% <em>(need {summary.keystoneRequirement}%)</em></strong></div>
+            )}
+            <div className="cc-xpbreak">
+              <div className="cc-xpline"><span>Task XP Earned</span><span>{(summary.taskXP || 0).toLocaleString()} XP</span></div>
+              <div className="cc-xpline"><span>Passing Bonus</span><span>{summary.bonusEarned ? `+${(summary.completionBonus || 0).toLocaleString()} XP` : 'Not Earned'}</span></div>
+              {summary.bonusXP > 0 && (
+                <div className="cc-xpline"><span>Bonus Mission XP</span><span>+{summary.bonusXP.toLocaleString()} XP</span></div>
+              )}
+              <div className="cc-xpline total"><span>Total Earned</span><span>{(summary.xpEarned || 0).toLocaleString()} XP</span></div>
+            </div>
+            {!passed && (
+              <p className="cc-fail-msg">
+                You completed the challenge period, but did not meet the passing requirements.
+                This result is information, not an identity.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="cc-perf-unavailable">Performance score unavailable for this past challenge.</div>
+        )}
 
         {badgeDefs.length > 0 && (
           <div className="cc-badges">
@@ -105,9 +134,12 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue }) {
         )}
 
         <div className="cc-actions">
-          <button className="btn btn-primary btn-full" onClick={onStartNew}>Start New Challenge</button>
-          <button className="btn btn-ghost btn-full" onClick={onViewArchive}>View Challenge Archive</button>
-          <button className="btn btn-ghost btn-full" onClick={onContinue}>Continue with Forge Daily</button>
+          {onRetry && (
+            <button className="btn btn-primary btn-full" onClick={onRetry}>Retry This Challenge</button>
+          )}
+          <button className={`btn btn-full ${onRetry ? 'btn-ghost' : 'btn-primary'}`} onClick={onStartNew}>Start New Challenge</button>
+          <button className="btn btn-ghost btn-full" onClick={onViewArchive}>Review Performance / Archive</button>
+          <button className="btn btn-ghost btn-full" onClick={onContinue}>Return to Forge Daily</button>
         </div>
       </div>
     </div>
@@ -559,6 +591,28 @@ export default function Dashboard({ setView }) {
   if (challengeDone && meta.badgeId) badgeIds.add(meta.badgeId);
   const badges = BADGE_DEFS.filter(b => badgeIds.has(b.id));
 
+  // Retry the just-completed challenge at the same difficulty.
+  function handleRetry() {
+    const s = profile?.lastCompletion;
+    const tpl = s?.templateId ? getTemplateById(s.templateId) : null;
+    if (tpl && tpl.start_flow === 'variant' && s.variant && tpl.variants?.[s.variant]?.start_tasks) {
+      startChallenge(undefined, {
+        challenge: {
+          templateId: tpl.id, name: tpl.challenge_name, emoji: tpl.emoji, variant: s.variant,
+          durationDays: s.durationDays, templateVersion: tpl.template_version || 1,
+          rewardXP: tpl.rewards?.xp || 0, completionBonusXP: tpl.rewards?.xp || 0,
+          passingScore: tpl.passing_score ?? 75, keystoneRequirement: tpl.keystone_requirement ?? 65,
+          badgeId: tpl.rewards?.badge_id || null,
+        },
+        tasks: tpl.variants[s.variant].start_tasks,
+        bonusMissions: tpl.bonus_missions || [],
+      });
+    } else {
+      startChallenge(); // legacy / default challenge
+    }
+    setView('today');
+  }
+
   function pickNextGoal(goal) {
     setShowNextGoal(false);
     setView('challenges');
@@ -624,6 +678,7 @@ export default function Dashboard({ setView }) {
           onStartNew={() => setShowNextGoal(true)}
           onViewArchive={() => setView('settings')}
           onContinue={() => dismissCompletion()}
+          onRetry={profile.lastCompletion?.templateId ? handleRetry : null}
         />
         {showNextGoal && <NextGoalChooser profileId={activeProfile} onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
       </>
@@ -745,6 +800,9 @@ export default function Dashboard({ setView }) {
           comebackCompletions={comebackCompletions}
         />
       )}
+
+      {/* Challenge Performance — percentage score, passing line, status */}
+      <ChallengePerformance setView={setView} />
 
       {/* Quote of the Day — identity and motivation live on Home */}
       <QuoteOfTheDay />

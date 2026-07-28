@@ -4563,3 +4563,77 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .rank-reward-label { font-weight: 600; font-size: 14px; }
 .rank-reward-desc { font-size: 11px; color: var(--text3); }
 .rank-reward-rank { font-size: 11px; color: var(--text2); flex-shrink: 0; }
+
+/* ── Challenge Performance card ─────────────────────────────────────────── */
+.perf-card {
+  background: linear-gradient(160deg, rgba(124,58,237,0.10), rgba(255,212,122,0.06));
+  border: 1px solid rgba(160,107,255,0.28); border-radius: 16px; padding: 16px; margin-bottom: 14px;
+}
+.perf-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.perf-title { font-size: 14px; font-weight: 800; letter-spacing: 0.3px; }
+.perf-status-badge { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 20px; border: 1px solid; white-space: nowrap; }
+.perf-main { display: flex; align-items: center; gap: 16px; }
+.perf-ring { flex-shrink: 0; }
+.perf-ring-num { font-size: 26px; font-weight: 900; fill: var(--text); }
+.perf-ring-sub { font-size: 10px; fill: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+.perf-main-info { flex: 1; min-width: 0; }
+.perf-row { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; color: var(--text2); }
+.perf-row strong { color: var(--text); }
+.perf-passbar { margin: 8px 0 6px; }
+.perf-passbar-track { position: relative; height: 8px; border-radius: 6px; background: rgba(255,255,255,0.12); overflow: visible; }
+.perf-passbar-fill { height: 100%; border-radius: 6px; transition: width 500ms ease; }
+.perf-passbar-mark { position: absolute; top: -3px; width: 2px; height: 14px; background: #ffd47a; box-shadow: 0 0 4px rgba(255,212,122,0.8); }
+.perf-statusmsg { font-size: 12px; color: var(--text2); line-height: 1.5; margin-top: 6px; }
+.perf-feedback {
+  margin-top: 10px; padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  background: rgba(124,58,237,0.15); border: 1px solid rgba(160,107,255,0.35); color: #e6dcff;
+  animation: perf-fb-in 300ms ease;
+}
+@keyframes perf-fb-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.perf-projection { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
+.perf-proj-row { display: flex; justify-content: space-between; font-size: 13px; }
+.perf-proj-row em { color: var(--text3); font-style: normal; font-size: 11px; }
+.perf-proj-result { font-size: 12px; color: var(--accent2, #FFB347); margin-top: 2px; font-weight: 600; }
+.perf-proj-guide { font-size: 12px; color: var(--text2); margin-top: 6px; line-height: 1.5; }
+.perf-expand-btn { width: 100%; margin-top: 12px; background: none; border: none; color: var(--text2); font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px; }
+.perf-breakdown { margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; }
+.perf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.perf-cell { background: var(--card2); border-radius: 10px; padding: 8px 10px; }
+.perf-cell span { display: block; font-size: 11px; color: var(--text3); }
+.perf-cell strong { font-size: 15px; }
+.perf-cell em { font-style: normal; font-size: 10px; color: var(--text3); }
+.perf-bonus { color: var(--accent2, #FFB347); }
+.perf-today { background: var(--card2); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+.perf-subhead { font-size: 12px; font-weight: 800; color: var(--text2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+.perf-note { font-size: 11px; color: var(--text3); margin-top: 4px; }
+.perf-tasklist { display: flex; flex-direction: column; gap: 6px; }
+.perf-task-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.perf-task-name { font-size: 13px; font-weight: 500; }
+.perf-ks { margin-left: 5px; font-size: 10px; }
+.perf-task-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.perf-task-count { font-size: 11px; color: var(--text3); }
+.perf-task-pct { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.perf-task-tier { font-size: 11px; font-weight: 600; min-width: 88px; text-align: right; }
+.perf-today-link { width: 100%; margin-top: 10px; }
+
+/* ── Challenge Complete: performance result ─────────────────────────────── */
+.cc-perf { margin: 6px auto 14px; max-width: 340px; }
+.cc-perf-scorebig { font-size: 44px; font-weight: 900; text-align: center;
+  background: linear-gradient(90deg, #c4a0ff, #ffd47a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.cc-perf.fail .cc-perf-scorebig { background: linear-gradient(90deg, #cbb8ff, #b9addb); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.cc-perf-line { display: flex; justify-content: space-between; font-size: 13px; color: var(--text2); padding: 2px 0; }
+.cc-perf-line strong { color: var(--text); }
+.cc-perf-line em { font-style: normal; color: var(--text3); font-size: 11px; }
+.cc-xpbreak { margin-top: 10px; background: var(--card2); border-radius: 10px; padding: 10px 12px; }
+.cc-xpline { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; color: var(--text2); }
+.cc-xpline.total { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; font-weight: 800; color: var(--text); }
+.cc-fail-msg { font-size: 13px; color: var(--text2); line-height: 1.6; margin-top: 12px; }
+.cc-perf-unavailable { font-size: 13px; color: var(--text3); margin: 10px 0; }
+
+/* ── Archive performance line ───────────────────────────────────────────── */
+.archive-row-perf { font-size: 12px; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 8px; }
+.archive-row-perf.muted { color: var(--text3); }
+.archive-perf-score { font-weight: 700; }
+.archive-perf-result.pass { color: #10B981; font-weight: 700; }
+.archive-perf-result.fail { color: var(--text2); font-weight: 700; }
+.archive-perf-bonus { color: var(--accent2, #FFB347); }

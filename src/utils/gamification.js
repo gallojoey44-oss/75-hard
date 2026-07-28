@@ -392,6 +392,143 @@ function computeComebackXP(profiles, profId, xpStartDay) {
 
 // ─── Total XP ────────────────────────────────────────────────────────────────
 
+// ─── Challenge Performance (percentage score) ────────────────────────────────
+// The Challenge Score is a whole-number percentage of REQUIRED-task XP only:
+//   (required XP earned so far) / (required XP available so far) × 100
+// over ELAPSED days. It deliberately excludes bonus missions, the completion
+// bonus, rank rewards, and the day-level extras (all-complete/ratings/faith/
+// streak/MWD bonuses) — those never move the score. Future days are excluded.
+// Minimum Warrior Days are "protected" (excluded from both sides) so a recovery
+// day never drags the score.
+
+export const DEFAULT_PASSING_SCORE = 75;
+export const DEFAULT_KEYSTONE_REQUIREMENT = 65;
+
+export function getPassingConfig(meta) {
+  return {
+    passingScore: meta?.passingScore ?? DEFAULT_PASSING_SCORE,
+    keystoneRequirement: meta?.keystoneRequirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
+    completionBonus: meta?.completionBonusXP ?? meta?.rewardXP ?? 0,
+  };
+}
+
+function scoreDayRequired(dayData, tasks) {
+  let earned = 0, available = 0;
+  for (const t of tasks) {
+    const xp = getTaskXP(t);
+    available += xp;
+    if (dayData?.tasks?.[t.id]) earned += xp;
+  }
+  return { earned, available };
+}
+
+/**
+ * Weighted required-XP Challenge Score over elapsed days. Returns null for
+ * open-ended baselines (Forge Daily) or when there is nothing scorable yet.
+ */
+export function computeChallengeScore(allDays, profiles, profId, dayNum) {
+  const prof = profiles[profId];
+  const meta = prof?.activeChallenge;
+  const duration = meta?.durationDays;
+  const tasks = prof?.tasks || [];
+  if (!duration || !dayNum || tasks.length === 0) return null;
+  const profDays = allDays[profId] || {};
+  const elapsed = Math.min(dayNum, duration);
+  const keystoneTasks = tasks.filter(isKeystone);
+
+  let earned = 0, available = 0, ksDone = 0, ksTotal = 0;
+  let completedDays = 0, missedDays = 0, scoredDays = 0, mwdDays = 0;
+  for (let i = 1; i <= elapsed; i++) {
+    const d = profDays[i];
+    if (d?.isMWD) { mwdDays++; continue; } // protected — excluded from scoring
+    scoredDays++;
+    const s = scoreDayRequired(d, tasks);
+    earned += s.earned; available += s.available;
+    const doneCount = d ? tasks.filter(t => d.tasks?.[t.id]).length : 0;
+    if (tasks.length && doneCount === tasks.length) completedDays++;
+    if (!d || doneCount === 0) missedDays++;
+    for (const kt of keystoneTasks) { ksTotal++; if (d?.tasks?.[kt.id]) ksDone++; }
+  }
+  const score = available > 0 ? Math.round((earned / available) * 100) : 0;
+  const keystoneAdherence = ksTotal > 0 ? Math.round((ksDone / ksTotal) * 100) : 100;
+  return {
+    score, requiredEarned: earned, requiredAvailable: available,
+    keystoneAdherence, keystoneCount: keystoneTasks.length,
+    completedDays, missedDays, scoredDays, mwdDays, elapsed, duration,
+    hasData: scoredDays > 0 && available > 0,
+  };
+}
+
+/** A challenge passes when the score AND keystone adherence both meet config. */
+export function isChallengePassed(scoreObj, meta) {
+  if (!scoreObj) return false;
+  const cfg = getPassingConfig(meta);
+  return scoreObj.score >= cfg.passingScore && scoreObj.keystoneAdherence >= cfg.keystoneRequirement;
+}
+
+export const PERF_STATUS = {
+  excellent: { key: 'excellent', label: 'Excellent',       message: 'You are performing well. Keep protecting your Keystone Habits.' },
+  onTrack:   { key: 'onTrack',   label: 'On Track',        message: 'You are currently above the passing score.' },
+  atRisk:    { key: 'atRisk',    label: 'At Risk',         message: 'You are close to the passing line. Your next Keystone task matters.' },
+  needs:     { key: 'needs',     label: 'Needs Attention', message: 'You are currently below the passing pace. Focus on the highest-value tasks first.' },
+};
+
+export function getPerformanceStatus(score) {
+  if (score >= 90) return PERF_STATUS.excellent;
+  if (score >= 75) return PERF_STATUS.onTrack;
+  if (score >= 65) return PERF_STATUS.atRisk;
+  return PERF_STATUS.needs;
+}
+
+/** Per-task completion % across elapsed (non-MWD) days. */
+export function computeTaskBreakdown(allDays, profiles, profId, dayNum) {
+  const prof = profiles[profId];
+  const meta = prof?.activeChallenge;
+  const duration = meta?.durationDays;
+  const tasks = prof?.tasks || [];
+  if (!duration || !dayNum || !tasks.length) return [];
+  const profDays = allDays[profId] || {};
+  const elapsed = Math.min(dayNum, duration);
+  return tasks.map(t => {
+    let done = 0, total = 0;
+    for (let i = 1; i <= elapsed; i++) {
+      const d = profDays[i];
+      if (d?.isMWD) continue;
+      total++;
+      if (d?.tasks?.[t.id]) done++;
+    }
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    return { id: t.id, name: t.name, done, total, pct, keystone: getTaskKeystone(t) };
+  });
+}
+
+/**
+ * Estimated final score assuming remaining days continue at the current rate.
+ * ALWAYS an estimate — the UI labels it as such. Also returns the required XP
+ * still needed to finish exactly at the passing line.
+ */
+export function projectFinalScore(scoreObj, meta) {
+  if (!scoreObj || !scoreObj.hasData) return null;
+  const cfg = getPassingConfig(meta);
+  const perDayAvail = scoreObj.scoredDays > 0 ? scoreObj.requiredAvailable / scoreObj.scoredDays : 0;
+  const remainingDays = Math.max(0, scoreObj.duration - scoreObj.elapsed);
+  const rate = scoreObj.requiredAvailable > 0 ? scoreObj.requiredEarned / scoreObj.requiredAvailable : 0;
+  const remainingAvail = Math.round(perDayAvail * remainingDays);
+  const projEarned = scoreObj.requiredEarned + rate * remainingAvail;
+  const projAvail = scoreObj.requiredAvailable + remainingAvail;
+  const projected = projAvail > 0 ? Math.round((projEarned / projAvail) * 100) : scoreObj.score;
+  const needTotal = Math.ceil((cfg.passingScore / 100) * projAvail);
+  const needRemaining = Math.max(0, needTotal - scoreObj.requiredEarned);
+  return {
+    projected,
+    willPass: projected >= cfg.passingScore,
+    remainingDays,
+    remainingAvailable: remainingAvail,
+    needRemaining: Math.min(needRemaining, remainingAvail),
+    passingScore: cfg.passingScore,
+  };
+}
+
 /**
  * Compute total XP for a profile.
  * Returns { total, rawTotal, gained, lost } — total is max(0, rawTotal + xpOffset).
@@ -425,10 +562,18 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
   // Comeback bonuses
   totalGained += computeComebackXP(profiles, profId, xpStartDay);
 
-  // Challenge completion reward (e.g. Fat Loss Challenge: +500 XP at day 30)
+  // Completion Bonus — awarded ONCE at the final day, and ONLY when the
+  // challenge is passed (final Challenge Score ≥ passing score AND keystone
+  // adherence ≥ requirement). Failing never removes already-earned task XP;
+  // it just withholds this separate bonus. This is a derived value (not a
+  // stored increment), so it never duplicates across reloads.
   const meta = profiles[profId]?.activeChallenge;
-  if (meta?.rewardXP && meta?.durationDays && dayNum >= meta.durationDays) {
-    totalGained += meta.rewardXP;
+  if (meta?.durationDays && dayNum >= meta.durationDays) {
+    const cfg = getPassingConfig(meta);
+    if (cfg.completionBonus > 0) {
+      const sc = computeChallengeScore(allDays, profiles, profId, dayNum);
+      if (isChallengePassed(sc, meta)) totalGained += cfg.completionBonus;
+    }
   }
 
   const rawTotal = totalGained - totalLost;

@@ -3,6 +3,7 @@ import { useApp, dayHasLoggedMetric } from '../context/AppContext';
 import { formatDateLong, getDateForDayNumber } from '../utils/dateUtils';
 import CheckItem from './CheckItem';
 import BonusMissions from './BonusMissions';
+import ChallengePerformance from './ChallengePerformance';
 import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
@@ -528,6 +529,9 @@ export default function DailyView({ editDayNum, setView }) {
           </div>
         </div>
       </div>
+
+      {/* Challenge Performance — percentage score, passing line, status */}
+      <ChallengePerformance />
 
       {/* Read My Why / I'm struggling */}
       <WhyBar

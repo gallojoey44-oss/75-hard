@@ -368,6 +368,10 @@ export default function ChallengesView({ setView }) {
           durationDays: ps.durationDays,
           templateVersion: ps.template.template_version || 1,
           rewardXP: ps.template.rewards?.xp || 0,
+          // Challenge Performance config (percentage score system).
+          completionBonusXP: ps.template.rewards?.xp || 0,
+          passingScore: ps.template.passing_score ?? 75,
+          keystoneRequirement: ps.template.keystone_requirement ?? 65,
           badgeId: ps.template.rewards?.badge_id || null,
         },
         tasks: variantDef.start_tasks,

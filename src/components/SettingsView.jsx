@@ -425,6 +425,15 @@ export default function SettingsView({ setView }) {
                       <div className="archive-row-meta">
                         Day {arch.endDayNum} of {arch.challenge?.durationDays || 75} · {daysLogged} days logged · {(arch.xpEarned || 0).toLocaleString()} XP
                       </div>
+                      {arch.finalScore != null && arch.scoreAvailable !== false ? (
+                        <div className="archive-row-perf">
+                          <span className="archive-perf-score">Final Score: {arch.finalScore}%</span>
+                          <span className={`archive-perf-result ${arch.passed ? 'pass' : 'fail'}`}>{arch.passed ? 'Passed' : 'Did Not Pass'}</span>
+                          <span className="archive-perf-bonus">Completion Bonus: {arch.bonusEarned ? `+${(arch.completionBonus || 0).toLocaleString()} XP` : 'Not Earned'}</span>
+                        </div>
+                      ) : (
+                        <div className="archive-row-perf muted">Performance score unavailable for this past challenge.</div>
+                      )}
                     </div>
                     <span className="archive-row-arrow">{isOpen ? '▲' : '▼'}</span>
                   </button>
@@ -434,9 +443,23 @@ export default function SettingsView({ setView }) {
                         <div className="archive-detail"><span>Started</span><strong>{formatDateShort(arch.challengeStart)}</strong></div>
                         <div className="archive-detail"><span>Archived</span><strong>{formatDateShort(arch.archivedAt)}</strong></div>
                         <div className="archive-detail"><span>Days logged</span><strong>{daysLogged}</strong></div>
-                        <div className="archive-detail"><span>XP earned</span><strong>{(arch.xpEarned || 0).toLocaleString()}</strong></div>
+                        <div className="archive-detail"><span>Task XP</span><strong>{(arch.taskXP ?? arch.xpEarned ?? 0).toLocaleString()}</strong></div>
                         <div className="archive-detail"><span>Tasks</span><strong>{(arch.tasks || []).length}</strong></div>
                         <div className="archive-detail"><span>Badges</span><strong>{(arch.badges || []).length}</strong></div>
+                        {arch.finalScore != null && arch.scoreAvailable !== false && (
+                          <>
+                            <div className="archive-detail"><span>Final score</span><strong>{arch.finalScore}%</strong></div>
+                            <div className="archive-detail"><span>Passing score</span><strong>{arch.passingScore ?? 75}%</strong></div>
+                            <div className="archive-detail"><span>Result</span><strong>{arch.passed ? 'Passed' : 'Did Not Pass'}</strong></div>
+                            {arch.keystoneAdherence != null && (
+                              <div className="archive-detail"><span>Keystone adherence</span><strong>{arch.keystoneAdherence}%</strong></div>
+                            )}
+                            <div className="archive-detail"><span>Completion bonus</span><strong>{arch.bonusEarned ? `+${(arch.completionBonus || 0).toLocaleString()}` : 'Not earned'}</strong></div>
+                            {arch.bonusXP > 0 && (
+                              <div className="archive-detail"><span>Bonus XP</span><strong>+{arch.bonusXP.toLocaleString()}</strong></div>
+                            )}
+                          </>
+                        )}
                       </div>
                       {(arch.badges || []).length > 0 && (
                         <div className="archive-badges">

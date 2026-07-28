@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback } from 'react';
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
-import { computeTotalXP, computeBadges } from '../utils/gamification';
+import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP } from '../utils/gamification';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { isKeystone, RANKS } from '../utils/gamification';
@@ -51,6 +51,11 @@ export const DEFAULT_CHALLENGE_META = {
   emoji: '🔥',
   variant: null,
   durationDays: 75,
+  // Challenge Performance config (applied to newly started default challenges;
+  // existing active challenges keep whatever they were started with).
+  passingScore: 80,
+  keystoneRequirement: 70,
+  completionBonusXP: 2500,
 };
 
 const DEFAULT_QUOTE_SETTINGS = {
@@ -701,6 +706,16 @@ export function AppProvider({ children }) {
 
     const completed = meta.durationDays != null && dayNum >= meta.durationDays;
 
+    // Challenge Performance snapshot (percentage score, pass/fail, bonus).
+    const cfg = getPassingConfig(meta);
+    const scoreObj = computeChallengeScore(allDays, profiles, profId, dayNum);
+    const passed = scoreObj ? isChallengePassed(scoreObj, meta) : null;
+    const bonusEarned = !!(passed && cfg.completionBonus > 0);
+    const totalXP = Math.max(0, xpData.rawTotal);
+    const bonusXP = Object.values(profDays).reduce((s, d) => s + getBonusXP(d), 0);
+    const completionBonusAwarded = bonusEarned ? cfg.completionBonus : 0;
+    const taskXP = Math.max(0, totalXP - completionBonusAwarded - bonusXP);
+
     return {
       id: `arch_${Date.now()}`,
       archivedAt: getTodayStr(),
@@ -714,11 +729,23 @@ export function AppProvider({ children }) {
       days: profDays,
       quoteData: challengeQuotes,
       weeklyReflections: { ...(weeklyReflections[profId] || {}) },
-      xpEarned: Math.max(0, xpData.rawTotal),
+      xpEarned: totalXP,
       badges,
       comebackHistory: prof.comebackHistory || [],
       xpOffset: prof.xpOffset ?? 0,
       xpStartDay: prof.xpStartDay ?? 1,
+      // Performance / scoring record (permanent)
+      finalScore: scoreObj ? scoreObj.score : null,
+      scoreAvailable: !!(scoreObj && scoreObj.hasData),
+      passingScore: cfg.passingScore,
+      keystoneRequirement: cfg.keystoneRequirement,
+      keystoneAdherence: scoreObj ? scoreObj.keystoneAdherence : null,
+      passed,
+      completionBonus: cfg.completionBonus,
+      bonusEarned,
+      taskXP,
+      bonusXP,
+      resultDate: completed ? getTodayStr() : null,
     };
   }, [profiles, allDays, quoteData, weeklyReflections, getDayCompletion]);
 
@@ -808,6 +835,7 @@ export function AppProvider({ children }) {
       name: entry.challenge?.name,
       emoji: entry.challenge?.emoji,
       variant: entry.challenge?.variant,
+      templateId: entry.challenge?.templateId,
       durationDays: entry.challenge?.durationDays,
       completionDate: entry.completionDate || getTodayStr(),
       xpEarned: entry.xpEarned,
@@ -821,6 +849,17 @@ export function AppProvider({ children }) {
       reflections: entry.weeklyReflections || {},
       letter: entry.challenge?.futureSelfLetter || null,
       improvements,
+      // Challenge Performance result (percentage score system)
+      finalScore: entry.finalScore ?? null,
+      scoreAvailable: entry.scoreAvailable !== false && entry.finalScore != null,
+      passingScore: entry.passingScore ?? 75,
+      keystoneRequirement: entry.keystoneRequirement ?? 65,
+      keystoneAdherence: entry.keystoneAdherence ?? null,
+      passed: entry.passed ?? null,
+      completionBonus: entry.completionBonus ?? 0,
+      bonusEarned: !!entry.bonusEarned,
+      taskXP: entry.taskXP ?? entry.xpEarned ?? 0,
+      bonusXP: entry.bonusXP ?? 0,
     };
   }
 
