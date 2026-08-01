@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
@@ -374,27 +374,22 @@ export function dayHasLoggedMetric(dayData) {
  * (the old per-metric task flags simply stop counting once their task
  * definitions are gone, and daily_log awards its 20 XP once). Idempotent.
  */
-function migrateAllDays(stored, profiles = {}) {
+function migrateAllDays(stored) {
   const all = { ...stored };
   let changed = false;
 
-  // One-time repair: an earlier build grandfathered Short Physical Reset onto
-  // EVERY existing MT day — including today and future days — which auto-checked
-  // the task before the user did anything. Undo that once for today/future so
-  // the current day starts unchecked. Guarded by a flag so it runs a single
-  // time and never clobbers a completion the user makes later.
-  const REPAIR_KEY = 'forge_mt_physical_repair_v1';
-  let doRepair = false;
-  try { doRepair = !localStorage.getItem(REPAIR_KEY); } catch { /* ignore */ }
+  // Daily-task completion is stored strictly per (day record, task id) and must
+  // never be inferred from another date or from the ABSENCE of a record.
+  //
+  // An earlier build "grandfathered" Short Physical Reset onto every prior
+  // Mental Training day that lacked an explicit record — fabricating completions
+  // the user never made. Because that ran on every load, any day the user
+  // legitimately left undone was silently re-checked the moment it rolled into
+  // the past ("carrying over from the previous day"). That grandfathering — and
+  // the one-time repair that existed only to undo its damage — are removed: a
+  // task with no stored record for a date now simply reads as unchecked.
 
   for (const profId of Object.keys(all)) {
-    const prof = profiles[profId];
-    const isMT = prof?.activeChallenge?.templateId === 'mental_training_phase';
-    // Current (uncapped) day number for the active MT challenge. Grandfathering
-    // applies ONLY to days strictly before today so history is never
-    // retroactively failed; today and future days must start unchecked.
-    const curDay = isMT && prof?.challengeStart ? getDayNumberFromStart(prof.challengeStart) : null;
-
     const profDays = all[profId] || {};
     let profChanged = false;
     const nextDays = {};
@@ -402,32 +397,13 @@ function migrateAllDays(stored, profiles = {}) {
       if (!d) { nextDays[k] = d; continue; }
       let day = d;
 
-      // Daily Log backfill (unchanged).
+      // Daily Log backfill: a day already carrying logged metric data counts its
+      // unified Daily Log as done. Derived only from THAT day's own recorded
+      // metrics (never another date), and idempotent.
       if (!day.tasks?.daily_log) {
         const hadMetricTask = !!(day.tasks && (day.tasks.mt_mood || day.tasks.mt_stress || day.tasks.mt_energy || day.tasks.sleep_log));
         if (hadMetricTask || dayHasLoggedMetric(day)) {
           day = { ...day, tasks: { ...day.tasks, daily_log: true } };
-          profChanged = true;
-        }
-      }
-
-      // Short Physical Reset (Mental Training v6).
-      if (isMT && curDay != null) {
-        const dayNum = Number(k);
-        const hasKey = !!(day.tasks && 'mt_physical' in day.tasks);
-        if (dayNum >= curDay) {
-          // Today / future: must start unchecked. One-time repair clears the
-          // erroneously auto-set completion from the earlier build.
-          if (doRepair && hasKey) {
-            const rest = { ...day.tasks };
-            delete rest.mt_physical;
-            day = { ...day, tasks: rest };
-            profChanged = true;
-          }
-        } else if (!hasKey) {
-          // Strictly-past day logged before the task existed → grandfather it so
-          // the new required task doesn't retroactively fail that date.
-          day = { ...day, tasks: { ...day.tasks, mt_physical: true } };
           profChanged = true;
         }
       }
@@ -437,7 +413,6 @@ function migrateAllDays(stored, profiles = {}) {
     if (profChanged) { all[profId] = nextDays; changed = true; }
   }
 
-  if (doRepair) { try { localStorage.setItem(REPAIR_KEY, '1'); } catch { /* ignore */ } }
   if (changed) saveLS('allDays', all);
   return all;
 }
@@ -449,7 +424,7 @@ export function AppProvider({ children }) {
   const [profiles, setProfilesState] = useState(() =>
     migrateProfiles(loadLS('profiles', makeDefaultProfiles()))
   );
-  const [allDays, setAllDaysState] = useState(() => migrateAllDays(loadLS('allDays', { me: {}, girlfriend: {} }), profiles));
+  const [allDays, setAllDaysState] = useState(() => migrateAllDays(loadLS('allDays', { me: {}, girlfriend: {} })));
   // Per-date quote data: { me: { '2024-01-15': { cycleOffset, reflectionNotes, reflectionComplete } }, girlfriend: {} }
   const [quoteData, setQuoteDataState] = useState(() => loadLS('quoteData', { me: {}, girlfriend: {} }));
   // Experiments: { me: [...], girlfriend: [...] }
@@ -467,6 +442,29 @@ export function AppProvider({ children }) {
   const [weeklyReflections, setWeeklyReflectionsState] = useState(() =>
     loadLS('weeklyReflections', { me: {}, girlfriend: {} })
   );
+
+  // Current local calendar date (YYYY-MM-DD). Kept in state so that when the app
+  // stays open across midnight the whole tree re-renders: getDayNumber() then
+  // recomputes to the new day and the Today view loads a fresh unchecked set for
+  // the new date — no reload or reinstall required. A poll (every local day
+  // boundary is at most 60s away) plus a foreground check covers both the
+  // app-left-open and app-resumed cases.
+  const [todayStr, setTodayStr] = useState(() => getTodayStr());
+  useEffect(() => {
+    const tick = () => setTodayStr(prev => {
+      const now = getTodayStr();
+      return now !== prev ? now : prev;
+    });
+    const id = setInterval(tick, 30000);
+    const onVisible = () => { if (document.visibilityState === 'visible') tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', tick);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', tick);
+    };
+  }, []);
 
   const setActiveProfile = useCallback((id) => {
     setActiveProfileState(id);
@@ -1416,7 +1414,7 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      activeProfile, profile, profiles, days, allDays,
+      activeProfile, profile, profiles, days, allDays, todayStr,
       setActiveProfile,
       getChallengeMeta, getDayNumber, getRawDayNumber, isForgeDaily, getDayData, getTodayData,
       completeChallenge, dismissCompletion, startForgeDaily,

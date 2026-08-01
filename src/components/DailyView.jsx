@@ -277,7 +277,7 @@ function MWDBanner({ comebackMode, dayNum }) {
 
 export default function DailyView({ editDayNum, setView }) {
   const {
-    activeProfile, profile, allDays,
+    activeProfile, profile, allDays, todayStr,
     getChallengeMeta, getDayNumber, getDayData,
     updateDay, toggleTask,
     weeklyReflections, saveWeeklyReflection,
@@ -308,6 +308,21 @@ export default function DailyView({ editDayNum, setView }) {
     setSelectedDayNum(n);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProfile]);
+
+  // Midnight rollover: when the local date changes while the app is open, if the
+  // user is viewing what WAS "today" (not reviewing a past/future day and not in
+  // an explicit edit), advance to the new current day. The selected-day effect
+  // below then loads a fresh, unchecked set for the new date. Users who have
+  // navigated to another day are left where they are.
+  const lastDayRef = useRef(currentDayNum);
+  useEffect(() => {
+    const cur = getDayNumber();
+    const prev = lastDayRef.current;
+    lastDayRef.current = cur;
+    if (cur == null || cur === prev) return;
+    if (editDayNum == null && selectedDayNum === prev) setSelectedDayNum(cur);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayStr]);
 
   useEffect(() => {
     if (!selectedDayNum) return;
