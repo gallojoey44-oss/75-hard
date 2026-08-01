@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { getTemplateById } from '../data/challengeTemplates';
+import { getTemplateById, isColdExposureRequiredForDate, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
+import { getDateForDayNumber } from '../utils/dateUtils';
 
 // 🎯 Bonus Missions — an optional, interactive section shown below the required
 // daily tasks. Bonus Missions award bonus XP but never count toward required
@@ -24,22 +25,29 @@ export default function BonusMissions({ dayNumber, isEditable = true }) {
   const dayData = (allDays[activeProfile] || {})[dayNumber] || {};
   const recurring = [...(profile?.bonusMissions || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const oneTime = dayData?.bonusOneTime || [];
-  const missions = [...recurring, ...oneTime];
   const bonusDone = dayData?.bonusDone || {};
 
+  // Once the required Cold Exposure Upgrade is active for this date, hide the
+  // optional cold-shower bonus mission so the same cold finish can't earn XP
+  // twice (bonus + required) on the same day. Earlier dates are unaffected.
+  const meta = getChallengeMeta();
+  const coldRequiredToday = isColdExposureRequiredForDate(meta, getDateForDayNumber(profile?.challengeStart, dayNumber));
+  const hideColdBonus = (id) => coldRequiredToday && id === COLD_SHOWER_BONUS_ID;
+  const missions = [...recurring, ...oneTime].filter(m => !hideColdBonus(m.id));
+
   const completedCount = missions.filter(m => bonusDone[m.id] != null).length;
-  const bonusXP = Object.values(bonusDone).reduce((s, v) => s + (Number(v) || 0), 0);
+  const bonusXP = missions.reduce((s, m) => s + (Number(bonusDone[m.id]) || 0), 0);
 
   // Challenge-specific suggestions not already in the list.
-  const meta = getChallengeMeta();
   const template = getTemplateById(meta.templateId);
   const presentIds = new Set(missions.map(m => m.id));
-  const suggestions = (template?.bonus_missions || []).filter(s => !presentIds.has(s.id));
+  const suggestions = (template?.bonus_missions || []).filter(s => !presentIds.has(s.id) && !hideColdBonus(s.id));
 
-  function moveRecurring(index, dir) {
+  function moveRecurring(mission, dir) {
     const next = [...recurring];
+    const index = next.findIndex(r => r.id === mission.id);
     const target = index + dir;
-    if (target < 0 || target >= next.length) return;
+    if (index < 0 || target < 0 || target >= next.length) return;
     [next[index], next[target]] = [next[target], next[index]];
     reorderBonusMissions(next);
   }
@@ -61,7 +69,7 @@ export default function BonusMissions({ dayNumber, isEditable = true }) {
       <div className="bonus-list">
         {missions.map((m, i) => {
           const done = bonusDone[m.id] != null;
-          const isRecurring = i < recurring.length;
+          const isRecurring = recurring.some(r => r.id === m.id);
           return (
             <div key={m.id} className={`bonus-item${done ? ' done' : ''}`}>
               <div
@@ -82,8 +90,8 @@ export default function BonusMissions({ dayNumber, isEditable = true }) {
                 <div className="bonus-item-manage">
                   {isRecurring && (
                     <>
-                      <button className="bonus-mini-btn" onClick={() => moveRecurring(i, -1)} disabled={i === 0} aria-label="Move up">↑</button>
-                      <button className="bonus-mini-btn" onClick={() => moveRecurring(i, 1)} disabled={i === recurring.length - 1} aria-label="Move down">↓</button>
+                      <button className="bonus-mini-btn" onClick={() => moveRecurring(m, -1)} disabled={recurring[0]?.id === m.id} aria-label="Move up">↑</button>
+                      <button className="bonus-mini-btn" onClick={() => moveRecurring(m, 1)} disabled={recurring[recurring.length - 1]?.id === m.id} aria-label="Move down">↓</button>
                     </>
                   )}
                   <button

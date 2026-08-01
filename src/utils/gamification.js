@@ -1,4 +1,19 @@
-import { getDayNumberFromStart } from './dateUtils.js';
+import { getDayNumberFromStart, getDateForDayNumber } from './dateUtils.js';
+import { isColdExposureRequiredForDate, COLD_SHOWER_TASK_ID } from '../data/challengeTemplates';
+
+/**
+ * The effective required-task list for a specific challenge day. The only
+ * date-dependent task is the Cold Exposure Upgrade's Cold Shower: it is required
+ * only on and after its activation date, so it is filtered OUT of any day before
+ * that date. Every other task is date-independent. Returns the same array
+ * reference when nothing changes (no allocation on the common path).
+ */
+export function requiredTasksForDay(tasks, meta, challengeStart, dayNum) {
+  if (!tasks || !tasks.some(t => t.id === COLD_SHOWER_TASK_ID)) return tasks || [];
+  const dateStr = getDateForDayNumber(challengeStart, dayNum);
+  if (isColdExposureRequiredForDate(meta, dateStr)) return tasks;
+  return tasks.filter(t => t.id !== COLD_SHOWER_TASK_ID);
+}
 
 // ─── Minimum Warrior Day ────────────────────────────────────────────────────
 
@@ -470,14 +485,18 @@ export function computeChallengeScore(allDays, profiles, profId, currentRawDay) 
   let completedDays = 0, missedDays = 0, finalizedDays = 0, mwdDays = 0;
 
   // ── Finalised (past) days — full slate in the denominator; unchecked = missed.
+  // The per-day task list is date-aware: the Cold Exposure Upgrade's Cold Shower
+  // is excluded from any day before its activation date, so enabling it mid-
+  // challenge never adds a denominator, a miss, or a penalty to earlier days.
   for (let i = 1; i <= finalizedThrough; i++) {
     const d = profDays[i];
     if (d?.isMWD) { mwdDays++; continue; } // protected — excluded from scoring
     finalizedDays++;
-    const s = scoreDayRequired(d, tasks);
+    const dayTasks = requiredTasksForDay(tasks, meta, prof.challengeStart, i);
+    const s = scoreDayRequired(d, dayTasks);
     earned += s.earned; available += s.available;
-    const doneCount = d ? tasks.filter(t => d.tasks?.[t.id]).length : 0;
-    if (tasks.length && doneCount === tasks.length) completedDays++;
+    const doneCount = d ? dayTasks.filter(t => d.tasks?.[t.id]).length : 0;
+    if (dayTasks.length && doneCount === dayTasks.length) completedDays++;
     if (!d || doneCount === 0) missedDays++;
     for (const kt of keystoneTasks) { ksTotal++; if (d?.tasks?.[kt.id]) ksDone++; }
   }
@@ -491,15 +510,16 @@ export function computeChallengeScore(allDays, profiles, profId, currentRawDay) 
       mwdDays++;
     } else if (d) {
       hasInProgress = true;
-      for (const t of tasks) {
+      const dayTasks = requiredTasksForDay(tasks, meta, prof.challengeStart, inProgressDay);
+      for (const t of dayTasks) {
         if (d.tasks?.[t.id]) { const xp = getTaskXP(t); earned += xp; available += xp; todayEvaluated += xp; }
       }
       // Keystone adherence stays neutral too — today's keystones only count once
       // completed; an unchecked keystone today is not held against the user yet.
       for (const kt of keystoneTasks) { if (d.tasks?.[kt.id]) { ksTotal++; ksDone++; } }
       if (todayEvaluated > 0) todayScored = true;
-      const doneCount = tasks.filter(t => d.tasks?.[t.id]).length;
-      if (tasks.length && doneCount === tasks.length) completedDays++;
+      const doneCount = dayTasks.filter(t => d.tasks?.[t.id]).length;
+      if (dayTasks.length && doneCount === dayTasks.length) completedDays++;
     }
   }
 
@@ -561,13 +581,17 @@ export function computeTaskBreakdown(allDays, profiles, profId, currentRawDay) {
   const tasks = prof?.tasks || [];
   if (!duration || !currentRawDay || !tasks.length) return [];
   const profDays = allDays[profId] || {};
+  const cs = prof.challengeStart;
   const inProgressDay = currentRawDay <= duration ? currentRawDay : null;
   const finalizedThrough = Math.min(currentRawDay - 1, duration);
   return tasks.map(t => {
+    // Cold Shower only counts across dates on/after its activation date.
+    const dateAware = t.id === COLD_SHOWER_TASK_ID;
     let done = 0, total = 0;
     for (let i = 1; i <= finalizedThrough; i++) {
       const d = profDays[i];
       if (d?.isMWD) continue;
+      if (dateAware && !isColdExposureRequiredForDate(meta, getDateForDayNumber(cs, i))) continue;
       total++;
       if (d?.tasks?.[t.id]) done++;
     }
@@ -626,13 +650,18 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
   // Uncapped local day — the boundary between finalised past days (which can
   // incur miss penalties) and the neutral, penalty-free current day.
   const rawDay         = getDayNumberFromStart(profiles[profId]?.challengeStart) ?? currentDayNum ?? dayNum;
+  const meta           = profiles[profId]?.activeChallenge;
+  const challengeStart = profiles[profId]?.challengeStart;
 
   let totalGained = 0;
   let totalLost   = 0;
 
-  // Day-level XP (only days within the active range)
+  // Day-level XP (only days within the active range). Each day is evaluated with
+  // its DATE-AWARE task list, so the Cold Exposure Upgrade only earns/penalises
+  // XP on and after its activation date — never on earlier days.
   for (let i = xpStartDay; i <= dayNum; i++) {
-    const { gained, lost } = computeDayXP(profDays[i], tasks, profId, i, currentDayNum, penaltiesOn, rawDay);
+    const dayTasks = requiredTasksForDay(tasks, meta, challengeStart, i);
+    const { gained, lost } = computeDayXP(profDays[i], dayTasks, profId, i, currentDayNum, penaltiesOn, rawDay);
     totalGained += gained;
     totalLost   += lost;
   }
@@ -654,7 +683,6 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
   // adherence ≥ requirement). Failing never removes already-earned task XP;
   // it just withholds this separate bonus. This is a derived value (not a
   // stored increment), so it never duplicates across reloads.
-  const meta = profiles[profId]?.activeChallenge;
   if (meta?.durationDays && dayNum >= meta.durationDays) {
     const cfg = getPassingConfig(meta);
     if (cfg.completionBonus > 0) {
@@ -686,8 +714,9 @@ export function computeTodayXP(allDays, profiles, profId, getDayCompletion, dayN
   const profDays    = allDays[profId] || {};
   const tasks       = profiles[profId]?.tasks || [];
   const penaltiesOn = profiles[profId]?.xpPenalties !== false;
+  const dayTasks    = requiredTasksForDay(tasks, profiles[profId]?.activeChallenge, profiles[profId]?.challengeStart, dayNum);
 
-  const { gained, lost } = computeDayXP(profDays[dayNum], tasks, profId, dayNum, dayNum, penaltiesOn);
+  const { gained, lost } = computeDayXP(profDays[dayNum], dayTasks, profId, dayNum, dayNum, penaltiesOn);
 
   // Check if today hit a streak milestone
   let streak = 0;

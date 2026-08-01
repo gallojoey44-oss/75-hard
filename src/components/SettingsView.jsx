@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatDateShort, getTodayStr } from '../utils/dateUtils';
+import { formatDateShort, getTodayStr, dayNumberForDate } from '../utils/dateUtils';
 import TaskManager from './TaskManager';
 import QuoteLibrary from './QuoteLibrary';
 import NotificationSettings from './NotificationSettings';
@@ -447,7 +447,11 @@ export default function SettingsView({ setView }) {
                         <div className="archive-detail"><span>Tasks</span><strong>{(arch.tasks || []).length}</strong></div>
                         <div className="archive-detail"><span>Badges</span><strong>{(arch.badges || []).length}</strong></div>
                         {arch.challenge?.templateId === 'mental_training_phase' && (
-                          <div className="archive-detail"><span>Cold Exposure Upgrade</span><strong>{arch.challenge?.coldExposureUpgradeEnabled ? 'Enabled' : 'Not Enabled'}</strong></div>
+                          <div className="archive-detail"><span>Cold Exposure Upgrade</span><strong>
+                            {arch.challenge?.coldExposureUpgradeEnabled
+                              ? `Enabled from Day ${dayNumberForDate(arch.challengeStart, arch.challenge.coldExposureUpgradeStartDate || arch.challengeStart)}`
+                              : 'Not Enabled'}
+                          </strong></div>
                         )}
                         {arch.finalScore != null && arch.scoreAvailable !== false && (
                           <>

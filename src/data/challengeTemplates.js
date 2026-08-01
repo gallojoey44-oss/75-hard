@@ -41,6 +41,10 @@ export const DAILY_LOG_TASK = {
 // disproportionately inflating available XP.
 export const MENTAL_TRAINING_TEMPLATE_ID = 'mental_training_phase';
 export const COLD_SHOWER_TASK_ID = 'mt_cold_shower';
+// The legacy OPTIONAL cold-exposure Bonus Mission. It is hidden on and after the
+// required upgrade's activation date so the same cold finish can't be credited
+// twice (once as bonus XP, once as the required task) on a single day.
+export const COLD_SHOWER_BONUS_ID = 'bm_cold';
 export const COLD_SHOWER_TASK = {
   id: COLD_SHOWER_TASK_ID,
   name: 'Cold Shower — 30–60 second cold finish',
@@ -54,6 +58,23 @@ export const COLD_SHOWER_TASK = {
 /** True only when a challenge attempt explicitly enabled the Cold Exposure Upgrade. */
 export function isColdExposureEnabled(meta) {
   return meta?.templateId === MENTAL_TRAINING_TEMPLATE_ID && meta?.coldExposureUpgradeEnabled === true;
+}
+
+/**
+ * Date-aware requirement check. The Cold Shower is a required task ONLY for the
+ * activation date and every day after it — never retroactively. `dateStr` is a
+ * local YYYY-MM-DD string; lexicographic comparison is correct for that format.
+ *
+ * A legacy attempt enabled at setup carries no start date; it is required from
+ * day one (migration backfills its start date to the challenge start so the two
+ * behave identically). The upgrade is never removable, so this only ever gates
+ * EARLIER dates out — it never turns a required day back off.
+ */
+export function isColdExposureRequiredForDate(meta, dateStr) {
+  if (!isColdExposureEnabled(meta)) return false;
+  const startDate = meta.coldExposureUpgradeStartDate;
+  if (!startDate) return true;
+  return !!dateStr && dateStr >= startDate;
 }
 
 /**

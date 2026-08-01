@@ -24,6 +24,15 @@ export function getDayNumberFromStart(startStr) {
   return Math.max(1, diff);
 }
 
+// The 1-based challenge day number a local date falls on, relative to the
+// challenge start (both local-midnight anchored, so it is DST-correct).
+export function dayNumberForDate(startStr, dateStr) {
+  if (!startStr || !dateStr) return null;
+  const start = new Date(startStr + 'T00:00:00');
+  const d = new Date(dateStr + 'T00:00:00');
+  return Math.max(1, Math.floor((d - start) / 86400000) + 1);
+}
+
 export function getDateForDayNumber(startStr, dayNumber) {
   if (!startStr) return null;
   const start = new Date(startStr + 'T00:00:00');

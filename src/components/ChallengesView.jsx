@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
-import { METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK, applyColdExposureUpgrade } from '../data/challengeTemplates';
+import { METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK, applyColdExposureUpgrade, isColdExposureEnabled } from '../data/challengeTemplates';
+import { formatDateLong } from '../utils/dateUtils';
 import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
 import { FutureSelfLetterForm } from './FutureSelfLetter';
 
@@ -367,7 +368,7 @@ export default function ChallengesView({ setView }) {
     activeProfile,
     profile, getChallengeMeta, getDayNumber, getDayCompletion,
     getStreak,
-    startChallenge,
+    startChallenge, addColdExposureUpgrade,
     isChallengeTemplateOutdated, syncActiveChallengeWithTemplate, isForgeDaily,
   } = useApp();
 
@@ -381,6 +382,7 @@ export default function ChallengesView({ setView }) {
   // step: 'hardWarn' → 'letter'. Standard/Beginner skip straight to 'letter'.
   const [pendingStart, setPendingStart] = useState(null);
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
+  const [showColdConfirm, setShowColdConfirm] = useState(false);
 
   const meta      = getChallengeMeta();
   const baseline  = isForgeDaily();
@@ -493,6 +495,34 @@ export default function ChallengesView({ setView }) {
                 </p>
               </div>
             )}
+            {/* Cold Exposure Upgrade — add mid-challenge (Mental Training only,
+                one-directional: disabled → enabled). */}
+            {meta.templateId === MENTAL_TRAINING_TEMPLATE_ID && (
+              isColdExposureEnabled(meta) ? (
+                <div className="cold-active-status">
+                  <span>🚿 Cold Exposure Upgrade: <strong>Active</strong></span>
+                  {meta.coldExposureUpgradeStartDate && (
+                    <span className="cold-active-since">Required since {formatDateLong(meta.coldExposureUpgradeStartDate)}</span>
+                  )}
+                </div>
+              ) : (
+                <div className="cold-upgrade-card">
+                  <div className="cold-upgrade-head">
+                    <div className="cold-upgrade-title">🚿 Cold Exposure Upgrade</div>
+                  </div>
+                  <p className="cold-upgrade-desc">
+                    Add a 30–60 second cold finish to the remaining days of this challenge. Once added, it
+                    becomes a required task and cannot be removed from this attempt.
+                  </p>
+                  <p className="cold-upgrade-safety">
+                    ⚠️ Skip cold exposure if you feel dizzy, hypoglycemic, sick, or unusually weak.
+                  </p>
+                  <button className="btn btn-primary btn-full" onClick={() => setShowColdConfirm(true)}>
+                    Add to Current Challenge
+                  </button>
+                </div>
+              )
+            )}
             <div className="acc-actions">
               <button className="btn btn-primary" onClick={() => setView('today')}>Log Today →</button>
               <button className="btn btn-ghost" onClick={() => setView('home')}>Dashboard</button>
@@ -547,6 +577,26 @@ export default function ChallengesView({ setView }) {
               <button className="btn btn-ghost" onClick={() => setShowSyncConfirm(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={() => { syncActiveChallengeWithTemplate(); setShowSyncConfirm(false); }}>
                 Update Template Tasks
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Cold Exposure Upgrade to the active challenge */}
+      {showColdConfirm && (
+        <div className="modal-overlay" onClick={() => setShowColdConfirm(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h3>Add Cold Exposure Upgrade?</h3>
+            <p>
+              Cold Shower will become a required 20 XP task starting today. It will affect your daily
+              score, challenge grade, and XP for the remaining days of this challenge.
+            </p>
+            <p><strong>This change cannot be undone for the current challenge.</strong></p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setShowColdConfirm(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { addColdExposureUpgrade(); setShowColdConfirm(false); }}>
+                Confirm Upgrade
               </button>
             </div>
           </div>

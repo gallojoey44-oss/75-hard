@@ -13,7 +13,7 @@ import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
 import { visibleNextGoals, getTemplateById } from '../data/challengeTemplates';
 import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
-import { formatDateShort } from '../utils/dateUtils';
+import { formatDateShort, dayNumberForDate } from '../utils/dateUtils';
 
 // ── Challenge Complete screen ────────────────────────────────────────────────
 
@@ -70,7 +70,11 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
         )}
 
         {summary.templateId === 'mental_training_phase' && (
-          <div className="cc-cold-line">🚿 Cold Exposure Upgrade: <strong>{summary.coldExposureEnabled ? 'Enabled' : 'Not Enabled'}</strong></div>
+          <div className="cc-cold-line">🚿 Cold Exposure Upgrade: <strong>
+            {summary.coldExposureEnabled
+              ? `Enabled from Day ${dayNumberForDate(summary.challengeStart, summary.coldExposureStartDate || summary.challengeStart)}`
+              : 'Not Enabled'}
+          </strong></div>
         )}
 
         {badgeDefs.length > 0 && (

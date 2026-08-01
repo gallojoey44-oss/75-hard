@@ -2,8 +2,8 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
-import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP } from '../utils/gamification';
-import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID } from '../data/challengeTemplates';
+import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay } from '../utils/gamification';
+import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { isKeystone, RANKS } from '../utils/gamification';
 
@@ -322,12 +322,18 @@ function migrateProfiles(stored) {
     if (meta?.templateId !== 'mental_training_phase') continue;
     const tpl = getTemplateById('mental_training_phase');
 
-    // Cold Exposure Upgrade — pre-feature MT attempts default to disabled.
-    // Idempotent: only writes the default `false` when the field is absent;
-    // it never enables the upgrade, adds the Cold Shower task, or touches any
-    // day record, score, or XP. Existing attempts stay exactly as they were.
+    // Cold Exposure Upgrade normalization (idempotent, never touches day
+    // records / scores / XP):
+    //   • absent flag → default false (pre-feature attempts stay disabled and
+    //     show the new "Add to Current Challenge" control).
+    //   • enabled at setup but missing a start date → backfill to the challenge
+    //     start, which reflects the old setup-only behavior (required from day
+    //     one). We never guess a mid-challenge date.
     if (meta.coldExposureUpgradeEnabled === undefined) {
       profiles[profId] = { ...profiles[profId], activeChallenge: { ...meta, coldExposureUpgradeEnabled: false } };
+      changed = true;
+    } else if (meta.coldExposureUpgradeEnabled === true && !meta.coldExposureUpgradeStartDate && profiles[profId].challengeStart) {
+      profiles[profId] = { ...profiles[profId], activeChallenge: { ...meta, coldExposureUpgradeStartDate: profiles[profId].challengeStart } };
       changed = true;
     }
 
@@ -640,7 +646,10 @@ export function AppProvider({ children }) {
   }, [activeProfile, setAllDays]);
 
   const getDayCompletion = useCallback((dayNumber, profId = activeProfile) => {
-    const tasks = profiles[profId]?.tasks || [];
+    // Date-aware task set: the Cold Exposure Upgrade's Cold Shower is only part
+    // of a day's required tasks on and after its activation date, so completion
+    // for earlier days is judged against the correct (smaller) set.
+    const tasks = requiredTasksForDay(profiles[profId]?.tasks || [], profiles[profId]?.activeChallenge, profiles[profId]?.challengeStart, dayNumber);
     if (!tasks.length) return 0;
     const dayData = (allDays[profId] || {})[dayNumber];
     if (!dayData) return 0;
@@ -659,12 +668,15 @@ export function AppProvider({ children }) {
     const profDays = allDays[profId] || {};
     const tasks = profiles[profId]?.tasks || [];
     if (!tasks.length) return 0;
+    const meta = profiles[profId]?.activeChallenge;
+    const cs = profiles[profId]?.challengeStart;
     let streak = 0;
     for (let i = dayNum; i >= 1; i--) {
       const d = profDays[i];
       if (!d) break;
-      const done = tasks.filter(t => d.tasks[t.id]).length;
-      if (done === tasks.length) streak++;
+      const dayTasks = requiredTasksForDay(tasks, meta, cs, i);
+      const done = dayTasks.filter(t => d.tasks[t.id]).length;
+      if (dayTasks.length && done === dayTasks.length) streak++;
       else break;
     }
     return streak;
@@ -676,11 +688,14 @@ export function AppProvider({ children }) {
     const profDays = allDays[profId] || {};
     const tasks = profiles[profId]?.tasks || [];
     if (!tasks.length) return 0;
+    const meta = profiles[profId]?.activeChallenge;
+    const cs = profiles[profId]?.challengeStart;
     let max = 0, cur = 0;
     for (let i = 1; i <= dayNum; i++) {
       const d = profDays[i];
-      const done = d ? tasks.filter(t => d.tasks[t.id]).length : 0;
-      if (done === tasks.length) { cur++; max = Math.max(max, cur); }
+      const dayTasks = requiredTasksForDay(tasks, meta, cs, i);
+      const done = d ? dayTasks.filter(t => d.tasks[t.id]).length : 0;
+      if (dayTasks.length && done === dayTasks.length) { cur++; max = Math.max(max, cur); }
       else cur = 0;
     }
     return max;
@@ -777,6 +792,11 @@ export function AppProvider({ children }) {
       setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
     }
     const meta = options?.challenge ? { ...DEFAULT_CHALLENGE_META, ...options.challenge } : { ...DEFAULT_CHALLENGE_META };
+    // A setup-time Cold Exposure Upgrade is required from day one — pin its
+    // activation to the challenge start (today) so date-aware grading matches.
+    if (isColdExposureEnabled(meta) && !meta.coldExposureUpgradeStartDate) {
+      meta.coldExposureUpgradeStartDate = getTodayStr();
+    }
     // Future Self Letter is stored on the challenge descriptor, so it archives
     // with the challenge (buildArchiveEntry snapshots the descriptor) and is
     // never overwritten by a later challenge.
@@ -818,10 +838,12 @@ export function AppProvider({ children }) {
       const d = days[i];
       const hasActivity = d && (Object.values(d.tasks || {}).some(Boolean) || (d.notes || '').trim());
       if (hasActivity) { daysLogged++; logged.push(d); }
-      const done = d ? tasks.filter(t => d.tasks?.[t.id]).length : 0;
-      const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+      // Date-aware: Cold Shower only counts from its activation date onward.
+      const dayTasks = requiredTasksForDay(tasks, entry.challenge, entry.challengeStart, i);
+      const done = d ? dayTasks.filter(t => d.tasks?.[t.id]).length : 0;
+      const pct = dayTasks.length ? Math.round((done / dayTasks.length) * 100) : 0;
       compSum += pct; compCount++;
-      if (tasks.length && done === tasks.length) perfectDays++;
+      if (dayTasks.length && done === dayTasks.length) perfectDays++;
       if (d) for (const kt of keystoneTasks) { ksTotal++; if (d.tasks?.[kt.id]) ksDone++; }
     }
     // Personal improvements: first vs last few logged days for key ratings
@@ -848,6 +870,8 @@ export function AppProvider({ children }) {
       variant: entry.challenge?.variant,
       templateId: entry.challenge?.templateId,
       coldExposureEnabled: !!entry.challenge?.coldExposureUpgradeEnabled,
+      coldExposureStartDate: entry.challenge?.coldExposureUpgradeStartDate || null,
+      challengeStart: entry.challengeStart || null,
       durationDays: entry.challenge?.durationDays,
       completionDate: entry.completionDate || getTodayStr(),
       xpEarned: entry.xpEarned,
@@ -1119,6 +1143,50 @@ export function AppProvider({ children }) {
   const reorderTasks = useCallback((newTasks) => {
     updateProfile({ tasks: newTasks.map((t, i) => ({ ...t, order: i })) });
   }, [updateProfile]);
+
+  /**
+   * Add the Cold Exposure Upgrade to the ACTIVE Mental Training challenge, mid-
+   * attempt. One-directional (disabled → enabled) and idempotent: it never runs
+   * for a non-MT challenge or an already-enabled attempt. It sets the locked
+   * rule + activation date (today, local) and generates today's required Cold
+   * Shower task. Past days are untouched — date-aware grading excludes the task
+   * from every date before the activation date, so no prior grade, XP, count, or
+   * penalty changes.
+   */
+  const addColdExposureUpgrade = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    const meta = prof?.activeChallenge;
+    if (!prof?.challengeStart) return;
+    if (meta?.templateId !== MENTAL_TRAINING_TEMPLATE_ID) return;
+    if (meta?.coldExposureUpgradeEnabled === true) return;
+    const startDate = getTodayStr();
+    const todayNum = getDayNumber(profId);
+    setProfiles(prev => {
+      const p = prev[profId];
+      return {
+        ...prev,
+        [profId]: {
+          ...p,
+          activeChallenge: { ...p.activeChallenge, coldExposureUpgradeEnabled: true, coldExposureUpgradeStartDate: startDate },
+          tasks: applyColdExposureUpgrade(p.tasks || [], true).map((t, i) => ({ ...t, order: i })),
+        },
+      };
+    });
+    // Prevent double cold-exposure credit on the activation date: drop any
+    // optional bm_cold bonus already completed earlier today (its XP is
+    // superseded by the now-required Cold Shower, which starts unchecked).
+    // Past dates are never touched.
+    if (todayNum) {
+      setAllDays(prev => {
+        const profDays = prev[profId] || {};
+        const d = profDays[todayNum];
+        if (!d || d.bonusDone?.[COLD_SHOWER_BONUS_ID] == null) return prev;
+        const bonusDone = { ...d.bonusDone };
+        delete bonusDone[COLD_SHOWER_BONUS_ID];
+        return { ...prev, [profId]: { ...profDays, [todayNum]: { ...d, bonusDone } } };
+      });
+    }
+  }, [activeProfile, profiles, setProfiles, setAllDays, getDayNumber]);
 
   // ── Bonus Mission actions ───────────────────────────────────────────────
   // Bonus Missions are optional. They award bonus XP but are never required,
@@ -1448,7 +1516,7 @@ export function AppProvider({ children }) {
       notifPrefs, updateNotifPrefs,
       // Weekly reflection
       weeklyReflections, saveWeeklyReflection,
-      addTask, updateTask, deleteTask, reorderTasks,
+      addTask, updateTask, deleteTask, reorderTasks, addColdExposureUpgrade,
       // Bonus Missions
       toggleBonusMission, addBonusMission, removeBonusMission, reorderBonusMissions,
       // Rank ceremony / Hall of Legends

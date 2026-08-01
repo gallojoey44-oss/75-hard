@@ -11,7 +11,7 @@ import BuildBanner from './BuildBanner';
 import { FutureSelfLetterView } from './FutureSelfLetter';
 import {
   MWD_TASKS, getMWDComplete, getWarriorMessage,
-  sortTasksByKeystone, getTaskKeystone, getTaskXP, isKeystone,
+  sortTasksByKeystone, getTaskKeystone, getTaskXP, isKeystone, requiredTasksForDay,
 } from '../utils/gamification';
 import { KEYSTONE_EXPLAINER, WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { getTemplateById } from '../data/challengeTemplates';
@@ -344,7 +344,8 @@ export default function DailyView({ editDayNum, setView }) {
 
   function calcPct(data) {
     if (!data || !profile) return 0;
-    const tasks = profile.tasks || [];
+    // Date-aware: the Cold Shower only belongs to days on/after its activation.
+    const tasks = requiredTasksForDay(profile.tasks || [], profile.activeChallenge, profile.challengeStart, data?.dayNumber ?? selectedDayNum);
     if (!tasks.length) return 0;
     const done           = tasks.filter(t => data.tasks?.[t.id]).length;
     const faithEnabled   = profile?.faithEnabled;
@@ -447,7 +448,7 @@ export default function DailyView({ editDayNum, setView }) {
   const isEditingOtherDay = currentDayNum && selectedDayNum !== currentDayNum;
   const pct     = calcPct(dayData);
   const mwdPct  = calcMWDPct(dayData);
-  const tasks   = [...(profile.tasks || [])].sort((a, b) => a.order - b.order);
+  const tasks   = [...requiredTasksForDay(profile.tasks || [], profile.activeChallenge, profile.challengeStart, selectedDayNum)].sort((a, b) => a.order - b.order);
   const dateStr = dayData?.date || getDateForDayNumber(profile?.challengeStart, selectedDayNum);
   const isMe    = activeProfile === 'me';
   const isMWD   = !!dayData?.isMWD;

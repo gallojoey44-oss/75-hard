@@ -3670,6 +3670,13 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .cold-upgrade-xp { margin-left: auto; font-size: 12px; color: #4EA8DE; font-weight: 700; }
 .cc-cold-line { font-size: 13px; color: var(--text2); margin: 10px 0; text-align: center; }
 .cc-cold-line strong { color: var(--text); }
+.cold-active-status {
+  display: flex; flex-direction: column; gap: 2px; margin: 12px 0; padding: 10px 14px;
+  border-radius: 12px; background: rgba(78,168,222,0.12); border: 1px solid rgba(78,168,222,0.4);
+  font-size: 13px; color: var(--text);
+}
+.cold-active-status strong { color: #4EA8DE; }
+.cold-active-since { font-size: 12px; color: var(--text3); }
 .tpl-sources {
   font-size: 11px;
   color: var(--text3);
