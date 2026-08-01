@@ -446,6 +446,9 @@ export default function SettingsView({ setView }) {
                         <div className="archive-detail"><span>Task XP</span><strong>{(arch.taskXP ?? arch.xpEarned ?? 0).toLocaleString()}</strong></div>
                         <div className="archive-detail"><span>Tasks</span><strong>{(arch.tasks || []).length}</strong></div>
                         <div className="archive-detail"><span>Badges</span><strong>{(arch.badges || []).length}</strong></div>
+                        {arch.challenge?.templateId === 'mental_training_phase' && (
+                          <div className="archive-detail"><span>Cold Exposure Upgrade</span><strong>{arch.challenge?.coldExposureUpgradeEnabled ? 'Enabled' : 'Not Enabled'}</strong></div>
+                        )}
                         {arch.finalScore != null && arch.scoreAvailable !== false && (
                           <>
                             <div className="archive-detail"><span>Final score</span><strong>{arch.finalScore}%</strong></div>

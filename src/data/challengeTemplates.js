@@ -33,6 +33,46 @@ export const DAILY_LOG_TASK = {
   keystone: 0,
 };
 
+// ─── Cold Exposure Upgrade (Mental Training only) ────────────────────────────
+// Cold exposure is the ONLY optional Forge activity that can be promoted into a
+// required challenge task, and ONLY for the Mental Training challenge. It is a
+// required SUPPORT task (20 XP, never a keystone) — deliberately not weighted
+// like Mental Training itself, so enabling the upgrade raises difficulty without
+// disproportionately inflating available XP.
+export const MENTAL_TRAINING_TEMPLATE_ID = 'mental_training_phase';
+export const COLD_SHOWER_TASK_ID = 'mt_cold_shower';
+export const COLD_SHOWER_TASK = {
+  id: COLD_SHOWER_TASK_ID,
+  name: 'Cold Shower — 30–60 second cold finish',
+  icon: '🚿',
+  color: '#4EA8DE',
+  xp: 20,
+  keystone: 0,
+  desc: 'A 30–60 second cold finish. Skip if you feel dizzy, hypoglycemic, sick, or unusually weak.',
+};
+
+/** True only when a challenge attempt explicitly enabled the Cold Exposure Upgrade. */
+export function isColdExposureEnabled(meta) {
+  return meta?.templateId === MENTAL_TRAINING_TEMPLATE_ID && meta?.coldExposureUpgradeEnabled === true;
+}
+
+/**
+ * Return a task list with the required Cold Shower task present exactly once,
+ * inserted just before Complete Daily Log (or appended if there is none), when
+ * `enabled` is true — and guaranteed absent when false. Never duplicates and
+ * never depends on any other task's state. Used identically at challenge start,
+ * on template sync, and in the setup preview so the three always agree.
+ */
+export function applyColdExposureUpgrade(tasks, enabled) {
+  const list = (Array.isArray(tasks) ? tasks : []).filter(t => t.id !== COLD_SHOWER_TASK_ID);
+  if (!enabled) return list;
+  const dailyIdx = list.findIndex(t => t.id === 'daily_log');
+  const insertAt = dailyIdx >= 0 ? dailyIdx : list.length;
+  const next = [...list];
+  next.splice(insertAt, 0, { ...COLD_SHOWER_TASK, source: 'template' });
+  return next;
+}
+
 // The Forge-owned metric-logging task ids the Daily Log consolidates. Only
 // these built-in ids are ever merged — never genuine custom tasks, even if a
 // user names one "mood" or "energy".

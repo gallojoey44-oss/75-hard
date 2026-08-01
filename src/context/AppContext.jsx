@@ -3,7 +3,7 @@ import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../util
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP } from '../utils/gamification';
-import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks } from '../data/challengeTemplates';
+import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { isKeystone, RANKS } from '../utils/gamification';
 
@@ -321,6 +321,15 @@ function migrateProfiles(stored) {
     const meta = profiles[profId].activeChallenge;
     if (meta?.templateId !== 'mental_training_phase') continue;
     const tpl = getTemplateById('mental_training_phase');
+
+    // Cold Exposure Upgrade — pre-feature MT attempts default to disabled.
+    // Idempotent: only writes the default `false` when the field is absent;
+    // it never enables the upgrade, adds the Cold Shower task, or touches any
+    // day record, score, or XP. Existing attempts stay exactly as they were.
+    if (meta.coldExposureUpgradeEnabled === undefined) {
+      profiles[profId] = { ...profiles[profId], activeChallenge: { ...meta, coldExposureUpgradeEnabled: false } };
+      changed = true;
+    }
 
     // Add the required Short Physical Reset task to active MT challenges without
     // it — inserted just before the Daily Log, preserving custom tasks. The
@@ -838,6 +847,7 @@ export function AppProvider({ children }) {
       emoji: entry.challenge?.emoji,
       variant: entry.challenge?.variant,
       templateId: entry.challenge?.templateId,
+      coldExposureEnabled: !!entry.challenge?.coldExposureUpgradeEnabled,
       durationDays: entry.challenge?.durationDays,
       completionDate: entry.completionDate || getTodayStr(),
       xpEarned: entry.xpEarned,
@@ -1021,7 +1031,12 @@ export function AppProvider({ children }) {
     const variantDef = tpl?.variants?.[meta.variant];
     if (!variantDef?.start_tasks) return;
 
-    const templateTasks = variantDef.start_tasks.map(t => ({ ...t, source: 'template' }));
+    // Preserve the locked Cold Exposure Upgrade for this attempt: when enabled,
+    // the required Cold Shower task is re-generated into the refreshed template
+    // task list (it is not part of the static template start_tasks). A sync
+    // never silently removes it or alters the attempt's rule.
+    const baseTemplateTasks = applyColdExposureUpgrade(variantDef.start_tasks, isColdExposureEnabled(meta));
+    const templateTasks = baseTemplateTasks.map(t => ({ ...t, source: 'template' }));
     const customTasks = [...(prof.tasks || [])]
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .filter(t => getTaskSource(t, profId) === 'custom')
@@ -1093,6 +1108,10 @@ export function AppProvider({ children }) {
 
   const deleteTask = useCallback((taskId) => {
     if (!activeProfile) return;
+    // The Cold Exposure Upgrade is a locked rule of the active Mental Training
+    // attempt: its required Cold Shower task cannot be casually removed through
+    // ordinary task management (to change it, start a new challenge attempt).
+    if (taskId === 'mt_cold_shower' && isColdExposureEnabled(profile?.activeChallenge)) return;
     const tasks = profile?.tasks || [];
     updateProfile({ tasks: tasks.filter(t => t.id !== taskId).map((t, i) => ({ ...t, order: i })) });
   }, [activeProfile, profile, updateProfile]);

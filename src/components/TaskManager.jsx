@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { isColdExposureEnabled } from '../data/challengeTemplates';
 
 const PRESET_COLORS = [
   '#FF6B6B','#FF8FAB','#FFB347','#F9E04B',
@@ -171,14 +172,16 @@ export default function TaskManager() {
               >
                 {editId === task.id ? '✓' : '✏️'}
               </button>
-              <button
-                className="btn btn-icon"
-                style={{ color: 'var(--danger)' }}
-                onClick={() => deleteTask(task.id)}
-                title="Delete"
-              >
-                🗑
-              </button>
+              {!(task.id === 'mt_cold_shower' && isColdExposureEnabled(profile?.activeChallenge)) && (
+                <button
+                  className="btn btn-icon"
+                  style={{ color: 'var(--danger)' }}
+                  onClick={() => deleteTask(task.id)}
+                  title="Delete"
+                >
+                  🗑
+                </button>
+              )}
             </div>
           </div>
 

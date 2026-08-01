@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
-import { METRIC_LABELS, visibleChallenges } from '../data/challengeTemplates';
+import { METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK, applyColdExposureUpgrade } from '../data/challengeTemplates';
 import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
 import { FutureSelfLetterForm } from './FutureSelfLetter';
 
@@ -163,8 +163,13 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
   const [variantTab, setVariantTab] = useState(isActive && activeVariant ? activeVariant : 'standard');
   const isVariantStart = template.start_flow === 'variant';
   const isCustom = template.id === 'custom_challenge_framework';
+  const isMT = template.id === MENTAL_TRAINING_TEMPLATE_ID;
   const defaultDuration = template.duration_options_days[Math.floor((template.duration_options_days.length - 1) / 2)];
   const [durationSel, setDurationSel] = useState(defaultDuration);
+  // Cold Exposure Upgrade — Mental Training only, opt-in, disabled by default,
+  // and re-asked for every new attempt (this is local setup state, never a
+  // stored profile preference).
+  const [coldUpgrade, setColdUpgrade] = useState(false);
 
   return (
     <div className={`challenge-card${isActive ? ' active' : ''}`}>
@@ -285,6 +290,47 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
           </div>
           <VariantPanel variant={template.variants[variantTab]} template={template} />
 
+          {/* Cold Exposure Upgrade — Mental Training only. Optional, disabled by
+              default, chosen fresh each attempt, and locked once the challenge
+              starts. */}
+          {isMT && !isActive && template.startable && (
+            <div className={`cold-upgrade-card${coldUpgrade ? ' on' : ''}`}>
+              <div className="cold-upgrade-head">
+                <div className="cold-upgrade-title">🚿 Cold Exposure Upgrade</div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={coldUpgrade}
+                  className={`toggle-btn${coldUpgrade ? ' on' : ''}`}
+                  onClick={() => setColdUpgrade(v => !v)}
+                >
+                  {coldUpgrade ? 'Enabled' : 'Off'}
+                </button>
+              </div>
+              <p className="cold-upgrade-desc">
+                Add a 30–60 second cold finish to your daily challenge requirements. Once enabled, it
+                counts toward your daily grade and XP just like every other required task.
+              </p>
+              <p className="cold-upgrade-safety">
+                ⚠️ Skip cold exposure if you feel dizzy, hypoglycemic, sick, or unusually weak.
+              </p>
+              <ul className="cold-upgrade-points">
+                <li>Optional — off unless you turn it on.</li>
+                <li>Enabling it increases your daily requirements.</li>
+                <li>It affects both your challenge grade and XP.</li>
+                <li>Once the challenge starts, it can&apos;t be casually removed from that attempt.</li>
+              </ul>
+              {coldUpgrade && (
+                <div className="cold-upgrade-preview">
+                  <div className="cold-upgrade-preview-label">Required because Cold Exposure Upgrade is enabled:</div>
+                  <div className="cold-upgrade-preview-task">
+                    {COLD_SHOWER_TASK.icon} Cold Shower — 30–60 second cold finish <span className="cold-upgrade-xp">{COLD_SHOWER_TASK.xp} XP</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {template.inspiration_sources?.length > 0 && template.inspiration_sources[0] !== 'User-defined' && (
             <div className="tpl-sources">Informed by: {template.inspiration_sources.join(', ')}</div>
           )}
@@ -297,7 +343,7 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
           {!isActive && template.startable && isVariantStart && (
             <button
               className="btn btn-primary challenge-card-action"
-              onClick={() => onStart({ variant: variantTab, durationDays: durationSel })}
+              onClick={() => onStart({ variant: variantTab, durationDays: durationSel, coldExposureUpgradeEnabled: isMT ? coldUpgrade : false })}
             >
               Start {template.challenge_name}
             </button>
@@ -359,6 +405,10 @@ export default function ChallengesView({ setView }) {
       startChallenge(undefined, { futureSelfLetter: letter });
     } else {
       const variantDef = ps.template.variants[ps.variant];
+      // Cold Exposure Upgrade applies only to Mental Training. The choice is
+      // locked onto THIS attempt's challenge rules, and the required Cold Shower
+      // task is generated into the daily task list only when enabled.
+      const coldEnabled = ps.template.id === MENTAL_TRAINING_TEMPLATE_ID && ps.coldExposureUpgradeEnabled === true;
       startChallenge(undefined, {
         challenge: {
           templateId: ps.template.id,
@@ -373,8 +423,10 @@ export default function ChallengesView({ setView }) {
           passingScore: ps.template.passing_score ?? 75,
           keystoneRequirement: ps.template.keystone_requirement ?? 65,
           badgeId: ps.template.rewards?.badge_id || null,
+          // Locked challenge-attempt rule — default false, MT only.
+          coldExposureUpgradeEnabled: coldEnabled,
         },
-        tasks: variantDef.start_tasks,
+        tasks: applyColdExposureUpgrade(variantDef.start_tasks, coldEnabled),
         bonusMissions: ps.template.bonus_missions || [],
         futureSelfLetter: letter,
       });

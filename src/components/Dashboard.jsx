@@ -69,6 +69,10 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
           <div className="cc-perf-unavailable">Performance score unavailable for this past challenge.</div>
         )}
 
+        {summary.templateId === 'mental_training_phase' && (
+          <div className="cc-cold-line">🚿 Cold Exposure Upgrade: <strong>{summary.coldExposureEnabled ? 'Enabled' : 'Not Enabled'}</strong></div>
+        )}
+
         {badgeDefs.length > 0 && (
           <div className="cc-badges">
             {badgeDefs.map(b => (
