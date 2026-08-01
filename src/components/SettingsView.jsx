@@ -6,7 +6,7 @@ import QuoteLibrary from './QuoteLibrary';
 import NotificationSettings from './NotificationSettings';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 import BuildBanner, { BUILD_VERSION } from './BuildBanner';
-import { computeTotalXP, computeLifetimeXP, getRankInfo, BADGE_DEFS } from '../utils/gamification';
+import { computeTotalXP, computeLifetimeXP, getRankInfo, BADGE_DEFS, LEGACY_PASSING_SCORE } from '../utils/gamification';
 
 const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints', 'archives', 'notifPrefs', 'weeklyReflections'];
 
@@ -456,7 +456,7 @@ export default function SettingsView({ setView }) {
                         {arch.finalScore != null && arch.scoreAvailable !== false && (
                           <>
                             <div className="archive-detail"><span>Final score</span><strong>{arch.finalScore}%</strong></div>
-                            <div className="archive-detail"><span>Passing score</span><strong>{arch.passingScore ?? 75}%</strong></div>
+                            <div className="archive-detail"><span>Passing score</span><strong>{arch.passingScore ?? LEGACY_PASSING_SCORE}%</strong></div>
                             <div className="archive-detail"><span>Result</span><strong>{arch.passed ? 'Passed' : 'Did Not Pass'}</strong></div>
                             {arch.keystoneAdherence != null && (
                               <div className="archive-detail"><span>Keystone adherence</span><strong>{arch.keystoneAdherence}%</strong></div>

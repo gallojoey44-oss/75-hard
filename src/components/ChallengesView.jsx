@@ -5,6 +5,7 @@ import { METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHO
 import { formatDateLong } from '../utils/dateUtils';
 import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
 import { FutureSelfLetterForm } from './FutureSelfLetter';
+import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
 
 // Overall challenge difficulty — fixed per challenge, independent of the
 // Beginner/Standard/Hard mode chosen inside it.
@@ -422,8 +423,8 @@ export default function ChallengesView({ setView }) {
           rewardXP: ps.template.rewards?.xp || 0,
           // Challenge Performance config (percentage score system).
           completionBonusXP: ps.template.rewards?.xp || 0,
-          passingScore: ps.template.passing_score ?? 75,
-          keystoneRequirement: ps.template.keystone_requirement ?? 65,
+          passingScore: ps.template.passing_score ?? DEFAULT_PASSING_SCORE,
+          keystoneRequirement: ps.template.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
           badgeId: ps.template.rewards?.badge_id || null,
           // Locked challenge-attempt rule — default false, MT only.
           coldExposureUpgradeEnabled: coldEnabled,

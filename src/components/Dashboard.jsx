@@ -8,6 +8,7 @@ import {
   computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
   getRankReward, getUnlockedRewards, computeGrowthSummary, buildFutureSelfMessage,
+  DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT,
 } from '../utils/gamification';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
@@ -609,7 +610,7 @@ export default function Dashboard({ setView }) {
           templateId: tpl.id, name: tpl.challenge_name, emoji: tpl.emoji, variant: s.variant,
           durationDays: s.durationDays, templateVersion: tpl.template_version || 1,
           rewardXP: tpl.rewards?.xp || 0, completionBonusXP: tpl.rewards?.xp || 0,
-          passingScore: tpl.passing_score ?? 75, keystoneRequirement: tpl.keystone_requirement ?? 65,
+          passingScore: tpl.passing_score ?? DEFAULT_PASSING_SCORE, keystoneRequirement: tpl.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
           badgeId: tpl.rewards?.badge_id || null,
         },
         tasks: tpl.variants[s.variant].start_tasks,

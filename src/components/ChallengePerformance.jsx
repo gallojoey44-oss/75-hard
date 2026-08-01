@@ -63,7 +63,7 @@ export default function ChallengePerformance({ setView }) {
     if (prev != null && prev !== cur) {
       const pass = cfg.passingScore;
       let msg = null;
-      if (prev < pass && cur >= pass) msg = 'You are now above the passing line.';
+      if (prev < pass && cur >= pass) msg = `You are now above the ${pass}% passing line.`;
       else if (prev >= pass && cur < pass) msg = `You are currently below the ${pass}% passing line. There is still time to recover.`;
       else if (Math.abs(cur - prev) >= 2) msg = `Challenge Score ${cur > prev ? 'increased' : 'changed'} from ${prev}% to ${cur}%.`;
       if (msg) setFeedback({ key: Date.now(), text: msg });
@@ -80,7 +80,7 @@ export default function ChallengePerformance({ setView }) {
   // Only scorable active challenges (fixed-duration, not the Forge Daily baseline).
   if (isForgeDaily() || !score) return null;
 
-  const status = getPerformanceStatus(score.score);
+  const status = getPerformanceStatus(score.score, cfg.passingScore);
   const color = STATUS_COLOR[status.key];
   const abovePassing = score.score >= cfg.passingScore;
   const keystoneShort = score.keystoneCount > 0 && abovePassing && score.keystoneAdherence < cfg.keystoneRequirement;
@@ -196,7 +196,7 @@ export default function ChallengePerformance({ setView }) {
           <div className="perf-subhead">Performance by task</div>
           <div className="perf-tasklist">
             {breakdown.map(t => {
-              const ts = getPerformanceStatus(t.pct);
+              const ts = getPerformanceStatus(t.pct, cfg.passingScore);
               return (
                 <div key={t.id} className="perf-task-row">
                   <div className="perf-task-name">{t.name}{t.keystone > 0 && <span className="perf-ks">{'⭐'.repeat(t.keystone)}</span>}</div>

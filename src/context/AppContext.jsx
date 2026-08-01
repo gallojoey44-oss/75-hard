@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
-import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay } from '../utils/gamification';
+import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay, DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, LEGACY_PASSING_SCORE } from '../utils/gamification';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { isKeystone, RANKS } from '../utils/gamification';
@@ -318,7 +318,23 @@ function migrateProfiles(stored) {
       changed = true;
     }
 
-    const meta = profiles[profId].activeChallenge;
+    let meta = profiles[profId].activeChallenge;
+
+    // Passing-score default lowered 75 → 70 (standard Forge). Migrate an active
+    // attempt that still stores the OLD 75 default down to 70 — but ONLY when its
+    // template does not define an explicit passing_score. A stricter/intentional
+    // rule (e.g. 75-Day Discipline stores 80, or a template that explicitly sets
+    // its own threshold) is preserved untouched. Idempotent: once it reads 70 (or
+    // a template override), nothing changes. Archived results are never touched.
+    if (meta && meta.passingScore === LEGACY_PASSING_SCORE) {
+      const t = getTemplateById(meta.templateId);
+      if (t?.passing_score == null) {
+        profiles[profId] = { ...profiles[profId], activeChallenge: { ...meta, passingScore: DEFAULT_PASSING_SCORE } };
+        meta = profiles[profId].activeChallenge;
+        changed = true;
+      }
+    }
+
     if (meta?.templateId !== 'mental_training_phase') continue;
     const tpl = getTemplateById('mental_training_phase');
 
@@ -331,9 +347,11 @@ function migrateProfiles(stored) {
     //     one). We never guess a mid-challenge date.
     if (meta.coldExposureUpgradeEnabled === undefined) {
       profiles[profId] = { ...profiles[profId], activeChallenge: { ...meta, coldExposureUpgradeEnabled: false } };
+      meta = profiles[profId].activeChallenge;
       changed = true;
     } else if (meta.coldExposureUpgradeEnabled === true && !meta.coldExposureUpgradeStartDate && profiles[profId].challengeStart) {
       profiles[profId] = { ...profiles[profId], activeChallenge: { ...meta, coldExposureUpgradeStartDate: profiles[profId].challengeStart } };
+      meta = profiles[profId].activeChallenge;
       changed = true;
     }
 
@@ -888,8 +906,10 @@ export function AppProvider({ children }) {
       // Challenge Performance result (percentage score system)
       finalScore: entry.finalScore ?? null,
       scoreAvailable: entry.scoreAvailable !== false && entry.finalScore != null,
-      passingScore: entry.passingScore ?? 75,
-      keystoneRequirement: entry.keystoneRequirement ?? 65,
+      // Old archives completed before a threshold was stored keep the historical
+      // 75% context (their pass/fail was decided under the old default).
+      passingScore: entry.passingScore ?? LEGACY_PASSING_SCORE,
+      keystoneRequirement: entry.keystoneRequirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
       keystoneAdherence: entry.keystoneAdherence ?? null,
       passed: entry.passed ?? null,
       completionBonus: entry.completionBonus ?? 0,

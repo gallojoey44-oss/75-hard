@@ -430,8 +430,15 @@ function computeComebackXP(profiles, profId, xpStartDay) {
 // Minimum Warrior Days are "protected" (excluded from both sides) so a recovery
 // day never drags the score.
 
-export const DEFAULT_PASSING_SCORE = 75;
+// The single shared standard-Forge passing threshold. Individual challenges may
+// override it (stricter or user-chosen) via meta.passingScore; everything that
+// needs the standard default reads this constant rather than hardcoding a number.
+export const DEFAULT_PASSING_SCORE = 70;
 export const DEFAULT_KEYSTONE_REQUIREMENT = 65;
+// The pre-migration standard default. Used only as a fallback when displaying or
+// summarizing OLD archives that were completed before a threshold was stored, so
+// their historical pass/fail context is preserved (never applied to live scoring).
+export const LEGACY_PASSING_SCORE = 75;
 
 export function getPassingConfig(meta) {
   return {
@@ -561,10 +568,17 @@ export const PERF_STATUS = {
   needs:     { key: 'needs',     label: 'Needs Attention', message: 'You are currently below the passing pace. Focus on the highest-value tasks first.' },
 };
 
-export function getPerformanceStatus(score) {
+// Status bands anchored to the challenge's passing score (default 70):
+//   Excellent    ≥ 90
+//   On Track     ≥ passingScore            (≥ 70 by default)
+//   At Risk      ≥ passingScore − 10       (60–69 by default)
+//   Needs Attn.  below that                (< 60 by default)
+// Anchoring to the passing score keeps the bands truthful for stricter
+// challenges too (e.g. an 80% challenge shows On Track at ≥ 80, At Risk ≥ 70).
+export function getPerformanceStatus(score, passingScore = DEFAULT_PASSING_SCORE) {
   if (score >= 90) return PERF_STATUS.excellent;
-  if (score >= 75) return PERF_STATUS.onTrack;
-  if (score >= 65) return PERF_STATUS.atRisk;
+  if (score >= passingScore) return PERF_STATUS.onTrack;
+  if (score >= passingScore - 10) return PERF_STATUS.atRisk;
   return PERF_STATUS.needs;
 }
 

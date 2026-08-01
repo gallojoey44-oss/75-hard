@@ -546,9 +546,6 @@ export default function DailyView({ editDayNum, setView }) {
         </div>
       </div>
 
-      {/* Challenge Performance — percentage score, passing line, status */}
-      <ChallengePerformance />
-
       {/* Read My Why / I'm struggling */}
       <WhyBar
         letter={letter}
@@ -772,6 +769,11 @@ export default function DailyView({ editDayNum, setView }) {
 
       {/* Bonus Missions — optional, below required tasks, above the Daily Log */}
       <BonusMissions dayNumber={selectedDayNum} isEditable />
+
+      {/* Challenge Performance — placed after the daily actions so the user
+          first sees what to do, then how it affects their overall score.
+          (Bonus Missions never affect the required challenge score.) */}
+      <ChallengePerformance />
 
       {/* Daily Log — both profiles */}
       <div className="section-card" ref={logRef}>
