@@ -4345,6 +4345,23 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   border-radius: 8px;
 }
 .cc-improvement.up { border-color: rgba(16,185,129,0.4); color: #10B981; }
+/* Changes During This Challenge — averaged before/after per metric */
+.cc-changes { display: flex; flex-direction: column; gap: 6px; }
+.cc-change {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px 12px;
+  font-size: 13px; padding: 8px 10px; background: var(--card2);
+  border: 1px solid var(--border); border-left-width: 3px; border-radius: 8px;
+}
+.cc-change-label { font-weight: 600; }
+.cc-change-values { color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cc-change-verdict { font-weight: 600; white-space: nowrap; font-size: 12px; }
+.cc-change.improved { border-left-color: #10B981; }
+.cc-change.improved .cc-change-verdict { color: #10B981; }
+.cc-change.worsened { border-left-color: #F59E0B; }
+.cc-change.worsened .cc-change-verdict { color: #F59E0B; }
+.cc-change.flat { border-left-color: var(--border); }
+.cc-change.flat .cc-change-verdict { color: var(--text3); }
+.cc-changes-empty { font-size: 13px; color: var(--text3); padding: 8px 10px; }
 .cc-reflection { background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
 .cc-reflection-week { font-size: 12px; font-weight: 700; color: var(--accent2); margin-bottom: 4px; }
 .cc-reflection-line { font-size: 12px; color: var(--text2); line-height: 1.5; margin-bottom: 3px; }

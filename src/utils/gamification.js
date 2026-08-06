@@ -651,6 +651,76 @@ export function projectFinalScore(scoreObj, meta) {
   };
 }
 
+// ─── Changes During This Challenge ───────────────────────────────────────────
+// The tracked wellbeing metrics and their direction. "higherBetter: false" means
+// a LOWER value is an improvement (e.g. stress). New metrics can be added here
+// and are picked up everywhere automatically.
+export const CHANGE_METRICS = [
+  { key: 'mood',          label: 'Mood',           higherBetter: true },
+  { key: 'energy',        label: 'Energy',         higherBetter: true },
+  { key: 'confidence',    label: 'Confidence',     higherBetter: true },
+  { key: 'sleep',         label: 'Sleep',          higherBetter: true },
+  { key: 'recovery',      label: 'Recovery',       higherBetter: true },
+  { key: 'workoutEffort', label: 'Workout Effort', higherBetter: true },
+  { key: 'stress',        label: 'Stress',         higherBetter: false },
+];
+// Each comparison window must have at least this many logged values for a metric
+// before it is reported — otherwise the result is too noisy to be meaningful.
+export const CHANGE_MIN_WINDOW = 2;
+
+/**
+ * "Changes During This Challenge" — a statistically meaningful before/after for
+ * each tracked metric. Instead of comparing a single day (which is noisy), it
+ * compares the AVERAGE of the first half of logged days against the AVERAGE of
+ * the second half.
+ *
+ * Windows: the logged challenge days (days that recorded at least one metric)
+ * are split into two NON-OVERLAPPING halves; when the count is odd the middle
+ * day is dropped so the two halves stay comparable. This generalises to any
+ * challenge length (a fully-logged 14-day challenge splits into first-7 vs
+ * last-7; a 30/75-day challenge into first-half vs second-half) with no
+ * hardcoded window sizes.
+ *
+ * Rules: missing values are ignored (never counted as 0); a metric is reported
+ * only when BOTH halves hold at least CHANGE_MIN_WINDOW logged values; direction
+ * is respected (lower is better for stress). Returns [] when there is not enough
+ * data to form two halves — callers show "Not enough data."
+ */
+export function computeChallengeChanges(days, endDayNum) {
+  const logged = [];
+  for (let i = 1; i <= (endDayNum || 0); i++) {
+    const d = days?.[i];
+    if (d && CHANGE_METRICS.some(m => Number(d[m.key]) > 0)) logged.push(d);
+  }
+  const n = logged.length;
+  const half = Math.floor(n / 2);
+  if (half < 1) return [];
+  const firstWin = logged.slice(0, half);
+  const secondWin = logged.slice(n - half);
+  const windowAvg = (arr, key) => {
+    const vals = arr.map(d => Number(d[key])).filter(v => Number.isFinite(v) && v > 0);
+    return vals.length ? { avg: vals.reduce((s, v) => s + v, 0) / vals.length, count: vals.length } : { avg: null, count: 0 };
+  };
+  const out = [];
+  for (const { key, label, higherBetter } of CHANGE_METRICS) {
+    const a = windowAvg(firstWin, key), b = windowAvg(secondWin, key);
+    if (a.count < CHANGE_MIN_WINDOW || b.count < CHANGE_MIN_WINDOW) continue;
+    const from = Math.round(a.avg * 10) / 10;
+    const to = Math.round(b.avg * 10) / 10;
+    // Delta is derived from the displayed (rounded) values so "from → to" and
+    // "by X" are always arithmetically consistent and transparent.
+    const deltaRounded = Math.round((to - from) * 10) / 10;
+    out.push({
+      key, label, higherBetter, from, to,
+      delta: Math.abs(deltaRounded),
+      changed: deltaRounded !== 0,
+      improved: higherBetter ? deltaRounded > 0 : deltaRounded < 0,
+      baselineCount: a.count, endingCount: b.count,
+    });
+  }
+  return out;
+}
+
 /**
  * Compute total XP for a profile.
  * Returns { total, rawTotal, gained, lost } — total is max(0, rawTotal + xpOffset).

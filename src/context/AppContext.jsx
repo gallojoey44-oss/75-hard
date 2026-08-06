@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
-import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay, DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, LEGACY_PASSING_SCORE } from '../utils/gamification';
+import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay, computeChallengeChanges, DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, LEGACY_PASSING_SCORE } from '../utils/gamification';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { isKeystone, RANKS } from '../utils/gamification';
@@ -864,23 +864,9 @@ export function AppProvider({ children }) {
       if (dayTasks.length && done === dayTasks.length) perfectDays++;
       if (d) for (const kt of keystoneTasks) { ksTotal++; if (d.tasks?.[kt.id]) ksDone++; }
     }
-    // Personal improvements: first vs last few logged days for key ratings
-    const avg = (arr, key) => {
-      const vals = arr.map(d => d[key] || 0).filter(v => v > 0);
-      return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
-    };
-    const first = logged.slice(0, 3), last = logged.slice(-3);
-    const improvements = [
-      { key: 'mood', label: 'Mood', higherBetter: true },
-      { key: 'energy', label: 'Energy', higherBetter: true },
-      { key: 'confidence', label: 'Confidence', higherBetter: true },
-      { key: 'stress', label: 'Stress', higherBetter: false },
-    ].map(({ key, label, higherBetter }) => {
-      const a = avg(first, key), b = avg(last, key);
-      if (a == null || b == null) return null;
-      const delta = Math.round((b - a) * 10) / 10;
-      return { label, delta, improved: higherBetter ? delta > 0 : delta < 0 };
-    }).filter(Boolean);
+    // "Changes During This Challenge": averaged first-half vs second-half of the
+    // logged challenge days for every tracked metric (no single-day baseline).
+    const changes = computeChallengeChanges(days, entry.endDayNum);
 
     return {
       name: entry.challenge?.name,
@@ -902,7 +888,7 @@ export function AppProvider({ children }) {
       hasKeystones: keystoneTasks.length > 0,
       reflections: entry.weeklyReflections || {},
       letter: entry.challenge?.futureSelfLetter || null,
-      improvements,
+      changes,
       // Challenge Performance result (percentage score system)
       finalScore: entry.finalScore ?? null,
       scoreAvailable: entry.scoreAvailable !== false && entry.finalScore != null,

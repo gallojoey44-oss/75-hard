@@ -107,19 +107,24 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
           </div>
         </div>
 
-        {summary.improvements?.length > 0 && (
-          <div className="cc-section">
-            <div className="cc-section-title">Personal improvements</div>
-            <div className="cc-improvements">
-              {summary.improvements.map(im => (
-                <div key={im.label} className={`cc-improvement${im.improved ? ' up' : ''}`}>
-                  <span>{im.label}</span>
-                  <span>{im.delta > 0 ? '+' : ''}{im.delta} {im.improved ? '↑' : ''}</span>
+        <div className="cc-section">
+          <div className="cc-section-title">Changes During This Challenge</div>
+          {summary.changes?.length > 0 ? (
+            <div className="cc-changes">
+              {summary.changes.map(c => (
+                <div key={c.key} className={`cc-change ${c.changed ? (c.improved ? 'improved' : 'worsened') : 'flat'}`}>
+                  <div className="cc-change-label">{c.label}</div>
+                  <div className="cc-change-values">{c.from.toFixed(1)} → {c.to.toFixed(1)}</div>
+                  <div className="cc-change-verdict">
+                    {c.changed ? `${c.improved ? 'Improved' : 'Worsened'} by ${c.delta.toFixed(1)}` : 'No change'}
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="cc-changes-empty">Not enough data.</div>
+          )}
+        </div>
 
         {reflectionWeeks.length > 0 && (
           <div className="cc-section">
