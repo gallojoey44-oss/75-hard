@@ -213,18 +213,10 @@ export default function SettingsView({ setView }) {
         </div>
         {profile?.faithEnabled && (
           <div className="settings-row" style={{ marginTop: 10 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>Count toward daily completion</div>
-              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
-                Adds 1 task slot; completing faith reflection raises the % bar
-              </div>
+            <div style={{ flex: 1, fontSize: 12, color: 'var(--text2)' }}>
+              Faith / Reflection is a personal add-on — it has its own journal and XP and does not change
+              your challenge score or daily task percentage.
             </div>
-            <button
-              className={`toggle-btn${profile?.faithCountsToward ? ' on' : ''}`}
-              onClick={() => updateProfile({ faithCountsToward: !profile?.faithCountsToward })}
-            >
-              {profile?.faithCountsToward ? 'On' : 'Off'}
-            </button>
           </div>
         )}
       </div>

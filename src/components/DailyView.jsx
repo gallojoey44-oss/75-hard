@@ -345,15 +345,12 @@ export default function DailyView({ editDayNum, setView }) {
   function calcPct(data) {
     if (!data || !profile) return 0;
     // Date-aware: the Cold Shower only belongs to days on/after its activation.
+    // Only the challenge's required tasks count — matches getDayCompletion and
+    // the visible "x/y tasks" count, so all-required-done reads exactly 100%.
     const tasks = requiredTasksForDay(profile.tasks || [], profile.activeChallenge, profile.challengeStart, data?.dayNumber ?? selectedDayNum);
     if (!tasks.length) return 0;
-    const done           = tasks.filter(t => data.tasks?.[t.id]).length;
-    const faithEnabled   = profile?.faithEnabled;
-    const faithCounts    = profile?.faithCountsToward;
-    const faithComplete  = data.faithReflection?.completed;
-    const extra     = (faithEnabled && faithCounts) ? 1 : 0;
-    const extraDone = (faithEnabled && faithCounts && faithComplete) ? 1 : 0;
-    return Math.round(((done + extraDone) / (tasks.length + extra)) * 100);
+    const done = tasks.filter(t => data.tasks?.[t.id]).length;
+    return Math.round((done / tasks.length) * 100);
   }
 
   function calcMWDPct(data) {
@@ -455,7 +452,6 @@ export default function DailyView({ editDayNum, setView }) {
 
   const mentalTaskId = isMe ? 'mental' : 'gf_mental';
   const faithEnabled = profile?.faithEnabled || false;
-  const faithCounts  = profile?.faithCountsToward || false;
   const hasGratitudeTask = tasks.some(t => t.id === 'mt_gratitude');
   const meta = getChallengeMeta();
   const isFatLoss = meta.templateId === 'fat_loss_phase';
@@ -680,7 +676,6 @@ export default function DailyView({ editDayNum, setView }) {
           dayNumber={selectedDayNum}
           dayData={dayData}
           onUpdate={handleUpdate}
-          countsToward={faithCounts}
         />
       )}
 
@@ -738,7 +733,6 @@ export default function DailyView({ editDayNum, setView }) {
               dayNumber={selectedDayNum}
               dayData={dayData}
               onUpdate={handleUpdate}
-              countsToward={faithCounts}
             />
           )}
 

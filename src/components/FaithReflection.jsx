@@ -3,7 +3,7 @@ import { FAITH_VIRTUES, MENTAL_BATTLES, FAITH_PROMPTS, DAILY_VERSES } from '../d
 
 const EMPTY_FAITH = { completed: false, journal: '', virtue: null, mentalBattle: null, win: '' };
 
-export default function FaithReflection({ dayNumber, dayData, onUpdate, countsToward }) {
+export default function FaithReflection({ dayNumber, dayData, onUpdate }) {
   const [open, setOpen] = useState(false);
 
   const faith = { ...EMPTY_FAITH, ...(dayData?.faithReflection || {}) };
@@ -105,12 +105,6 @@ export default function FaithReflection({ dayNumber, dayData, onUpdate, countsTo
                 onChange={e => update({ win: e.target.value })}
               />
             </div>
-
-            {countsToward && (
-              <div className="faith-counts-note">
-                ℹ️ Counts toward daily completion
-              </div>
-            )}
 
             {/* Complete button */}
             {faith.completed ? (

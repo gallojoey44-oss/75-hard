@@ -671,13 +671,13 @@ export function AppProvider({ children }) {
     if (!tasks.length) return 0;
     const dayData = (allDays[profId] || {})[dayNumber];
     if (!dayData) return 0;
+    // The daily percentage is computed ONLY from the challenge attempt's required
+    // tasks (the same set the visible "x/y tasks" count uses), so it always
+    // agrees with the count and reads 100% when every required task is done. The
+    // optional Faith / Reflection section is a personal add-on, not a challenge
+    // task — it never enters this denominator (it still awards its own XP).
     const done = tasks.filter(t => dayData.tasks[t.id]).length;
-    const faithEnabled    = profiles[profId]?.faithEnabled;
-    const faithCounts     = profiles[profId]?.faithCountsToward;
-    const faithCompleted  = dayData.faithReflection?.completed;
-    const extra     = (faithEnabled && faithCounts) ? 1 : 0;
-    const extraDone = (faithEnabled && faithCounts && faithCompleted) ? 1 : 0;
-    return Math.round(((done + extraDone) / (tasks.length + extra)) * 100);
+    return Math.round((done / tasks.length) * 100);
   }, [activeProfile, profiles, allDays]);
 
   const getStreak = useCallback((profId = activeProfile) => {
