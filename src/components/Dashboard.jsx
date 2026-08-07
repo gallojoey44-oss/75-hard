@@ -8,7 +8,7 @@ import {
   computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
   getRankReward, getUnlockedRewards, computeGrowthSummary, buildFutureSelfMessage,
-  DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, computeChallengeChanges,
+  DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, computeChallengeChanges, computeWithinChallengeTrend,
 } from '../utils/gamification';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
@@ -109,20 +109,41 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
 
         <div className="cc-section">
           <div className="cc-section-title">Changes During This Challenge</div>
+          <div className="cc-changes-sub">Compared with your pre-challenge baseline.</div>
           {summary.changes?.length > 0 ? (
-            <div className="cc-changes">
-              {summary.changes.map(c => (
-                <div key={c.key} className={`cc-change ${c.changed ? (c.improved ? 'improved' : 'worsened') : 'flat'}`}>
-                  <div className="cc-change-label">{c.label}</div>
-                  <div className="cc-change-values">{c.from.toFixed(1)} → {c.to.toFixed(1)}</div>
-                  <div className="cc-change-verdict">
-                    {c.changed ? `${c.improved ? 'Improved' : 'Worsened'} by ${c.delta.toFixed(1)}` : 'No change'}
+            <>
+              <div className="cc-changes">
+                {summary.changes.map(c => (
+                  <div key={c.key} className={`cc-change ${c.changed ? (c.improved ? 'improved' : 'worsened') : 'flat'}`}>
+                    <div className="cc-change-label">
+                      {c.label}
+                      {c.limitedBaseline && <span className="cc-change-limited">Limited baseline data</span>}
+                    </div>
+                    <div className="cc-change-values">{c.from.toFixed(1)} → {c.to.toFixed(1)}</div>
+                    <div className="cc-change-verdict">
+                      {c.changed ? `${c.improved ? 'Improved' : 'Worsened'} by ${c.delta.toFixed(1)}` : 'No change'}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              {summary.trend?.length > 0 && (
+                <details className="cc-trend">
+                  <summary className="cc-trend-summary">Within-Challenge Trend</summary>
+                  <div className="cc-trend-note">First half vs second half of this challenge — momentum inside the challenge, not overall change.</div>
+                  {summary.trend.map(t => (
+                    <div key={t.key} className="cc-trend-row">
+                      <span>{t.label}</span>
+                      <span className="cc-trend-values">{t.first.toFixed(1)} → {t.second.toFixed(1)}</span>
+                      <span className={`cc-trend-delta ${t.changed ? (t.improved ? 'up' : 'down') : ''}`}>
+                        {t.changed ? `${t.second > t.first ? '+' : '−'}${t.delta.toFixed(1)}` : '0.0'}
+                      </span>
+                    </div>
+                  ))}
+                </details>
+              )}
+            </>
           ) : (
-            <div className="cc-changes-empty">Not enough data.</div>
+            <div className="cc-changes-empty">Not enough pre-challenge data</div>
           )}
         </div>
 
@@ -684,18 +705,30 @@ export default function Dashboard({ setView }) {
   }, [activeProfile, rankInfo.current.rank, profile?.highestRank, lifetimeXP]);
 
   // Challenge Complete screen takes priority — shown once after a challenge ends.
-  // Summaries stored before "Changes During This Challenge" shipped carry no
-  // `changes` field, which would render "Not enough data." even though the
-  // archived days hold plenty of ratings. Recompute from the archived day
-  // records in that case (derived only — the stored snapshot and the raw logs
-  // are never modified).
+  // "Changes During This Challenge" is always DERIVED from the archived day
+  // records plus the surrounding history, never read from the stored snapshot:
+  // older snapshots were built by superseded algorithms (single-day, then
+  // first-half-vs-second-half), so recomputing keeps every completion — new or
+  // old — on the current pre-challenge-baseline model. Purely derived: neither
+  // the snapshot nor any raw log is modified.
   const completionSummary = (() => {
     const s = profile?.lastCompletion;
-    if (!s || Array.isArray(s.changes)) return s;
+    if (!s) return s;
     const completedArchives = profileArchives.filter(a => a?.completed);
     const arch = [...completedArchives].reverse().find(a => !s.challengeStart || a.challengeStart === s.challengeStart)
       || completedArchives[completedArchives.length - 1];
-    return { ...s, changes: arch ? computeChallengeChanges(arch.days || {}, arch.endDayNum || 0) : [] };
+    if (!arch) return s;
+    const res = computeChallengeChanges(arch.days || {}, arch.endDayNum || 0, {
+      challengeStart: arch.challengeStart,
+      historyEntries: timeline,
+    });
+    return {
+      ...s,
+      changes: res.changes,
+      changesHasBaseline: res.hasBaseline,
+      changesLimited: res.limited,
+      trend: computeWithinChallengeTrend(arch.days || {}, arch.endDayNum || 0),
+    };
   })();
 
   if (completionSummary) {

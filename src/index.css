@@ -4362,6 +4362,23 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .cc-change.flat { border-left-color: var(--border); }
 .cc-change.flat .cc-change-verdict { color: var(--text3); }
 .cc-changes-empty { font-size: 13px; color: var(--text3); padding: 8px 10px; }
+.cc-changes-sub { font-size: 12px; color: var(--text3); margin: -2px 0 8px; }
+.cc-change-limited {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px;
+  font-size: 10px; font-weight: 600; color: var(--text3);
+  background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+}
+.cc-trend { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+.cc-trend-summary { font-size: 12px; color: var(--text2); cursor: pointer; font-weight: 600; }
+.cc-trend-note { font-size: 11px; color: var(--text3); margin: 6px 0 8px; line-height: 1.5; }
+.cc-trend-row {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+  font-size: 12px; color: var(--text2); padding: 4px 0;
+}
+.cc-trend-values { font-variant-numeric: tabular-nums; }
+.cc-trend-delta { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text3); }
+.cc-trend-delta.up { color: #10B981; }
+.cc-trend-delta.down { color: #F59E0B; }
 .cc-reflection { background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
 .cc-reflection-week { font-size: 12px; font-weight: 700; color: var(--accent2); margin-bottom: 4px; }
 .cc-reflection-line { font-size: 12px; color: var(--text2); line-height: 1.5; margin-bottom: 3px; }

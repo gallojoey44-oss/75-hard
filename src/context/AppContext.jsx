@@ -2,7 +2,8 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
-import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay, computeChallengeChanges, DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, LEGACY_PASSING_SCORE } from '../utils/gamification';
+import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay, computeChallengeChanges, computeWithinChallengeTrend, DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, LEGACY_PASSING_SCORE } from '../utils/gamification';
+import { buildTimeline } from '../utils/archiveUtils';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { isKeystone, RANKS } from '../utils/gamification';
@@ -846,7 +847,7 @@ export function AppProvider({ children }) {
   }, [activeProfile, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   // Build the Challenge Complete summary shown after a challenge finishes.
-  function buildCompletionSummary(entry) {
+  function buildCompletionSummary(entry, profId = activeProfile) {
     const days = entry.days || {};
     const tasks = entry.tasks || [];
     const keystoneTasks = tasks.filter(isKeystone);
@@ -866,7 +867,22 @@ export function AppProvider({ children }) {
     }
     // "Changes During This Challenge": averaged first-half vs second-half of the
     // logged challenge days for every tracked metric (no single-day baseline).
-    const changes = computeChallengeChanges(days, entry.endDayNum);
+    // Primary: the user's pre-challenge baseline vs this challenge's average.
+    // The baseline is drawn from ALL prior history (older archived challenges and
+    // Forge Daily / non-challenge days), strictly before this challenge started —
+    // buildTimeline unifies both sources by date, and computeChallengeChanges
+    // enforces date < challengeStart so the challenge can never seed its own
+    // baseline. Secondary: the within-challenge (first vs second half) trend.
+    const historyEntries = buildTimeline(
+      { challengeStart: entry.challengeStart, tasks: entry.tasks },
+      allDays[profId] || {},
+      archives[profId] || [],
+    );
+    const changesResult = computeChallengeChanges(days, entry.endDayNum, {
+      challengeStart: entry.challengeStart,
+      historyEntries,
+    });
+    const trend = computeWithinChallengeTrend(days, entry.endDayNum);
 
     return {
       name: entry.challenge?.name,
@@ -888,7 +904,10 @@ export function AppProvider({ children }) {
       hasKeystones: keystoneTasks.length > 0,
       reflections: entry.weeklyReflections || {},
       letter: entry.challenge?.futureSelfLetter || null,
-      changes,
+      changes: changesResult.changes,
+      changesHasBaseline: changesResult.hasBaseline,
+      changesLimited: changesResult.limited,
+      trend,
       // Challenge Performance result (percentage score system)
       finalScore: entry.finalScore ?? null,
       scoreAvailable: entry.scoreAvailable !== false && entry.finalScore != null,
@@ -916,7 +935,7 @@ export function AppProvider({ children }) {
     if (prof.activeChallenge?.templateId === 'forge_daily') return; // baseline never "completes"
 
     const entry = buildArchiveEntry(profId);
-    const summary = entry ? buildCompletionSummary(entry) : null;
+    const summary = entry ? buildCompletionSummary(entry, profId) : null;
     if (entry) {
       setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
     }

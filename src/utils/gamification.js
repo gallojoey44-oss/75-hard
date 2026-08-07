@@ -665,32 +665,121 @@ export const CHANGE_METRICS = [
   { key: 'workoutEffort', label: 'Workout Effort', higherBetter: true },
   { key: 'stress',        label: 'Stress',         higherBetter: false },
 ];
-// Each comparison window must have at least this many logged values for a metric
-// before it is reported — otherwise the result is too noisy to be meaningful.
+// Each within-challenge trend window must hold at least this many logged values
+// for a metric before the (secondary) trend is reported.
 export const CHANGE_MIN_WINDOW = 2;
 
+// Pre-challenge baseline sizing, per metric:
+//   ≥ 30 valid pre-challenge values → use the most recent 30
+//   14–29                           → use all available
+//   7–13                            → use all available, flagged "limited"
+//   < 7                             → the metric does not qualify
+export const BASELINE_MAX_DAYS = 30;
+export const BASELINE_MIN_DAYS = 7;
+export const BASELINE_LIMITED_MAX = 13;
+// A metric needs at least one valid value inside the challenge to have an average.
+export const CHALLENGE_MIN_VALUES = 1;
+
+/** Mean of a numeric list, rounded to one decimal (null when empty). */
+function avg1(vals) {
+  if (!vals.length) return null;
+  return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10;
+}
+
 /**
- * "Changes During This Challenge" — a statistically meaningful before/after for
- * each tracked metric. Instead of comparing a single day (which is noisy), it
- * compares the AVERAGE of the first half of logged days against the AVERAGE of
- * the second half.
+ * "Changes During This Challenge" — did this challenge improve the user compared
+ * with how they were doing BEFORE it started?
  *
- * Windows: the logged challenge days (days that recorded at least one metric)
- * are split into two NON-OVERLAPPING halves; when the count is odd the middle
- * day is dropped so the two halves stay comparable. This generalises to any
- * challenge length (a fully-logged 14-day challenge splits into first-7 vs
- * last-7; a 30/75-day challenge into first-half vs second-half) with no
- * hardcoded window sizes.
+ * BASELINE  = their most recent logged days strictly BEFORE challengeStart,
+ *             drawn from all history (archived challenges, Forge Daily days, any
+ *             other logs), capped at the most recent BASELINE_MAX_DAYS per metric.
+ * CHALLENGE = every valid logged value inside this exact challenge attempt.
  *
- * Rules: missing values are ignored (never counted as 0); a metric is reported
- * only when BOTH halves hold at least CHANGE_MIN_WINDOW logged values; direction
- * is respected (lower is better for stress). Returns [] when there is not enough
- * data to form two halves — callers show "Not enough data."
+ * Both windows are metric-specific and judged independently: a metric with a thin
+ * baseline is omitted on its own and never suppresses a metric that qualifies.
+ * Values are read through the shared normalizer (readDayMetric), so alias field
+ * names are handled and 0/blank is never a rating. Direction is respected (lower
+ * is better for stress).
+ *
+ * Data leakage is impossible by construction: baseline entries must satisfy
+ * date < challengeStart, and challenge values come only from this attempt's own
+ * day records (days 1..endDayNum), whose dates run challengeStart..challengeEnd.
+ *
+ * @param challengeDays  the attempt's day records, keyed by day number
+ * @param endDayNum      last day of the attempt
+ * @param opts.challengeStart  'YYYY-MM-DD' — the attempt's first day
+ * @param opts.historyEntries  [{ date, data }] across all sources (buildTimeline)
+ * @returns { changes, hasBaseline, limited, baselineStart, baselineEnd }
  */
-export function computeChallengeChanges(days, endDayNum) {
+export function computeChallengeChanges(challengeDays, endDayNum, opts = {}) {
+  const { challengeStart = null, historyEntries = [] } = opts;
+
+  // ── Pre-challenge history: strictly before the challenge start, oldest→newest.
+  const prior = (historyEntries || [])
+    .filter(e => e?.date && e?.data && (!challengeStart || e.date < challengeStart))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  // ── Challenge-period records (this attempt only).
+  const challengeRecords = [];
+  for (let i = 1; i <= (endDayNum || 0); i++) {
+    const d = challengeDays?.[i];
+    if (d && dayHasAnyMetric(d)) challengeRecords.push(d);
+  }
+
+  const changes = [];
+  let hasBaseline = false, limited = false;
+  let baselineStart = null, baselineEnd = null;
+
+  for (const { key, label, higherBetter } of CHANGE_METRICS) {
+    // Baseline: this metric's valid values before the challenge, most recent
+    // BASELINE_MAX_DAYS of them.
+    const priorForMetric = prior
+      .map(e => ({ date: e.date, v: readDayMetric(e.data, key) }))
+      .filter(x => x.v != null);
+    const used = priorForMetric.slice(-BASELINE_MAX_DAYS);
+    if (used.length < BASELINE_MIN_DAYS) continue; // not enough pre-challenge data
+    hasBaseline = true;
+    const isLimited = used.length <= BASELINE_LIMITED_MAX;
+    if (isLimited) limited = true;
+    if (!baselineStart || used[0].date < baselineStart) baselineStart = used[0].date;
+    const lastDate = used[used.length - 1].date;
+    if (!baselineEnd || lastDate > baselineEnd) baselineEnd = lastDate;
+
+    // Challenge average: every valid value inside the attempt.
+    const challengeVals = challengeRecords.map(d => readDayMetric(d, key)).filter(v => v != null);
+    if (challengeVals.length < CHALLENGE_MIN_VALUES) continue;
+
+    const from = avg1(used.map(x => x.v));
+    const to = avg1(challengeVals);
+    // Delta derives from the displayed (rounded) values so "from → to" and
+    // "by X" are always arithmetically consistent.
+    const deltaRounded = Math.round((to - from) * 10) / 10;
+    changes.push({
+      key, label, higherBetter, from, to,
+      delta: Math.abs(deltaRounded),
+      changed: deltaRounded !== 0,
+      improved: higherBetter ? deltaRounded > 0 : deltaRounded < 0,
+      baselineCount: used.length,
+      challengeCount: challengeVals.length,
+      limitedBaseline: isLimited,
+    });
+  }
+
+  return { changes, hasBaseline, limited, baselineStart, baselineEnd };
+}
+
+/**
+ * "Within-Challenge Trend" — the SECONDARY view: first half vs second half of the
+ * logged challenge days. It measures momentum inside the challenge and is never
+ * the primary result (that is baseline-vs-challenge above). Logged days are split
+ * into two non-overlapping halves, dropping the middle day when the count is odd,
+ * and a metric is reported only when both halves hold at least CHANGE_MIN_WINDOW
+ * values.
+ */
+export function computeWithinChallengeTrend(challengeDays, endDayNum) {
   const logged = [];
   for (let i = 1; i <= (endDayNum || 0); i++) {
-    const d = days?.[i];
+    const d = challengeDays?.[i];
     if (d && dayHasAnyMetric(d)) logged.push(d);
   }
   const n = logged.length;
@@ -698,30 +787,19 @@ export function computeChallengeChanges(days, endDayNum) {
   if (half < 1) return [];
   const firstWin = logged.slice(0, half);
   const secondWin = logged.slice(n - half);
-  // Values are read through the SHARED normalizer (same one Insights uses), so
-  // alias field names in archived/imported records are handled and 0/blank is
-  // never treated as a rating.
-  const windowAvg = (arr, key) => {
-    const vals = arr.map(d => readDayMetric(d, key)).filter(v => v != null);
-    return vals.length ? { avg: vals.reduce((s, v) => s + v, 0) / vals.length, count: vals.length } : { avg: null, count: 0 };
-  };
+  const windowVals = (arr, key) => arr.map(d => readDayMetric(d, key)).filter(v => v != null);
   const out = [];
-  // Each metric is judged INDEPENDENTLY: a metric with too little data is simply
-  // omitted and never suppresses another metric that does qualify.
   for (const { key, label, higherBetter } of CHANGE_METRICS) {
-    const a = windowAvg(firstWin, key), b = windowAvg(secondWin, key);
-    if (a.count < CHANGE_MIN_WINDOW || b.count < CHANGE_MIN_WINDOW) continue;
-    const from = Math.round(a.avg * 10) / 10;
-    const to = Math.round(b.avg * 10) / 10;
-    // Delta is derived from the displayed (rounded) values so "from → to" and
-    // "by X" are always arithmetically consistent and transparent.
-    const deltaRounded = Math.round((to - from) * 10) / 10;
+    const a = windowVals(firstWin, key), b = windowVals(secondWin, key);
+    if (a.length < CHANGE_MIN_WINDOW || b.length < CHANGE_MIN_WINDOW) continue;
+    const first = avg1(a), second = avg1(b);
+    const deltaRounded = Math.round((second - first) * 10) / 10;
     out.push({
-      key, label, higherBetter, from, to,
+      key, label, higherBetter, first, second,
       delta: Math.abs(deltaRounded),
       changed: deltaRounded !== 0,
       improved: higherBetter ? deltaRounded > 0 : deltaRounded < 0,
-      baselineCount: a.count, endingCount: b.count,
+      firstCount: a.length, secondCount: b.length,
     });
   }
   return out;
