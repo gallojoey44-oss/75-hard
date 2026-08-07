@@ -5,6 +5,45 @@ const THRESHOLD_COMP     = 75;
 const THRESHOLD_LOW      = 6;
 const THRESHOLD_VERY_LOW = 5;
 
+// ─── Shared metric normalization ─────────────────────────────────────────────
+// The single place that knows how to read a wellbeing rating off a day record.
+// Forge writes the canonical keys (mood, energy, confidence, sleep, recovery,
+// workoutEffort, stress), but archived/imported records from other shapes may
+// use alias names — so every reader goes through here rather than touching the
+// field directly. That keeps live Insights and archived challenge summaries on
+// exactly the same interpretation of "a logged value".
+export const METRIC_ALIASES = {
+  mood:          ['mood', 'moodRating', 'mood_rating'],
+  energy:        ['energy', 'energyRating', 'energy_rating', 'energyLevel'],
+  confidence:    ['confidence', 'confidenceRating', 'confidence_rating'],
+  sleep:         ['sleep', 'sleepQuality', 'sleep_quality', 'sleepRating', 'sleep_rating'],
+  recovery:      ['recovery', 'recoveryRating', 'recovery_rating'],
+  workoutEffort: ['workoutEffort', 'workout_effort', 'workoutEffortRating', 'effort'],
+  stress:        ['stress', 'stressRating', 'stress_rating'],
+};
+
+/**
+ * Read one metric from a day record, normalized across field-name variants.
+ * Returns a finite number > 0, or null when the value is missing, blank, zero,
+ * or non-numeric. 0/blank is "not logged" and is NEVER a valid rating.
+ */
+export function readDayMetric(dayData, key) {
+  if (!dayData) return null;
+  const names = METRIC_ALIASES[key] || [key];
+  for (const name of names) {
+    const raw = dayData[name];
+    if (raw == null || raw === '') continue;
+    const v = Number(raw);
+    if (Number.isFinite(v) && v > 0) return v;
+  }
+  return null;
+}
+
+/** True when a day record carries at least one logged wellbeing metric. */
+export function dayHasAnyMetric(dayData) {
+  return Object.keys(METRIC_ALIASES).some(k => readDayMetric(dayData, k) != null);
+}
+
 /**
  * Compute rolling averages for a set of day numbers.
  * Ratings are 1–10; 0 means "not logged" and is excluded from averages.
@@ -66,13 +105,22 @@ export function computeAveragesFromEntries(entries) {
     compSum += Math.round((done / tasks.length) * 100);
     compCount++;
 
-    if (data.energy        > 0) { energySum    += data.energy;        energyCount++;    }
-    if (data.sleep         > 0) { sleepSum      += data.sleep;         sleepCount++;     }
-    if (data.mood          > 0) { moodSum       += data.mood;          moodCount++;      }
-    if (data.confidence    > 0) { confSum       += data.confidence;    confCount++;      }
-    if (data.recovery      > 0) { recoverySum   += data.recovery;      recoveryCount++;  }
-    if (data.workoutEffort > 0) { effortSum     += data.workoutEffort; effortCount++;    }
-    if (data.stress        > 0) { stressSum     += data.stress;        stressCount++;    }
+    // All wellbeing ratings are read through the shared normalizer, so Insights
+    // and the challenge-completion summary agree on what counts as "logged".
+    const mEnergy = readDayMetric(data, 'energy');
+    const mSleep  = readDayMetric(data, 'sleep');
+    const mMood   = readDayMetric(data, 'mood');
+    const mConf   = readDayMetric(data, 'confidence');
+    const mRec    = readDayMetric(data, 'recovery');
+    const mEffort = readDayMetric(data, 'workoutEffort');
+    const mStress = readDayMetric(data, 'stress');
+    if (mEnergy != null) { energySum    += mEnergy; energyCount++;   }
+    if (mSleep  != null) { sleepSum     += mSleep;  sleepCount++;    }
+    if (mMood   != null) { moodSum      += mMood;   moodCount++;     }
+    if (mConf   != null) { confSum      += mConf;   confCount++;     }
+    if (mRec    != null) { recoverySum  += mRec;    recoveryCount++; }
+    if (mEffort != null) { effortSum    += mEffort; effortCount++;   }
+    if (mStress != null) { stressSum    += mStress; stressCount++;   }
     if (data.hoursSlept    > 0) { hoursSleptSum += data.hoursSlept;    hoursSleptCount++; }
 
     if (workoutTask) { workoutTotal++; if (data.tasks?.[workoutTask.id]) workoutDone++; }

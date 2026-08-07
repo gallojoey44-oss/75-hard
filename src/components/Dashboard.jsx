@@ -8,7 +8,7 @@ import {
   computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
   getRankReward, getUnlockedRewards, computeGrowthSummary, buildFutureSelfMessage,
-  DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT,
+  DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, computeChallengeChanges,
 } from '../utils/gamification';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
@@ -683,12 +683,26 @@ export default function Dashboard({ setView }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProfile, rankInfo.current.rank, profile?.highestRank, lifetimeXP]);
 
-  // Challenge Complete screen takes priority — shown once after a challenge ends
-  if (profile?.lastCompletion) {
+  // Challenge Complete screen takes priority — shown once after a challenge ends.
+  // Summaries stored before "Changes During This Challenge" shipped carry no
+  // `changes` field, which would render "Not enough data." even though the
+  // archived days hold plenty of ratings. Recompute from the archived day
+  // records in that case (derived only — the stored snapshot and the raw logs
+  // are never modified).
+  const completionSummary = (() => {
+    const s = profile?.lastCompletion;
+    if (!s || Array.isArray(s.changes)) return s;
+    const completedArchives = profileArchives.filter(a => a?.completed);
+    const arch = [...completedArchives].reverse().find(a => !s.challengeStart || a.challengeStart === s.challengeStart)
+      || completedArchives[completedArchives.length - 1];
+    return { ...s, changes: arch ? computeChallengeChanges(arch.days || {}, arch.endDayNum || 0) : [] };
+  })();
+
+  if (completionSummary) {
     return (
       <>
         <ChallengeComplete
-          summary={profile.lastCompletion}
+          summary={completionSummary}
           onStartNew={() => setShowNextGoal(true)}
           onViewArchive={() => setView('settings')}
           onContinue={() => dismissCompletion()}

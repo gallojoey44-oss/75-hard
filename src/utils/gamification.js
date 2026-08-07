@@ -1,5 +1,6 @@
 import { getDayNumberFromStart, getDateForDayNumber } from './dateUtils.js';
 import { isColdExposureRequiredForDate, COLD_SHOWER_TASK_ID } from '../data/challengeTemplates';
+import { readDayMetric, dayHasAnyMetric } from './insightsUtils';
 
 /**
  * The effective required-task list for a specific challenge day. The only
@@ -690,18 +691,23 @@ export function computeChallengeChanges(days, endDayNum) {
   const logged = [];
   for (let i = 1; i <= (endDayNum || 0); i++) {
     const d = days?.[i];
-    if (d && CHANGE_METRICS.some(m => Number(d[m.key]) > 0)) logged.push(d);
+    if (d && dayHasAnyMetric(d)) logged.push(d);
   }
   const n = logged.length;
   const half = Math.floor(n / 2);
   if (half < 1) return [];
   const firstWin = logged.slice(0, half);
   const secondWin = logged.slice(n - half);
+  // Values are read through the SHARED normalizer (same one Insights uses), so
+  // alias field names in archived/imported records are handled and 0/blank is
+  // never treated as a rating.
   const windowAvg = (arr, key) => {
-    const vals = arr.map(d => Number(d[key])).filter(v => Number.isFinite(v) && v > 0);
+    const vals = arr.map(d => readDayMetric(d, key)).filter(v => v != null);
     return vals.length ? { avg: vals.reduce((s, v) => s + v, 0) / vals.length, count: vals.length } : { avg: null, count: 0 };
   };
   const out = [];
+  // Each metric is judged INDEPENDENTLY: a metric with too little data is simply
+  // omitted and never suppresses another metric that does qualify.
   for (const { key, label, higherBetter } of CHANGE_METRICS) {
     const a = windowAvg(firstWin, key), b = windowAvg(secondWin, key);
     if (a.count < CHANGE_MIN_WINDOW || b.count < CHANGE_MIN_WINDOW) continue;
