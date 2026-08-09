@@ -3723,6 +3723,26 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   color: #fff;
   font-weight: 700;
 }
+/* Labelled duration cards (templates that name their durations) */
+.tpl-duration-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+@media (max-width: 380px) { .tpl-duration-cards { grid-template-columns: 1fr; } }
+.tpl-duration-card {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 8px; border-radius: 12px; cursor: pointer; text-align: center;
+  background: var(--card2); border: 1px solid var(--border);
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.tpl-duration-card:active { transform: scale(0.98); }
+.tpl-duration-card.active { background: rgba(139,92,246,0.16); border-color: var(--accent); }
+.tpl-duration-card-days { font-size: 13px; font-weight: 800; color: var(--text); letter-spacing: 0.02em; }
+.tpl-duration-card-label { font-size: 11px; color: var(--text2); }
+.tpl-duration-card.active .tpl-duration-card-label { color: var(--text); }
+.tpl-duration-card-rec {
+  margin-top: 2px; padding: 1px 6px; border-radius: 6px; font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  background: rgba(16,185,129,0.16); color: #10B981; border: 1px solid rgba(16,185,129,0.35);
+}
+.tpl-program-emphasis { font-size: 12.5px; font-weight: 600; color: var(--text); margin-top: 8px; line-height: 1.5; }
 
 .tpl-panel-note {
   font-size: 12px;

@@ -94,6 +94,61 @@ export function applyColdExposureUpgrade(tasks, enabled) {
   return next;
 }
 
+// ─── Per-template duration options ───────────────────────────────────────────
+// A template opts into multiple durations by listing them in
+// duration_options_days, optionally naming each one (duration_labels), marking a
+// recommended/default one, and giving each a completion bonus. Templates that
+// list a single duration keep their existing single-duration behaviour, so these
+// choices are never forced on challenges that have not opted in.
+
+/** The durations a template offers (always at least one). */
+export function getDurationOptions(template) {
+  const opts = template?.duration_options_days;
+  return Array.isArray(opts) && opts.length ? opts : [];
+}
+
+/** Default/pre-selected duration: explicit default, else the middle option. */
+export function getDefaultDuration(template) {
+  const opts = getDurationOptions(template);
+  if (!opts.length) return null;
+  const explicit = template?.default_duration_days;
+  if (explicit != null && opts.includes(explicit)) return explicit;
+  return opts[Math.floor((opts.length - 1) / 2)];
+}
+
+/** Short name for a duration ("Kickstart", "Standard", …) or null. */
+export function getDurationLabel(template, days) {
+  return template?.duration_labels?.[days] ?? null;
+}
+
+/** True when this duration is the one the template recommends. */
+export function isRecommendedDuration(template, days) {
+  const rec = template?.recommended_duration_days ?? template?.default_duration_days;
+  return rec != null && rec === days;
+}
+
+/**
+ * Completion bonus for a given duration. Templates may set a per-duration table;
+ * otherwise the template's flat reward XP applies to every duration.
+ */
+export function getCompletionBonusForDuration(template, days) {
+  const table = template?.completion_bonus_by_duration;
+  if (table && table[days] != null) return table[days];
+  return template?.rewards?.xp || 0;
+}
+
+/**
+ * Program content resolved for a duration: the base program with that duration's
+ * overrides merged over it (goal, expected results, what-you'll-notice, timeline,
+ * progress copy). Durations without an override use the base content.
+ */
+export function getProgramForDuration(template, days) {
+  const program = template?.program;
+  if (!program) return null;
+  const override = program.by_duration?.[days];
+  return override ? { ...program, ...override } : program;
+}
+
 // The Forge-owned metric-logging task ids the Daily Log consolidates. Only
 // these built-in ids are ever merged — never genuine custom tasks, even if a
 // user names one "mood" or "energy".
@@ -265,7 +320,19 @@ export const CHALLENGE_TEMPLATES = [
     category: 'Body Composition',
     purpose: 'Lose body fat while preserving muscle, improving energy, increasing confidence, and building sustainable habits.',
     tagline: 'Lose fat. Keep muscle. Build habits that last.',
-    duration_options_days: [30],
+    // Fat Loss runs for a user-chosen length. Duration is how long the program
+    // is followed — NOT a difficulty mode (the Beginner/Standard/Hard variants
+    // stay independent and the task list is identical across durations).
+    duration_options_days: [14, 30, 60],
+    default_duration_days: 30,
+    recommended_duration_days: 30,
+    duration_labels: { 14: 'Kickstart', 30: 'Standard', 60: 'Transformation' },
+    // Completion bonus per duration. Deliberately increasing per DAY with length
+    // (14.3 / 16.7 / 18.3 XP per day) so sustained adherence pays off and there
+    // is no exploit in repeatedly picking the short option: 4×14d = 800 < 1100
+    // for one 60d, and 2×30d = 1000 < 1100. 30 days keeps its existing 500 so
+    // the current economy and every past attempt are unchanged.
+    completion_bonus_by_duration: { 14: 200, 30: 500, 60: 1100 },
     metrics_targeted: ['daily_task_completion_pct', 'energy_rating', 'workout_effort', 'sleep_quality', 'confidence_rating'],
     insights_triggers: {
       pre_recommendation: 'diet_compliance is low OR user selects body composition goal OR completion is consistent but body composition goal is active',
@@ -326,6 +393,78 @@ export const CHALLENGE_TEMPLATES = [
           'Daily weigh-in (optional but encouraged)',
         ],
         finish: 'Finish all 30 days and you get your transformation report: before vs after, weight change, estimated body fat change, waist change, completion stats, and your XP earned.',
+      },
+      // Duration-aware copy. The base content above is the 30-day Standard
+      // program; 14 and 60 override the sections that would otherwise imply a
+      // 30-day timeframe. All figures stay framed as estimates and every
+      // duration keeps the same results-vary disclaimer.
+      by_duration: {
+        14: {
+          emphasis: 'Build momentum and create visible early progress.',
+          goal: 'Build momentum fast: start losing body fat, sharpen your nutrition and activity habits, and create visible early progress you can carry forward.',
+          expected_results: [
+            'Early scale/body-composition progress',
+            'Approximately 1–2.5 lb of body-fat loss may be achievable with an appropriate deficit',
+            'Early reduction in waist measurement/bloating may be noticeable',
+            'Improved consistency with nutrition, steps, training, and cardio',
+            'Early improvements in muscle definition may begin to appear',
+            'Better cardiovascular conditioning',
+            'Potential improvements in energy and confidence',
+          ],
+          visual_changes: [
+            'Reduced bloating',
+            'Slightly leaner face',
+            'Waistband feeling looser',
+            'Early muscle definition starting to show',
+          ],
+          timeline: [
+            { week: 'Week 1', points: ['Reduced bloating', 'Initial weight loss (mostly water)', 'Better energy'] },
+            { week: 'Week 2', points: ['Waist begins shrinking', 'Clothes fit better', 'Habits starting to feel automatic'] },
+          ],
+          progress: {
+            items: [
+              'Daily progress photo — a required task, not optional',
+              'Waist measurement at start and finish',
+              'Daily weigh-in (optional but encouraged)',
+            ],
+            finish: 'Finish all 14 days and you get your progress report: before vs after, weight change, waist change, completion stats, and your XP earned.',
+          },
+        },
+        60: {
+          emphasis: 'Enough time for a clearly noticeable transformation when adherence is high.',
+          goal: 'Give the process enough time for a clearly noticeable body-composition change: sustained fat loss with muscle preserved, and habits that hold after the challenge ends.',
+          expected_results: [
+            'Potential for a substantial visible body-composition change',
+            'Approximately 4–10 lb of body-fat loss may be achievable depending on starting size and calorie deficit',
+            'Noticeably leaner waist and improved muscle definition',
+            'More meaningful cardiovascular fitness improvements',
+            'Stronger nutrition and activity habits',
+            'Potential improvements in energy, sleep, and confidence',
+            'Greater opportunity to preserve/build fitness while reducing body fat',
+          ],
+          visual_changes: [
+            'Noticeably leaner face and jawline',
+            'Clearly smaller waist',
+            'Clothes fitting noticeably differently',
+            'More visible muscle definition across chest, shoulders and arms',
+            'More visible abs (depending on starting body fat)',
+            'Better overall posture and conditioning',
+          ],
+          timeline: [
+            { week: 'Weeks 1–2', points: ['Reduced bloating', 'Initial weight loss (mostly water)', 'Better energy'] },
+            { week: 'Weeks 3–4', points: ['Waist shrinking', 'Clothes fit better', 'Muscle definition becoming noticeable'] },
+            { week: 'Weeks 5–6', points: ['Leaner face', 'Conditioning clearly improved', 'Habits feel automatic'] },
+            { week: 'Weeks 7–8', points: ['Most noticeable visual change', 'Visible body recomposition', 'Increased confidence'] },
+          ],
+          progress: {
+            items: [
+              'Daily progress photo — a required task, not optional',
+              'Weekly waist measurement',
+              'Daily weigh-in (optional but encouraged)',
+            ],
+            finish: 'Finish all 60 days and you get your transformation report: before vs after, weight change, estimated body fat change, waist change, completion stats, and your XP earned.',
+          },
+        },
       },
     },
     variants: {

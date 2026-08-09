@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
-import { METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK, applyColdExposureUpgrade, isColdExposureEnabled } from '../data/challengeTemplates';
+import {
+  METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK,
+  applyColdExposureUpgrade, isColdExposureEnabled,
+  getDefaultDuration, getDurationLabel, isRecommendedDuration,
+  getCompletionBonusForDuration, getProgramForDuration,
+} from '../data/challengeTemplates';
 import { formatDateLong } from '../utils/dateUtils';
 import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
 import { FutureSelfLetterForm } from './FutureSelfLetter';
@@ -94,18 +99,21 @@ function VariantPanel({ variant, template }) {
 
 // Transformation-program sections (🎯 Goal, 📈 Expected Results, etc.) for
 // templates that ship full program content.
-function ProgramSections({ program, category }) {
+function ProgramSections({ program, category, durationDays }) {
   if (!program) return null;
   return (
     <div className="tpl-program">
       {category && <div className="tpl-program-category">🏷 {category}</div>}
 
-      {/* Expected results — shown prominently, not collapsed */}
+      {/* Expected results — shown prominently, not collapsed. The heading and
+          copy follow the selected duration so a 14- or 60-day attempt never
+          shows 30-day expectations. */}
       <div className="tpl-program-block">
-        <div className="tpl-program-title">📈 Expected Results (30 Days)</div>
+        <div className="tpl-program-title">📈 Expected Results{durationDays ? ` (${durationDays} Days)` : ''}</div>
         <ul className="tpl-task-list program">
           {program.expected_results.map((r, i) => <li key={i}>{r}</li>)}
         </ul>
+        {program.emphasis && <div className="tpl-program-emphasis">{program.emphasis}</div>}
         <div className="tpl-program-disclaimer">{program.results_disclaimer}</div>
       </div>
 
@@ -166,7 +174,7 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
   const isVariantStart = template.start_flow === 'variant';
   const isCustom = template.id === 'custom_challenge_framework';
   const isMT = template.id === MENTAL_TRAINING_TEMPLATE_ID;
-  const defaultDuration = template.duration_options_days[Math.floor((template.duration_options_days.length - 1) / 2)];
+  const defaultDuration = getDefaultDuration(template);
   const [durationSel, setDurationSel] = useState(defaultDuration);
   // Cold Exposure Upgrade — Mental Training only, opt-in, disabled by default,
   // and re-asked for every new attempt (this is local setup state, never a
@@ -214,8 +222,32 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
             <p className="tpl-tagline">{template.tagline}</p>
           )}
 
-          <ProgramSections program={template.program} category={template.category} />
+          <ProgramSections program={getProgramForDuration(template, durationSel)} category={template.category} durationDays={durationSel} />
 
+          {/* Duration picker. Templates that name their durations
+              (duration_labels) get the richer labelled cards; every other
+              template keeps the existing plain chips. */}
+          {isVariantStart && template.duration_labels ? (
+            <>
+              <div className="tpl-detail-label" style={{ margin: '12px 0 6px' }}>Choose Your Duration</div>
+              <div className="tpl-duration-cards">
+                {template.duration_options_days.map(d => (
+                  <button
+                    key={d}
+                    className={`tpl-duration-card${durationSel === d ? ' active' : ''}`}
+                    onClick={() => setDurationSel(d)}
+                    aria-pressed={durationSel === d}
+                  >
+                    <span className="tpl-duration-card-days">{d} DAYS</span>
+                    <span className="tpl-duration-card-label">{getDurationLabel(template, d)}</span>
+                    {isRecommendedDuration(template, d) && (
+                      <span className="tpl-duration-card-rec">Recommended</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
           <div className="tpl-detail-row">
             <span className="tpl-detail-label">Duration</span>
             <div className="tpl-chip-group">
@@ -234,6 +266,7 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
               ))}
             </div>
           </div>
+          )}
 
           <div className="tpl-detail-row">
             <span className="tpl-detail-label">Targets</span>
@@ -421,8 +454,10 @@ export default function ChallengesView({ setView }) {
           durationDays: ps.durationDays,
           templateVersion: ps.template.template_version || 1,
           rewardXP: ps.template.rewards?.xp || 0,
-          // Challenge Performance config (percentage score system).
-          completionBonusXP: ps.template.rewards?.xp || 0,
+          // Challenge Performance config (percentage score system). The
+          // completion bonus follows the CHOSEN duration for templates that
+          // define a per-duration table; others keep their flat reward.
+          completionBonusXP: getCompletionBonusForDuration(ps.template, ps.durationDays),
           passingScore: ps.template.passing_score ?? DEFAULT_PASSING_SCORE,
           keystoneRequirement: ps.template.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
           badgeId: ps.template.rewards?.badge_id || null,

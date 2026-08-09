@@ -12,7 +12,7 @@ import {
 } from '../utils/gamification';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
-import { visibleNextGoals, getTemplateById } from '../data/challengeTemplates';
+import { visibleNextGoals, getTemplateById, getCompletionBonusForDuration } from '../data/challengeTemplates';
 import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { formatDateShort, dayNumberForDate } from '../utils/dateUtils';
 
@@ -635,7 +635,8 @@ export default function Dashboard({ setView }) {
         challenge: {
           templateId: tpl.id, name: tpl.challenge_name, emoji: tpl.emoji, variant: s.variant,
           durationDays: s.durationDays, templateVersion: tpl.template_version || 1,
-          rewardXP: tpl.rewards?.xp || 0, completionBonusXP: tpl.rewards?.xp || 0,
+          // Retry keeps the same duration, so the bonus matches that duration.
+          rewardXP: tpl.rewards?.xp || 0, completionBonusXP: getCompletionBonusForDuration(tpl, s.durationDays),
           passingScore: tpl.passing_score ?? DEFAULT_PASSING_SCORE, keystoneRequirement: tpl.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
           badgeId: tpl.rewards?.badge_id || null,
         },
