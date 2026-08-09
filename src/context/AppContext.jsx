@@ -6,7 +6,7 @@ import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed
 import { buildTimeline } from '../utils/archiveUtils';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
-import { isKeystone, RANKS } from '../utils/gamification';
+import { keystoneHabitsOf, RANKS } from '../utils/gamification';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -850,7 +850,7 @@ export function AppProvider({ children }) {
   function buildCompletionSummary(entry, profId = activeProfile) {
     const days = entry.days || {};
     const tasks = entry.tasks || [];
-    const keystoneTasks = tasks.filter(isKeystone);
+    const keystoneTasks = keystoneHabitsOf(tasks);
     let perfectDays = 0, compSum = 0, compCount = 0, ksTotal = 0, ksDone = 0, daysLogged = 0;
     const logged = [];
     for (let i = 1; i <= entry.endDayNum; i++) {

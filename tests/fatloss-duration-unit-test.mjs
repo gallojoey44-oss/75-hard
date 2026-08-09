@@ -72,8 +72,10 @@ for (const v of ['beginner', 'standard', 'hard']) {
 }
 check('12: no duration-specific task overrides exist on Fat Loss',
   !Object.values(fl.variants).some(v => v.tasks_by_duration || v.start_tasks_by_duration));
-check('12: daily task XP unchanged by duration (protein still 25 XP)',
-  fl.variants.standard.start_tasks.find(t => t.id === 'fl_protein').xp === 25);
+// Task values come from a single per-variant definition, so they cannot vary by
+// duration (protein is the ⭐⭐⭐ Keystone at 40 XP for 14, 30 and 60 alike).
+check('12: daily task XP is duration-independent (protein 40 XP for every duration)',
+  fl.variants.standard.start_tasks.find(t => t.id === 'fl_protein').xp === 40);
 
 // ══ Passing threshold unchanged across durations ════════════════════════════
 check('14: Fat Loss defines no stricter passing score (inherits the 70% default)', fl.passing_score == null);

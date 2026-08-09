@@ -233,6 +233,25 @@ export function isKeystone(task) {
   return getTaskKeystone(task) > 0;
 }
 
+/**
+ * The tasks that count toward KEYSTONE ADHERENCE for a task list.
+ *
+ * Stars (`keystone: 1|2|3`) express display importance and drive ordering. Most
+ * templates treat every starred task as a keystone habit, which is the legacy
+ * behaviour kept here. A template can instead designate its keystone habits
+ * explicitly with `keystoneHabit: true` — used by Fat Loss, where ⭐ and ⭐⭐
+ * mark supporting/important tasks but only the two ⭐⭐⭐ habits (protein and
+ * whole-food nutrition) are true keystones.
+ *
+ * The designation lives on the task snapshot, so an attempt's archive keeps the
+ * rule that applied when it ran.
+ */
+export function keystoneHabitsOf(tasks) {
+  const list = tasks || [];
+  const designated = list.filter(t => t?.keystoneHabit === true);
+  return designated.length ? designated : list.filter(isKeystone);
+}
+
 export function keystoneStars(tier) {
   return '⭐'.repeat(Math.max(0, Math.min(3, tier || 0)));
 }
@@ -480,7 +499,7 @@ export function computeChallengeScore(allDays, profiles, profId, currentRawDay) 
   const tasks = prof?.tasks || [];
   if (!duration || !currentRawDay || tasks.length === 0) return null;
   const profDays = allDays[profId] || {};
-  const keystoneTasks = tasks.filter(isKeystone);
+  const keystoneTasks = keystoneHabitsOf(tasks);
   const fullDayAvail = tasks.reduce((s, t) => s + getTaskXP(t), 0);
 
   // Today (in progress) counts completed tasks only; every earlier day is
