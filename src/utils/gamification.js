@@ -1,6 +1,7 @@
 import { getDayNumberFromStart, getDateForDayNumber } from './dateUtils.js';
 import { isColdExposureRequiredForDate, COLD_SHOWER_TASK_ID } from '../data/challengeTemplates';
 import { readDayMetric, dayHasAnyMetric } from './insightsUtils';
+import { computeWeeklyRequirements } from './weeklyRequirements';
 
 /**
  * The effective required-task list for a specific challenge day. The only
@@ -493,6 +494,14 @@ function scoreDayRequired(dayData, tasks) {
  * every render, correct across reloads, timezones, and DST).
  */
 export function computeChallengeScore(allDays, profiles, profId, currentRawDay) {
+  // Weekly Requirements (Fat Loss) add their own earned/available XP on top of
+  // the daily-task totals, using the same finalised-vs-current fairness rule.
+  const weekly = computeWeeklyRequirements({
+    sessions: profiles[profId]?.weeklySessions,
+    meta: profiles[profId]?.activeChallenge,
+    challengeStart: profiles[profId]?.challengeStart,
+    currentRawDay,
+  });
   const prof = profiles[profId];
   const meta = prof?.activeChallenge;
   const duration = meta?.durationDays;
@@ -550,6 +559,11 @@ export function computeChallengeScore(allDays, profiles, profId, currentRawDay) 
     }
   }
 
+  // Weekly requirement XP joins the same weighted pools. Earned is capped at each
+  // week's target inside computeWeeklyRequirements, so this can never exceed 100%.
+  earned += weekly.earnedXP;
+  available += weekly.availableXP;
+
   const scoredDays = finalizedDays + (todayScored ? 1 : 0);
   const score = available > 0 ? Math.round((earned / available) * 100) : 0;
   const keystoneAdherence = ksTotal > 0 ? Math.round((ksDone / ksTotal) * 100) : 100;
@@ -567,6 +581,7 @@ export function computeChallengeScore(allDays, profiles, profId, currentRawDay) 
     completedDays, missedDays, scoredDays, finalizedDays, mwdDays,
     inProgressDay: (inProgressDay && inProgressDay > finalizedThrough) ? inProgressDay : null,
     elapsed, duration, remainingAvailable, fullDayAvail,
+    weekly,
     hasData: scoredDays > 0 && available > 0,
     // A confirmed score requires at least one finalised day. Before that (the
     // very first day), the score is "still building" rather than a real figure.
@@ -864,6 +879,20 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
 
   // Comeback bonuses
   totalGained += computeComebackXP(profiles, profId, xpStartDay);
+
+  // Weekly Requirements (Fat Loss): every logged session awards its XP, and each
+  // shortfall unit costs the standard miss penalty ONCE the week is finalised —
+  // an unfinished current week is never penalised. Derived from the stored
+  // session list, so reloading can neither duplicate XP nor re-apply a penalty.
+  const weeklyXP = computeWeeklyRequirements({
+    sessions: profiles[profId]?.weeklySessions,
+    meta,
+    challengeStart,
+    currentRawDay: rawDay,
+    penaltiesEnabled: penaltiesOn,
+  });
+  totalGained += weeklyXP.sessionXP;
+  totalLost += weeklyXP.missedPenalty;
 
   // Completion Bonus — awarded ONCE at the final day, and ONLY when the
   // challenge is passed (final Challenge Score ≥ passing score AND keystone

@@ -3,6 +3,7 @@ import { useApp, dayHasLoggedMetric } from '../context/AppContext';
 import { formatDateLong, getDateForDayNumber } from '../utils/dateUtils';
 import CheckItem from './CheckItem';
 import BonusMissions from './BonusMissions';
+import WeeklyRequirements from './WeeklyRequirements';
 import ChallengePerformance from './ChallengePerformance';
 import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
@@ -760,6 +761,10 @@ export default function DailyView({ editDayNum, setView }) {
           </div>
         </>
       )}
+
+      {/* Weekly Requirements — real per-challenge-week tracking (Fat Loss).
+          Sits below the daily tasks and above Challenge Performance. */}
+      {isCurrentDay && <WeeklyRequirements />}
 
       {/* Bonus Missions — optional, below required tasks, above the Daily Log */}
       <BonusMissions dayNumber={selectedDayNum} isEditable />

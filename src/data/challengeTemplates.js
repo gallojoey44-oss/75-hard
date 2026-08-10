@@ -521,8 +521,9 @@ export const CHALLENGE_TEMPLATES = [
           '⭐ Complete Daily Log (10 XP).',
         ],
         weekly_requirements: [
-          'Lift 3x',
-          '2 × 30-minute Zone 2 cardio',
+          '🏋️ Lift 3x — required (25 XP each)',
+          '❤️ 2 × 30-minute Zone 2 cardio — required (20 XP each)',
+          'Track these throughout each 7-day challenge week.',
         ],
         optional_tasks: [
           'Daily weigh-in.',

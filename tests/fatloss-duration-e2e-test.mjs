@@ -167,7 +167,26 @@ const legacyArch = await page.evaluate(() => JSON.parse(localStorage.getItem('ar
 check('9/17: legacy archive still reports 30 days', legacyArch.challenge.durationDays === 30);
 check('8/20: legacy archive score/XP untouched', legacyArch.finalScore === 88 && legacyArch.xpEarned === 900 && legacyArch.passed === true);
 const afterLegacy = await page.evaluate(() => localStorage.getItem('profiles') + '||' + localStorage.getItem('archives') + '||' + localStorage.getItem('allDays'));
-check('20: no legacy data rewritten on load (idempotent)', beforeLegacy === afterLegacy);
+// The weekly-requirements migration additively stamps weeklySessions:[] and
+// weeklyRequirementsStartDate on Fat Loss attempts. Nothing else may change, and
+// a second load must change nothing at all.
+check('20: legacy scores/XP/tasks untouched by load', await page.evaluate(() => {
+  const p = JSON.parse(localStorage.getItem('profiles')).me;
+  const a = JSON.parse(localStorage.getItem('archives')).me[0];
+  return p.activeChallenge.durationDays === 30 && p.activeChallenge.completionBonusXP === 500
+    && p.tasks.length === 2 && a.finalScore === 88 && a.xpEarned === 900;
+}));
+check('20: only the additive weekly fields differ', await page.evaluate(({ before }) => {
+  const b = JSON.parse(before.split('||')[0]).me;
+  const a = JSON.parse(localStorage.getItem('profiles')).me;
+  const strip = (o) => { const c = { ...o, activeChallenge: { ...o.activeChallenge } };
+    delete c.weeklySessions; delete c.activeChallenge.weeklyRequirementsStartDate; return JSON.stringify(c); };
+  return strip(b) === strip(a);
+}, { before: beforeLegacy }));
+const legacySecond = await page.evaluate(() => localStorage.getItem('profiles') + '||' + localStorage.getItem('archives') + '||' + localStorage.getItem('allDays'));
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 5000 }); await page.waitForTimeout(300);
+check('20: load is idempotent (second load changes nothing)',
+  (await page.evaluate(() => localStorage.getItem('profiles') + '||' + localStorage.getItem('archives') + '||' + localStorage.getItem('allDays'))) === legacySecond);
 await gotoTab('Today'); await page.waitForSelector('.daily-view', { timeout: 5000 });
 check('9: legacy attempt still shows "of 30"', (await page.textContent('.day-selector')).includes('of 30'));
 

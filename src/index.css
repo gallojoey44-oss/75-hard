@@ -4721,3 +4721,41 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .archive-perf-result.pass { color: #10B981; font-weight: 700; }
 .archive-perf-result.fail { color: var(--text2); font-weight: 700; }
 .archive-perf-bonus { color: var(--accent2, #FFB347); }
+
+/* ─── Weekly Requirements (Fat Loss) ─────────────────────────────────────── */
+.wr-weeklabel { font-size: 12px; color: var(--text2); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.wr-partial { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 6px;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text3); }
+.wr-sub { font-size: 12px; color: var(--text3); margin: -4px 0 10px; }
+.wr-row { padding: 10px 0; border-top: 1px solid var(--border); }
+.wr-row:first-of-type { border-top: none; padding-top: 2px; }
+.wr-row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.wr-row-name { font-size: 14px; font-weight: 600; }
+.wr-row-count { font-size: 12px; color: var(--text2); font-variant-numeric: tabular-nums; }
+.wr-segs { display: flex; gap: 4px; margin: 8px 0; }
+.wr-seg { flex: 1; height: 6px; border-radius: 3px; background: var(--card2); border: 1px solid var(--border); }
+.wr-seg.on { background: var(--accent); border-color: var(--accent); }
+.wr-seg.extra { background: rgba(16,185,129,0.5); border-color: rgba(16,185,129,0.6); }
+.wr-row.met .wr-seg.on { background: #10B981; border-color: #10B981; }
+.wr-met { font-size: 12px; font-weight: 700; color: #10B981; }
+.wr-log-btn { width: 100%; font-size: 13px; padding: 8px; }
+.wr-log-btn.subtle { margin-top: 6px; opacity: .65; font-size: 12px; }
+.wr-undo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px;
+  padding: 8px 12px; border-radius: 10px; font-size: 13px;
+  background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.35); color: var(--text); }
+.wr-undo-btn { background: none; border: none; color: #10B981; font-weight: 700; font-size: 13px; cursor: pointer; }
+.wr-history-toggle { width: 100%; margin-top: 10px; background: none; border: none; color: var(--text2);
+  font-size: 12px; font-weight: 600; cursor: pointer; padding: 6px; }
+.wr-history { border-top: 1px solid var(--border); padding-top: 8px; }
+.wr-history-empty { font-size: 12px; color: var(--text3); padding: 4px 0; }
+.wr-history-group { margin-bottom: 8px; }
+.wr-history-label { font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 4px; }
+.wr-history-item { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0; color: var(--text2); }
+.wr-history-date { color: var(--text3); }
+.wr-remove-btn { margin-left: auto; background: none; border: none; color: var(--danger); font-size: 11px; font-weight: 600; cursor: pointer; }
+/* Home compact line + performance breakdown */
+.wr-home { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text2); margin-top: 6px; }
+.wr-home strong { color: var(--text); }
+.perf-weekly { margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; }
+.perf-weekly-row { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; }
+.perf-weekly-cur { font-size: 12px; color: var(--text3); margin-top: 6px; line-height: 1.5; }

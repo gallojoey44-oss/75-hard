@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { weeklyAdherence } from '../utils/weeklyRequirements';
 import {
   computeChallengeScore, getPassingConfig, getPerformanceStatus, isChallengePassed,
   projectFinalScore, computeTaskBreakdown, getTaskXP, getBonusXP,
@@ -191,6 +192,29 @@ export default function ChallengePerformance({ setView }) {
             <div className="perf-row"><span>Bonus XP earned today</span><strong className="perf-bonus">+{todayBonus}</strong></div>
             <div className="perf-note">Bonus XP does not affect your Daily or Challenge Score.</div>
           </div>
+
+          {/* Weekly Requirements (Fat Loss) */}
+          {score.weekly?.supported && (
+            <div className="perf-weekly">
+              <div className="perf-subhead">Weekly Requirements</div>
+              {Object.entries(weeklyAdherence(score.weekly)).map(([id, t]) => {
+                const def = score.weekly.weeks[0]?.requirements.find(r => r.id === id);
+                return (
+                  <div key={id} className="perf-weekly-row">
+                    <span>{def?.icon} {def?.label}</span>
+                    <strong>{t.done} / {t.required} completed{t.pct != null ? ` · ${t.pct}%` : ''}</strong>
+                  </div>
+                );
+              })}
+              {score.weekly.current && (
+                <div className="perf-weekly-cur">
+                  Current week (week {score.weekly.current.week}, in progress):{' '}
+                  {score.weekly.current.requirements.map(r => `${r.label} ${r.done}/${r.target}`).join(' · ')}
+                  {' '}— not counted against you until the week ends.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Per-task breakdown */}
           <div className="perf-subhead">Performance by task</div>

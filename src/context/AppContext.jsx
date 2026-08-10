@@ -4,6 +4,7 @@ import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay, computeChallengeChanges, computeWithinChallengeTrend, DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, LEGACY_PASSING_SCORE } from '../utils/gamification';
 import { buildTimeline } from '../utils/archiveUtils';
+import { computeWeeklyRequirements, hasWeeklyRequirements, makeSession, weeklyAdherence, WEEKLY_REQUIREMENT_TEMPLATE_IDS as WEEKLY_REQ_TEMPLATES } from '../utils/weeklyRequirements';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS } from '../utils/gamification';
@@ -320,6 +321,25 @@ function migrateProfiles(stored) {
     }
 
     let meta = profiles[profId].activeChallenge;
+
+    // Weekly Requirements (Fat Loss) — every profile carries a session list.
+    if (!Array.isArray(profiles[profId].weeklySessions)) {
+      profiles[profId] = { ...profiles[profId], weeklySessions: [] };
+      changed = true;
+    }
+    // An attempt that began before weekly tracking existed has no session
+    // history for its earlier weeks, so enforcement starts from the day the
+    // feature is first seen: weeks before that are never evaluated or
+    // penalised, and nothing is fabricated. New attempts stamp this at start,
+    // so they are tracked from week 1. Idempotent — written once.
+    if (meta && WEEKLY_REQ_TEMPLATES.has(meta.templateId) && !meta.weeklyRequirementsStartDate && profiles[profId].challengeStart) {
+      profiles[profId] = {
+        ...profiles[profId],
+        activeChallenge: { ...meta, weeklyRequirementsStartDate: getTodayStr() },
+      };
+      meta = profiles[profId].activeChallenge;
+      changed = true;
+    }
 
     // Passing-score default lowered 75 → 70 (standard Forge). Migrate an active
     // attempt that still stores the OLD 75 default down to 70 — but ONLY when its
@@ -774,6 +794,29 @@ export function AppProvider({ children }) {
       days: profDays,
       quoteData: challengeQuotes,
       weeklyReflections: { ...(weeklyReflections[profId] || {}) },
+      // Weekly Requirements snapshot: the raw sessions plus the resolved
+      // per-week targets/results, so an archive can be read back without
+      // recomputing against a template that may later change.
+      weeklySessions: [...(prof.weeklySessions || [])],
+      weeklyRequirements: hasWeeklyRequirements(meta) ? (() => {
+        const wr = computeWeeklyRequirements({
+          sessions: prof.weeklySessions, meta, challengeStart: prof.challengeStart,
+          currentRawDay: (getDayNumberFromStart(prof.challengeStart) || 1) + 1, // finalise every elapsed week
+          penaltiesEnabled: prof.xpPenalties !== false,
+        });
+        return {
+          tracked: true,
+          startDate: meta.weeklyRequirementsStartDate || prof.challengeStart,
+          weeks: wr.weeks.map(w => ({
+            week: w.week, startDay: w.startDay, endDay: w.endDay, days: w.days, partial: w.partial,
+            tracked: w.tracked, finalized: w.finalized,
+            requirements: w.requirements.map(r => ({ id: r.id, target: r.target, done: r.done, credited: r.credited, met: r.met })),
+          })),
+          adherence: weeklyAdherence(wr),
+          earnedXP: wr.earnedXP, availableXP: wr.availableXP,
+          sessionXP: wr.sessionXP, missedUnits: wr.missedUnits, missedPenalty: wr.missedPenalty,
+        };
+      })() : { tracked: false },
       xpEarned: totalXP,
       badges,
       comebackHistory: prof.comebackHistory || [],
@@ -816,6 +859,10 @@ export function AppProvider({ children }) {
     if (isColdExposureEnabled(meta) && !meta.coldExposureUpgradeStartDate) {
       meta.coldExposureUpgradeStartDate = getTodayStr();
     }
+    // A brand-new attempt tracks weekly requirements from day one.
+    if (hasWeeklyRequirements(meta) && !meta.weeklyRequirementsStartDate) {
+      meta.weeklyRequirementsStartDate = getTodayStr();
+    }
     // Future Self Letter is stored on the challenge descriptor, so it archives
     // with the challenge (buildArchiveEntry snapshots the descriptor) and is
     // never overwritten by a later challenge.
@@ -835,6 +882,7 @@ export function AppProvider({ children }) {
         xpStartDay: 1,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
         comebackHistory: [],
+        weeklySessions: [],
         lastCompletion: null,
       },
     }));
@@ -890,6 +938,7 @@ export function AppProvider({ children }) {
       variant: entry.challenge?.variant,
       templateId: entry.challenge?.templateId,
       coldExposureEnabled: !!entry.challenge?.coldExposureUpgradeEnabled,
+      weeklyRequirements: entry.weeklyRequirements || { tracked: false },
       coldExposureStartDate: entry.challenge?.coldExposureUpgradeStartDate || null,
       challengeStart: entry.challengeStart || null,
       durationDays: entry.challenge?.durationDays,
@@ -952,6 +1001,7 @@ export function AppProvider({ children }) {
         xpStartDay: 1,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
         comebackHistory: [],
+        weeklySessions: [],
       },
     }));
     setAllDays(prev => ({ ...prev, [profId]: {} }));
@@ -987,6 +1037,7 @@ export function AppProvider({ children }) {
         xpStartDay: 1,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
         comebackHistory: [],
+        weeklySessions: [],
       },
     }));
     setAllDays(prev => ({ ...prev, [profId]: {} }));
@@ -1219,6 +1270,45 @@ export function AppProvider({ children }) {
   // completion. Completion + the XP awarded are stored per profile and date in
   // dayData.bonusDone (missionId → XP), so XP is awarded once, removed on
   // uncheck, and never double-counted after reopening.
+
+  // ── Weekly Requirements (Fat Loss) ──────────────────────────────────────
+  // Sessions are stored individually on the active attempt so they can be
+  // listed, attributed to a date and removed one at a time. Nothing is ever
+  // inferred — a session exists only because the user logged it.
+
+  const logWeeklySession = useCallback((type, dateStr, profId = activeProfile) => {
+    if (!profId || !type) return null;
+    const meta = profiles[profId]?.activeChallenge;
+    if (!hasWeeklyRequirements(meta)) return null;
+    const date = dateStr || getTodayStr();
+    const session = makeSession(type, date);
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: { ...prev[profId], weeklySessions: [...(prev[profId]?.weeklySessions || []), session] },
+    }));
+    return session;
+  }, [activeProfile, profiles, setProfiles]);
+
+  /** Remove one session by id (undo / fix a mistaken log). */
+  const removeWeeklySession = useCallback((sessionId, profId = activeProfile) => {
+    if (!profId || !sessionId) return;
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: { ...prev[profId], weeklySessions: (prev[profId]?.weeklySessions || []).filter(s => s.id !== sessionId) },
+    }));
+  }, [activeProfile, setProfiles]);
+
+  /** Resolved weekly-requirement state for the active attempt. */
+  const getWeeklyRequirements = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    return computeWeeklyRequirements({
+      sessions: prof?.weeklySessions,
+      meta: prof?.activeChallenge,
+      challengeStart: prof?.challengeStart,
+      currentRawDay: getRawDayNumber(profId),
+      penaltiesEnabled: prof?.xpPenalties !== false,
+    });
+  }, [activeProfile, profiles, getRawDayNumber]);
 
   const toggleBonusMission = useCallback((dayNumber, mission) => {
     if (!activeProfile || !mission?.id || !dayNumber) return;
@@ -1542,6 +1632,8 @@ export function AppProvider({ children }) {
       // Weekly reflection
       weeklyReflections, saveWeeklyReflection,
       addTask, updateTask, deleteTask, reorderTasks, addColdExposureUpgrade,
+      // Weekly Requirements
+      logWeeklySession, removeWeeklySession, getWeeklyRequirements,
       // Bonus Missions
       toggleBonusMission, addBonusMission, removeBonusMission, reorderBonusMissions,
       // Rank ceremony / Hall of Legends

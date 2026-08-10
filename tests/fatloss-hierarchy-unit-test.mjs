@@ -52,7 +52,11 @@ check('11: starred-but-supporting tasks are NOT keystone habits', !ks.some(t => 
 check('Stars still mark supporting tasks for display', isKeystone(task('fl_water')) && getTaskKeystone(task('fl_water')) === 1);
 
 // Adherence math matches the spec example: protein 25/30, whole 20/30 → 75%.
-const META = { templateId: 'fat_loss_phase', durationDays: 30, completionBonusXP: 500 };
+// These assertions target DAILY-task weighting, so weekly requirements are held
+// inert by starting them after the challenge ends (their own behaviour is
+// covered exhaustively in weekly-requirements-unit-test).
+const WEEKLY_OFF = '2099-01-01';
+const META = { templateId: 'fat_loss_phase', durationDays: 30, completionBonusXP: 500, weeklyRequirementsStartDate: WEEKLY_OFF };
 const profiles = { me: { challengeStart: '2026-01-01', tasks: std, activeChallenge: META, xpPenalties: false } };
 const days = {};
 for (let i = 1; i <= 30; i++) days[i] = day({ fl_protein: i <= 25, fl_whole: i <= 20 });
@@ -98,7 +102,7 @@ check('16: Fat Loss offers 14/30/60', JSON.stringify(getDurationOptions(fl)) ===
 check('16: task values are duration-independent (one definition per variant)',
   !fl.variants.standard.start_tasks_by_duration && !fl.variants.standard.tasks_by_duration);
 for (const d of [14, 30, 60]) {
-  const m = { ...META, durationDays: d };
+  const m = { ...META, durationDays: d, weeklyRequirementsStartDate: WEEKLY_OFF };
   const p = { me: { challengeStart: '2026-01-01', tasks: std, activeChallenge: m, xpPenalties: false } };
   const dd = {}; for (let i = 1; i <= d; i++) dd[i] = day({ ...allDone });
   const s = computeChallengeScore({ me: dd }, p, 'me', d + 1);
@@ -127,6 +131,17 @@ check('Beginner variant uses the same hierarchy', keystoneHabitsOf(fl.variants.b
 check('Keystone rationale provided for both habits', !!fl.keystone_why?.fl_protein && !!fl.keystone_why?.fl_whole);
 check('Whole-foods copy does NOT claim it creates a deficit by itself',
   /does not create a calorie deficit on its own/.test(fl.keystone_why.fl_whole) && /energy balance/.test(fl.keystone_why.fl_whole));
+
+// Sanity: with weekly requirements ACTIVE (and no sessions logged), a finalized
+// week correctly adds its 115 XP to the denominator — daily tasks alone are no
+// longer a perfect Fat Loss run.
+{
+  const live = { ...META, durationDays: 30, weeklyRequirementsStartDate: '2026-01-01' };
+  const p = { me: { challengeStart: '2026-01-01', tasks: std, activeChallenge: live, weeklySessions: [], xpPenalties: false } };
+  const dd = {}; for (let i = 1; i <= 10; i++) dd[i] = day({ ...allDone });
+  const s2 = computeChallengeScore({ me: dd }, p, 'me', 11);
+  check('Weekly requirements join the same weighted score when active', s2.requiredAvailable === 1650 + 115 && s2.score < 100, `avail=${s2.requiredAvailable} score=${s2.score}`);
+}
 
 const failed = results.filter(x => !x.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);

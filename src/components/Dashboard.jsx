@@ -13,6 +13,7 @@ import {
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
 import { visibleNextGoals, getTemplateById, getCompletionBonusForDuration } from '../data/challengeTemplates';
+import { WEEKLY_REQUIREMENT_DEFS } from '../utils/weeklyRequirements';
 import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { formatDateShort, dayNumberForDate } from '../utils/dateUtils';
 
@@ -68,6 +69,28 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
           </div>
         ) : (
           <div className="cc-perf-unavailable">Performance score unavailable for this past challenge.</div>
+        )}
+
+        {summary.weeklyRequirements?.tracked && (
+          <div className="cc-section">
+            <div className="cc-section-title">Weekly Requirements</div>
+            <div className="cc-changes">
+              {WEEKLY_REQUIREMENT_DEFS.map(def => {
+                const a = summary.weeklyRequirements.adherence?.[def.id];
+                if (!a || a.required === 0) return null;
+                return (
+                  <div key={def.id} className="cc-change flat">
+                    <div className="cc-change-label">{def.icon} {def.label}</div>
+                    <div className="cc-change-values">{a.done} / {a.required} required sessions</div>
+                    <div className="cc-change-verdict">{a.pct}%</div>
+                  </div>
+                );
+              })}
+            </div>
+            {summary.weeklyRequirements.missedUnits > 0 && (
+              <div className="cc-changes-sub">{summary.weeklyRequirements.missedUnits} missed session{summary.weeklyRequirements.missedUnits === 1 ? '' : 's'} across finalized weeks.</div>
+            )}
+          </div>
         )}
 
         {summary.templateId === 'mental_training_phase' && (
@@ -575,7 +598,7 @@ function ComebackCard({ dayNum, comebackMode, setback, onStart, onDismiss, onCom
 export default function Dashboard({ setView }) {
   const {
     activeProfile, profile, profiles, days, allDays, archives,
-    getChallengeMeta, getDayNumber, getDayCompletion, getStreak, getLongestStreak,
+    getChallengeMeta, getDayNumber, getDayCompletion, getStreak, getLongestStreak, getWeeklyRequirements,
     startChallenge, isForgeDaily, completeChallenge, dismissCompletion, startForgeDaily,
     setActiveProfile,
     startComeback, dismissComeback, completeComeback,
@@ -660,6 +683,7 @@ export default function Dashboard({ setView }) {
   const avg7Home = computeAveragesFromEntries(entriesInLastNDays(timeline, 7));
   const topInsight = getPriorityBottleneck(avg7Home, profile?.sleepTarget ?? 8);
 
+  const weeklyNow   = getWeeklyRequirements();
   const setback     = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
   const comebackMode = profile?.comebackMode || { active: false, dayStart: null, dismissedAt: null };
   const comebackCompletions = (profile?.comebackHistory || []).filter(cb => cb.completed).length;
@@ -976,6 +1000,15 @@ export default function Dashboard({ setView }) {
               />
             </div>
           </div>
+          {/* Compact weekly-requirement line (Fat Loss only) */}
+          {weeklyNow?.supported && weeklyNow.current && (
+            <div className="wr-home">
+              <span>This Week</span>
+              {weeklyNow.current.requirements.map(r => (
+                <span key={r.id}>{r.icon} <strong>{r.done} / {r.target}</strong> {r.id === 'lifting' ? 'lifts' : 'Zone 2'}</span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -136,7 +136,18 @@ check('19: active attempt is NOT silently upgraded to the new hierarchy', !legac
 const profilesBefore = snapBefore.split('||')[0];
 const afterFirst = await page.evaluate(() => localStorage.getItem('profiles') + '||' + localStorage.getItem('allDays'));
 const daysFirst = await page.evaluate(() => JSON.parse(localStorage.getItem('allDays')).me);
-check('19: task definitions and challenge rules untouched', afterFirst.split('||')[0] === profilesBefore);
+// The weekly-requirements migration additively stamps weeklySessions:[] and
+// weeklyRequirementsStartDate; the task list and every pre-existing challenge
+// rule must be byte-identical.
+check('19: task definitions and challenge rules untouched (ignoring additive weekly fields)',
+  await page.evaluate(({ before }) => {
+    const b = JSON.parse(before).me, a = JSON.parse(localStorage.getItem('profiles')).me;
+    const strip = (o) => { const c = { ...o, activeChallenge: { ...o.activeChallenge } };
+      delete c.weeklySessions; delete c.activeChallenge.weeklyRequirementsStartDate; return JSON.stringify(c); };
+    return strip(b) === strip(a);
+  }, { before: profilesBefore }));
+check('19: the task snapshot itself is unchanged', await page.evaluate(({ before }) =>
+  JSON.stringify(JSON.parse(before).me.tasks) === JSON.stringify(JSON.parse(localStorage.getItem('profiles')).me.tasks), { before: profilesBefore }));
 check('19: seeded task completions preserved exactly', [1, 2, 3, 4, 5].every(i =>
   daysFirst[i].tasks.fl_protein === true && daysFirst[i].tasks.fl_steps === true && daysFirst[i].tasks.fl_photo === true));
 check('19: no task was auto-completed that the user never did', [1, 2, 3, 4, 5].every(i =>
