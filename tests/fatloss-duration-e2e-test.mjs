@@ -44,6 +44,9 @@ async function startFatLoss(days) {
   await page.waitForSelector('.letter-modal', { timeout: 5000 });
   await page.locator('.letter-modal .letter-textarea').first().fill('Get lean and stay consistent.');
   await page.locator('.letter-modal .btn-primary', { hasText: 'Save & Begin' }).click();
+  // Setup now asks when to begin — these suites test a challenge running today.
+  await page.waitForSelector('.start-when-options', { timeout: 5000 });
+  await page.locator('.start-when-btn', { hasText: 'Start Today' }).click();
   await page.waitForSelector('.daily-view', { timeout: 5000 });
 }
 const meta = () => page.evaluate(() => JSON.parse(localStorage.getItem('profiles')).me.activeChallenge);

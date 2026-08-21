@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
+import { challengeDayNumber, getChallengeState, isScheduled, isChallengeActive, CHALLENGE_STATE, daysUntilStart, dateOffsetFromToday } from '../utils/challengeSchedule';
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay, computeChallengeChanges, computeWithinChallengeTrend, DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, LEGACY_PASSING_SCORE } from '../utils/gamification';
@@ -333,9 +334,12 @@ function migrateProfiles(stored) {
     // penalised, and nothing is fabricated. New attempts stamp this at start,
     // so they are tracked from week 1. Idempotent — written once.
     if (meta && WEEKLY_REQ_TEMPLATES.has(meta.templateId) && !meta.weeklyRequirementsStartDate && profiles[profId].challengeStart) {
+      // Never earlier than Day 1: a scheduled attempt tracks weeks from its
+      // future start, not from the day the app happened to migrate it.
+      const cs = profiles[profId].challengeStart;
       profiles[profId] = {
         ...profiles[profId],
-        activeChallenge: { ...meta, weeklyRequirementsStartDate: getTodayStr() },
+        activeChallenge: { ...meta, weeklyRequirementsStartDate: cs > getTodayStr() ? cs : getTodayStr() },
       };
       meta = profiles[profId].activeChallenge;
       changed = true;
@@ -619,10 +623,19 @@ export function AppProvider({ children }) {
   // Raw days since the challenge/baseline began — uncapped. Used to detect
   // when a fixed-duration challenge has run past its final day.
   const getRawDayNumber = useCallback((profId = activeProfile) => {
-    const start = profiles[profId]?.challengeStart;
-    if (!start) return null;
-    return getDayNumberFromStart(start);
+    // NULL while the attempt is scheduled — the clock has not started, so no
+    // downstream system (scoring, XP, streaks, weekly requirements, day
+    // generation, notifications) sees a challenge day.
+    return challengeDayNumber(profiles[profId]?.challengeStart);
   }, [activeProfile, profiles]);
+
+  /** Authoritative attempt state: 'none' | 'scheduled' | 'active'. */
+  const getChallengeStatus = useCallback((profId = activeProfile) => {
+    return getChallengeState(profiles[profId]);
+  }, [activeProfile, profiles]);
+
+  const isChallengeScheduled = useCallback((profId = activeProfile) => isScheduled(profiles[profId]), [activeProfile, profiles]);
+  const getDaysUntilStart = useCallback((profId = activeProfile) => daysUntilStart(profiles[profId]?.challengeStart), [activeProfile, profiles]);
 
   const isForgeDaily = useCallback((profId = activeProfile) => {
     return profiles[profId]?.activeChallenge?.templateId === 'forge_daily';
@@ -631,7 +644,8 @@ export function AppProvider({ children }) {
   const getDayNumber = useCallback((profId = activeProfile) => {
     const start = profiles[profId]?.challengeStart;
     if (!start) return null;
-    const n = getDayNumberFromStart(start);
+    const n = challengeDayNumber(start);
+    if (n == null) return null;                 // scheduled — no day yet
     // Forge Daily (durationDays null) is open-ended — the day number tracks
     // the real calendar date and is never capped, so Today never freezes.
     const duration = profiles[profId]?.activeChallenge?.durationDays;
@@ -751,6 +765,10 @@ export function AppProvider({ children }) {
     const prof = profiles[profId];
     const profDays = allDays[profId] || {};
     if (!prof?.challengeStart || Object.keys(profDays).length === 0) return null;
+    // A scheduled attempt never reached Day 1, so there is nothing to archive —
+    // cancelling or rescheduling it must not create a phantom completed/failed
+    // challenge in the user's history.
+    if (isScheduled(prof)) return null;
 
     const meta = prof.activeChallenge || DEFAULT_CHALLENGE_META;
     const dayNum = Math.min(getDayNumberFromStart(prof.challengeStart) || 1, meta.durationDays || 75);
@@ -856,13 +874,16 @@ export function AppProvider({ children }) {
     const meta = options?.challenge ? { ...DEFAULT_CHALLENGE_META, ...options.challenge } : { ...DEFAULT_CHALLENGE_META };
     // A setup-time Cold Exposure Upgrade is required from day one — pin its
     // activation to the challenge start (today) so date-aware grading matches.
-    if (isColdExposureEnabled(meta) && !meta.coldExposureUpgradeStartDate) {
-      meta.coldExposureUpgradeStartDate = getTodayStr();
-    }
-    // A brand-new attempt tracks weekly requirements from day one.
+
+    // Day 1 may be today or a future local date (a scheduled start). Everything
+    // else — weekly requirements, cold exposure, scoring — anchors to it.
+    const startDate = options?.startDate || getTodayStr();
+    // A brand-new attempt tracks weekly requirements from DAY 1, not from the
+    // day it was set up, so a scheduled challenge's week 1 begins on Day 1.
     if (hasWeeklyRequirements(meta) && !meta.weeklyRequirementsStartDate) {
-      meta.weeklyRequirementsStartDate = getTodayStr();
+      meta.weeklyRequirementsStartDate = startDate;
     }
+    if (isColdExposureEnabled(meta)) meta.coldExposureUpgradeStartDate = startDate;
     // Future Self Letter is stored on the challenge descriptor, so it archives
     // with the challenge (buildArchiveEntry snapshots the descriptor) and is
     // never overwritten by a later challenge.
@@ -873,7 +894,7 @@ export function AppProvider({ children }) {
       ...prev,
       [profId]: {
         ...prev[profId],
-        challengeStart: getTodayStr(),
+        challengeStart: startDate,
         activeChallenge: meta,
         ...(options?.tasks ? { tasks: options.tasks.map((t, i) => ({ ...t, source: 'template', order: i })) } : {}),
         // Bonus Missions are per-challenge: seed from the new challenge (or clear).
@@ -982,6 +1003,7 @@ export function AppProvider({ children }) {
     const prof = profiles[profId];
     if (!prof?.challengeStart) return;
     if (prof.activeChallenge?.templateId === 'forge_daily') return; // baseline never "completes"
+    if (isScheduled(prof)) return; // never begun — cannot complete
 
     const entry = buildArchiveEntry(profId);
     const summary = entry ? buildCompletionSummary(entry, profId) : null;
@@ -1175,6 +1197,31 @@ export function AppProvider({ children }) {
   }, [activeProfile, setProfiles, setAllDays, setArchives, setQuoteData, setExperiments, setDismissedHints]);
 
   // Update start date without wiping saved day data — used for backfilling
+  /**
+   * Move a SCHEDULED attempt's Day 1 to another date (past-safe: refuses once the
+   * challenge has begun, where setChallengeStart's backfill correction applies
+   * instead). No days have occurred yet, so nothing else is touched.
+   */
+  const rescheduleChallenge = useCallback((dateStr, profId = activeProfile) => {
+    if (!dateStr) return false;
+    const prof = profiles[profId];
+    if (!isScheduled(prof)) return false;
+    setProfiles(prev => {
+      const p = prev[profId];
+      const meta = { ...p.activeChallenge };
+      // Re-anchor the date-based challenge rules to the new Day 1.
+      if (meta.weeklyRequirementsStartDate) meta.weeklyRequirementsStartDate = dateStr;
+      if (meta.coldExposureUpgradeStartDate) meta.coldExposureUpgradeStartDate = dateStr;
+      return { ...prev, [profId]: { ...p, challengeStart: dateStr, activeChallenge: meta } };
+    });
+    return true;
+  }, [activeProfile, profiles, setProfiles]);
+
+  /** Begin a scheduled attempt immediately: today's local date becomes Day 1. */
+  const startChallengeNow = useCallback((profId = activeProfile) => {
+    return rescheduleChallenge(getTodayStr(), profId);
+  }, [activeProfile, rescheduleChallenge]);
+
   const setChallengeStart = useCallback((dateStr, profId = activeProfile) => {
     if (!dateStr) return;
     setProfiles(prev => ({
@@ -1235,7 +1282,9 @@ export function AppProvider({ children }) {
     if (!prof?.challengeStart) return;
     if (meta?.templateId !== MENTAL_TRAINING_TEMPLATE_ID) return;
     if (meta?.coldExposureUpgradeEnabled === true) return;
-    const startDate = getTodayStr();
+    // Effective from today for a running challenge; from Day 1 for one that is
+    // still scheduled — the upgrade can never activate before the challenge does.
+    const startDate = isScheduled(prof) ? prof.challengeStart : getTodayStr();
     const todayNum = getDayNumber(profId);
     setProfiles(prev => {
       const p = prev[profId];
@@ -1634,6 +1683,9 @@ export function AppProvider({ children }) {
       addTask, updateTask, deleteTask, reorderTasks, addColdExposureUpgrade,
       // Weekly Requirements
       logWeeklySession, removeWeeklySession, getWeeklyRequirements,
+      // Scheduled / future challenge starts
+      getChallengeStatus, isChallengeScheduled, getDaysUntilStart,
+      rescheduleChallenge, startChallengeNow, CHALLENGE_STATE,
       // Bonus Missions
       toggleBonusMission, addBonusMission, removeBonusMission, reorderBonusMissions,
       // Rank ceremony / Hall of Legends

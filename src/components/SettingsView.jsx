@@ -34,6 +34,7 @@ export default function SettingsView({ setView }) {
     resetXP,
     archives, restoreArchive, deleteArchive, deleteAllProfileData,
     isChallengeTemplateOutdated, syncActiveChallengeWithTemplate,
+    isChallengeScheduled, rescheduleChallenge, startChallengeNow, getDaysUntilStart,
   } = useApp();
 
   const [editingName, setEditingName] = useState(false);
@@ -115,9 +116,29 @@ export default function SettingsView({ setView }) {
 
   function handleSetStartDate() {
     if (!startDateInput) return;
-    if (startDateInput > getTodayStr()) { flash(false, 'Start date cannot be in the future.'); return; }
-    setChallengeStart(startDateInput);
-    flash(true, `Start date set to ${formatDateShort(startDateInput)}.`);
+    const future = startDateInput > getTodayStr();
+    // A future Day 1 is valid ONLY while the attempt has not begun — either it
+    // is already scheduled, or it is being scheduled now. An active challenge
+    // keeps the existing backfill-correction behaviour (past dates only), so a
+    // running challenge can never be pushed into the future.
+    if (future && !isChallengeScheduled()) {
+      flash(false, 'This challenge has already begun — pick today or an earlier date.');
+      return;
+    }
+    if (future) {
+      rescheduleChallenge(startDateInput);
+      flash(true, `Challenge scheduled for ${formatDateShort(startDateInput)}.`);
+    } else {
+      setChallengeStart(startDateInput);
+      flash(true, `Start date set to ${formatDateShort(startDateInput)}.`);
+    }
+    setStartDateInput('');
+  }
+
+  /** Convert a scheduled attempt's Day 1 to the current local date. */
+  function handleStartNow() {
+    if (!startChallengeNow()) return;
+    flash(true, 'Challenge started — today is Day 1.');
     setStartDateInput('');
   }
 
@@ -134,6 +155,8 @@ export default function SettingsView({ setView }) {
   const otherProfile = activeProfile === 'me' ? 'girlfriend' : 'me';
   const challengeMeta = getChallengeMeta();
   const challengeDuration = challengeMeta.durationDays || 75;
+  // Authoritative pre-start flag — drives every start-date affordance below.
+  const startScheduled = isChallengeScheduled();
 
   return (
     <div className="settings-view">
@@ -308,19 +331,30 @@ export default function SettingsView({ setView }) {
         {/* Challenge Start Date controls */}
         <div className="start-date-box">
           <div className="start-date-title">📅 Challenge Start Date</div>
-          <p className="start-date-hint">
-            Use this if you started before today and need to backfill earlier days. Your saved day data is preserved.
-          </p>
+          {startScheduled ? (
+            <p className="start-date-hint">
+              This challenge is scheduled — Day 1 begins {formatDateShort(profile.challengeStart)}
+              {' '}({getDaysUntilStart() === 1 ? 'tomorrow' : `in ${getDaysUntilStart()} days`}).
+              Pick any date from today onward to reschedule it. Nothing has begun, so
+              rescheduling costs no XP, grades, streaks or history.
+            </p>
+          ) : (
+            <p className="start-date-hint">
+              Use this if you started before today and need to backfill earlier days. Your saved day data is preserved.
+            </p>
+          )}
 
-          {/* Set by exact date */}
+          {/* Set by exact date. A future Day 1 is offered only while the attempt
+              has not begun; an active challenge keeps past-dates-only backfill. */}
           <div className="start-date-row">
-            <label className="start-date-label">Set start date</label>
+            <label className="start-date-label">{startScheduled ? 'Reschedule Day 1' : 'Set start date'}</label>
             <div style={{ display: 'flex', gap: 6 }}>
               <input
                 type="date"
                 className="inline-input"
                 value={startDateInput}
-                max={getTodayStr()}
+                min={startScheduled ? getTodayStr() : undefined}
+                max={startScheduled ? undefined : getTodayStr()}
                 onChange={e => setStartDateInput(e.target.value)}
                 style={{ flex: 1, minWidth: 0 }}
               />
@@ -335,7 +369,16 @@ export default function SettingsView({ setView }) {
             </div>
           </div>
 
-          {/* Set by current day number */}
+          {startScheduled && (
+            <div className="start-date-row">
+              <button className="btn btn-secondary btn-full" onClick={handleStartNow}>
+                Start Now — make today Day 1
+              </button>
+            </div>
+          )}
+
+          {/* Set by current day number — meaningless before Day 1 exists. */}
+          {!startScheduled && <>
           <div className="start-date-divider">or</div>
           <div className="start-date-row">
             <label className="start-date-label">Set today as Day</label>
@@ -365,6 +408,7 @@ export default function SettingsView({ setView }) {
               </div>
             )}
           </div>
+          </>}
 
           {startMsg && (
             <div className={`update-status-row${startMsg.ok ? ' success' : ' warn'}`} style={{ marginTop: 10 }}>

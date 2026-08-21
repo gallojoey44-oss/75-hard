@@ -16,6 +16,7 @@ import { visibleNextGoals, getTemplateById, getCompletionBonusForDuration } from
 import { WEEKLY_REQUIREMENT_DEFS } from '../utils/weeklyRequirements';
 import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { formatDateShort, dayNumberForDate } from '../utils/dateUtils';
+import ScheduledStartCard from './ScheduledStart';
 
 // ── Challenge Complete screen ────────────────────────────────────────────────
 
@@ -600,6 +601,7 @@ export default function Dashboard({ setView }) {
     activeProfile, profile, profiles, days, allDays, archives,
     getChallengeMeta, getDayNumber, getDayCompletion, getStreak, getLongestStreak, getWeeklyRequirements,
     startChallenge, isForgeDaily, completeChallenge, dismissCompletion, startForgeDaily,
+    isChallengeScheduled,
     setActiveProfile,
     startComeback, dismissComeback, completeComeback,
     initRankBaseline, recordRankUp,
@@ -768,6 +770,31 @@ export default function Dashboard({ setView }) {
         />
         {showNextGoal && <NextGoalChooser profileId={activeProfile} onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
       </>
+    );
+  }
+
+  // SCHEDULED attempt: Day 1 has not arrived. Show the pre-start state only —
+  // no day number, no tasks, no score, no XP. Nothing has begun yet.
+  if (isChallengeScheduled()) {
+    return (
+      <div className="dashboard">
+        <BuildBanner />
+        <div className="dash-top">
+          <div className="dash-profile-info">
+            <span className="dash-emoji">{profile?.emoji}</span>
+            <div>
+              <h2>{profile?.name}</h2>
+              <p className="text-muted dash-challenge-label">
+                {meta.emoji} {meta.name} · Scheduled
+              </p>
+            </div>
+          </div>
+          <button className="dash-switch-btn" onClick={() => setActiveProfile(otherProfile)}>
+            Switch
+          </button>
+        </div>
+        <ScheduledStartCard onChangeChallenge={() => setView('challenges')} />
+      </div>
     );
   }
 

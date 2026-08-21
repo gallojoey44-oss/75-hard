@@ -2,6 +2,7 @@ import { getDayNumberFromStart, getDateForDayNumber } from './dateUtils.js';
 import { isColdExposureRequiredForDate, COLD_SHOWER_TASK_ID } from '../data/challengeTemplates';
 import { readDayMetric, dayHasAnyMetric } from './insightsUtils';
 import { computeWeeklyRequirements } from './weeklyRequirements';
+import { isScheduled } from './challengeSchedule';
 
 /**
  * The effective required-task list for a specific challenge day. The only
@@ -844,6 +845,10 @@ export function computeWithinChallengeTrend(challengeDays, endDayNum) {
  * Returns { total, rawTotal, gained, lost } — total is max(0, rawTotal + xpOffset).
  */
 export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, currentDayNum) {
+  // A SCHEDULED attempt has no challenge days yet, so no XP can exist — neither
+  // earned (no farming a Day 1 that has not arrived) nor lost (no miss
+  // penalties, no streak penalties, no weekly-requirement shortfalls).
+  if (isScheduled(profiles[profId])) return { total: 0, rawTotal: 0, gained: 0, lost: 0 };
   const profDays       = allDays[profId] || {};
   const tasks          = profiles[profId]?.tasks || [];
   const penaltiesOn    = profiles[profId]?.xpPenalties !== false;

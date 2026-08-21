@@ -4759,3 +4759,45 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .perf-weekly { margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; }
 .perf-weekly-row { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; }
 .perf-weekly-cur { font-size: 12px; color: var(--text3); margin-top: 6px; line-height: 1.5; }
+
+/* ── Scheduled (pre-start) challenge ───────────────────────────────────── */
+/* Shown while challengeStart is still in the future. Deliberately shows no day
+   number, no tasks and no score — Day 1 does not exist yet. */
+.scheduled-card {
+  background: linear-gradient(135deg, rgba(59,130,246,0.14), rgba(59,130,246,0.04));
+  border: 1px solid rgba(59,130,246,0.35);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+.scheduled-card.compact { padding: 14px; }
+.sched-heading { font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.sched-challenge { font-size: 14px; font-weight: 600; color: var(--text2); margin-bottom: 10px; }
+.sched-day1 { font-size: 15px; font-weight: 700; color: #60A5FA; }
+.sched-countdown { font-size: 12px; font-weight: 700; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.7px; margin-top: 4px; }
+.sched-note { font-size: 13px; color: var(--text2); line-height: 1.6; margin: 12px 0 0; }
+.sched-msg { margin-top: 12px; padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.35); color: var(--text); }
+.sched-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+.sched-actions .btn { flex: 1 1 140px; }
+.sched-edit { margin-top: 14px; }
+.sched-date-input { width: 100%; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 15px; }
+.sched-edit-quick { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+.sched-switch { display: block; width: 100%; margin-top: 12px; background: none; border: none;
+  color: var(--text3); font-size: 12px; font-weight: 600; cursor: pointer; padding: 6px; }
+.sched-prep { font-size: 12px; color: var(--text3); line-height: 1.6; margin: 14px 0 0; }
+
+/* "When do you want to begin?" step of challenge setup */
+.start-when-options { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; }
+.start-when-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  width: 100%; padding: 14px 16px; border-radius: var(--radius); cursor: pointer; text-align: left;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text); }
+.start-when-btn.primary { background: rgba(59,130,246,0.14); border-color: rgba(59,130,246,0.5); }
+.start-when-btn.choose { cursor: default; }
+.start-when-title { font-size: 15px; font-weight: 700; }
+.start-when-sub { font-size: 12px; color: var(--text3); }
+.start-when-btn .inline-input { width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; }

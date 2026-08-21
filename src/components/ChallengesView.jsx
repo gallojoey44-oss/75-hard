@@ -7,9 +7,11 @@ import {
   getDefaultDuration, getDurationLabel, isRecommendedDuration,
   getCompletionBonusForDuration, getProgramForDuration,
 } from '../data/challengeTemplates';
-import { formatDateLong } from '../utils/dateUtils';
+import { formatDateLong, getTodayStr } from '../utils/dateUtils';
 import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
 import { FutureSelfLetterForm } from './FutureSelfLetter';
+import { dateOffsetFromToday, startsInWords } from '../utils/challengeSchedule';
+import ScheduledStartCard from './ScheduledStart';
 import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
 
 // Overall challenge difficulty — fixed per challenge, independent of the
@@ -404,6 +406,7 @@ export default function ChallengesView({ setView }) {
     getStreak,
     startChallenge, addColdExposureUpgrade,
     isChallengeTemplateOutdated, syncActiveChallengeWithTemplate, isForgeDaily,
+    isChallengeScheduled,
   } = useApp();
 
   // Challenge library filtered by the active profile (e.g. Women's Hormone
@@ -424,9 +427,12 @@ export default function ChallengesView({ setView }) {
   const dayNum    = getDayNumber();
   const todayPct  = dayNum ? getDayCompletion(dayNum) : 0;
   const streak    = getStreak();
+  // A scheduled attempt is prepared but not running — it gets the pre-start card
+  // instead of the active-challenge summary (no Day N, no score, no streak).
+  const scheduled = isChallengeScheduled();
   // Forge Daily is the baseline, not a "challenge" — so the tab shows the
   // no-active-challenge state and the library to start a real one.
-  const isRunning = !!profile?.challengeStart && !baseline;
+  const isRunning = !!profile?.challengeStart && !baseline && !scheduled;
 
   const totalDone = dayNum
     ? Array.from({ length: dayNum }, (_, i) => i + 1).filter(n => getDayCompletion(n) === 100).length
@@ -434,11 +440,11 @@ export default function ChallengesView({ setView }) {
 
   // Begin a challenge once difficulty is confirmed and the Future Self Letter
   // is written. Handles both the variant flow and the legacy 75-day flow.
-  function beginChallenge(letter) {
+  function beginChallenge(letter, startDate) {
     const ps = pendingStart;
     if (!ps) return;
     if (ps.legacy75) {
-      startChallenge(undefined, { futureSelfLetter: letter });
+      startChallenge(undefined, { futureSelfLetter: letter, startDate });
     } else {
       const variantDef = ps.template.variants[ps.variant];
       // Cold Exposure Upgrade applies only to Mental Training. The choice is
@@ -467,6 +473,7 @@ export default function ChallengesView({ setView }) {
         tasks: applyColdExposureUpgrade(variantDef.start_tasks, coldEnabled),
         bonusMissions: ps.template.bonus_missions || [],
         futureSelfLetter: letter,
+        startDate,
       });
     }
     setPendingStart(null);
@@ -481,6 +488,9 @@ export default function ChallengesView({ setView }) {
       </div>
 
       <div className="challenges-content">
+
+        {/* Scheduled (pre-start) attempt */}
+        {scheduled && <ScheduledStartCard />}
 
         {/* Active challenge summary */}
         {isRunning ? (
@@ -662,8 +672,48 @@ export default function ChallengesView({ setView }) {
         <FutureSelfLetterForm
           challengeName={pendingStart.template?.challenge_name || '75-Day Discipline Challenge'}
           onCancel={() => setPendingStart(null)}
-          onSubmit={(letter) => beginChallenge(letter)}
+          onSubmit={(letter) => setPendingStart(p => ({ ...p, letter, step: 'schedule' }))}
         />
+      )}
+
+      {/* When do you want to begin? — Day 1 may be today or any future local
+          date. Preparation is already saved by this point; only the clock
+          start is being chosen. */}
+      {pendingStart?.step === 'schedule' && (
+        <div className="modal-overlay" onClick={() => setPendingStart(null)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h3>When do you want to begin?</h3>
+            <p>Day 1 sets your challenge clock. Tasks, XP, streaks and scoring all begin then.</p>
+            <div className="start-when-options">
+              <button className="start-when-btn" onClick={() => beginChallenge(pendingStart.letter, getTodayStr())}>
+                <span className="start-when-title">Start Today</span>
+                <span className="start-when-sub">Day 1 is {formatDateLong(getTodayStr())}</span>
+              </button>
+              <button className="start-when-btn primary" onClick={() => beginChallenge(pendingStart.letter, dateOffsetFromToday(1))}>
+                <span className="start-when-title">Start Tomorrow</span>
+                <span className="start-when-sub">Day 1 is {formatDateLong(dateOffsetFromToday(1))}</span>
+              </button>
+              <label className="start-when-btn choose">
+                <span className="start-when-title">Choose Date</span>
+                <input
+                  type="date"
+                  className="inline-input"
+                  min={getTodayStr()}
+                  value={pendingStart.customDate || ''}
+                  onChange={e => setPendingStart(p => ({ ...p, customDate: e.target.value }))}
+                />
+              </label>
+              {pendingStart.customDate && pendingStart.customDate >= getTodayStr() && (
+                <button className="btn btn-primary btn-full" onClick={() => beginChallenge(pendingStart.letter, pendingStart.customDate)}>
+                  Begin {startsInWords(pendingStart.customDate) === 'today' ? 'today' : `on ${formatDateLong(pendingStart.customDate)}`}
+                </button>
+              )}
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setPendingStart(p => ({ ...p, step: 'letter' }))}>← Back</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 75-day start confirmation → leads into the Future Self Letter */}

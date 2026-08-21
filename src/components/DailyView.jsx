@@ -16,6 +16,7 @@ import {
 } from '../utils/gamification';
 import { KEYSTONE_EXPLAINER, WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { getTemplateById } from '../data/challengeTemplates';
+import ScheduledStartCard from './ScheduledStart';
 
 const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
 
@@ -279,7 +280,7 @@ function MWDBanner({ comebackMode, dayNum }) {
 export default function DailyView({ editDayNum, setView }) {
   const {
     activeProfile, profile, allDays, todayStr,
-    getChallengeMeta, getDayNumber, getDayData,
+    getChallengeMeta, getDayNumber, getDayData, isChallengeScheduled,
     updateDay, toggleTask,
     weeklyReflections, saveWeeklyReflection,
   } = useApp();
@@ -491,6 +492,18 @@ export default function DailyView({ editDayNum, setView }) {
 
   const displayPct = isMWD ? mwdPct : pct;
   const taskCount  = isMWD ? `${MWD_TASKS.filter(t => dayData?.mwdTasks?.[t.id]).length}/${MWD_TASKS.length} MWD tasks` : `${tasks.filter(t => dayData?.tasks?.[t.id]).length}/${tasks.length} tasks`;
+
+  // SCHEDULED attempt: Day 1 has not arrived, so there is no day to show. Never
+  // render a task list (which would look like — and could be checked off as —
+  // a real Day 1) before the scheduled start date.
+  if (isChallengeScheduled()) {
+    return (
+      <div className="daily-view">
+        <BuildBanner />
+        <ScheduledStartCard />
+      </div>
+    );
+  }
 
   return (
     <div className="daily-view">

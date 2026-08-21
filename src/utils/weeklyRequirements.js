@@ -97,6 +97,10 @@ export function sessionsInWeek(sessions, type, week, challengeStart) {
   if (!challengeStart) return [];
   return (sessions || []).filter(s => {
     if (!s || s.type !== type || !s.date) return false;
+    // A session logged BEFORE Day 1 (e.g. while the challenge was still
+    // scheduled) belongs to no challenge week. dayNumberForDate clamps to 1, so
+    // reject the date explicitly rather than letting it land in week 1.
+    if (s.date < challengeStart) return false;
     const day = dayNumberForDate(challengeStart, s.date);
     return day != null && day >= week.startDay && day <= week.endDay;
   });
