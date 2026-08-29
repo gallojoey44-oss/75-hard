@@ -5,6 +5,7 @@ import CheckItem from './CheckItem';
 import BonusMissions from './BonusMissions';
 import WeeklyRequirements from './WeeklyRequirements';
 import ChallengePerformance from './ChallengePerformance';
+import SupportProgress from './SupportProgress';
 import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
@@ -17,6 +18,7 @@ import {
 import { KEYSTONE_EXPLAINER, WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { getTemplateById } from '../data/challengeTemplates';
 import ScheduledStartCard from './ScheduledStart';
+import { supportsLabel } from '../utils/challengeStack';
 
 const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
 
@@ -644,6 +646,7 @@ export default function DailyView({ editDayNum, setView }) {
                   onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
                   keystone={getTaskKeystone(task)}
                   xp={getTaskXP(task)}
+                  supports={supportsLabel(task, profile)}
                 />
               ))}
             </>
@@ -786,6 +789,7 @@ export default function DailyView({ editDayNum, setView }) {
           first sees what to do, then how it affects their overall score.
           (Bonus Missions never affect the required challenge score.) */}
       <ChallengePerformance />
+      <SupportProgress />
 
       {/* Daily Log — both profiles */}
       <div className="section-card" ref={logRef}>

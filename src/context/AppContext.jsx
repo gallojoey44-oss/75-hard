@@ -1,6 +1,12 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { getTodayStr, getDayNumberFromStart, getDateForDayNumber } from '../utils/dateUtils';
+import { getTodayStr, getDayNumberFromStart, getDateForDayNumber, dayNumberForDate } from '../utils/dateUtils';
 import { challengeDayNumber, getChallengeState, isScheduled, isChallengeActive, CHALLENGE_STATE, daysUntilStart, dateOffsetFromToday } from '../utils/challengeSchedule';
+import {
+  LANE, challengeOf, startOf, hasSupportChallenge, laneDayNumber, laneIsComplete,
+  tasksForLane, mergeSupportTasks, stripSupportTasks, previewMerge, lanesOfTask,
+  recordKeyForLaneDay,
+} from '../utils/challengeStack';
+import { canStack, getCompatibility } from '../data/challengeCompatibility';
 import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay, computeChallengeChanges, computeWithinChallengeTrend, DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, LEGACY_PASSING_SCORE } from '../utils/gamification';
@@ -120,6 +126,29 @@ function emptyDay(date, dayNumber) {
     bonusDone: {},
     bonusOneTime: [],
   };
+}
+
+/**
+ * Re-key a profile's day records from one challenge start date to another.
+ *
+ * Day records are keyed by the primary challenge's day number, so moving the
+ * primary anchor (promoting a support challenge, or dropping to Forge Daily
+ * beside a running support) would otherwise strand every record. Each record's
+ * real calendar date is authoritative here — stored on the record, or recovered
+ * from the old start — so the move is lossless. Records dated before the new
+ * Day 1 have no day number in the new numbering and are dropped.
+ */
+function rekeyDays(days, oldStart, newStart) {
+  if (!oldStart || !newStart || oldStart === newStart) return days || {};
+  const out = {};
+  for (const [key, rec] of Object.entries(days || {})) {
+    const date = rec?.date || getDateForDayNumber(oldStart, Number(key));
+    if (!date || date < newStart) continue;
+    const n = dayNumberForDate(newStart, date);
+    if (!n) continue;
+    out[n] = { ...rec, date, dayNumber: n };
+  }
+  return out;
 }
 
 function loadLS(key, fallback) {
@@ -321,6 +350,16 @@ function migrateProfiles(stored) {
       changed = true;
     }
 
+    // Challenge Combination — the support lane. Existing users migrate naturally:
+    // their one running challenge IS the primary (it already lives in
+    // activeChallenge / challengeStart / tasks, which this never touches), and
+    // they simply have no support challenge. Only the two absent fields are
+    // written, so the migration is additive, idempotent, and impossible to
+    // misread — nothing is re-derived, re-keyed or reset.
+    if (profiles[profId].supportChallenge === undefined) {
+      profiles[profId] = { ...profiles[profId], supportChallenge: null, supportChallengeStart: null };
+      changed = true;
+    }
     let meta = profiles[profId].activeChallenge;
 
     // Weekly Requirements (Fat Loss) — every profile carries a session list.
@@ -405,6 +444,23 @@ function migrateProfiles(stored) {
       profiles[profId] = {
         ...profiles[profId],
         bonusMissions: tpl.bonus_missions.map((m, i) => ({ ...m, source: 'template', recurring: true, order: i })),
+      };
+      changed = true;
+    }
+  }
+
+  // Task provenance defaults to the primary lane. A task written before the
+  // Challenge Combination feature — template or user-added — belongs to the one
+  // challenge that was running, so tagging it primary is exactly what it already
+  // meant. This runs LAST, after every other migration has finished editing task
+  // lists, so a task inserted by an earlier step is tagged in the same pass and
+  // the whole migration settles in one load (re-running then changes nothing).
+  for (const profId of ['me', 'girlfriend']) {
+    const ts = profiles[profId]?.tasks;
+    if (Array.isArray(ts) && ts.some(t => t && !Array.isArray(t.challenges))) {
+      profiles[profId] = {
+        ...profiles[profId],
+        tasks: ts.map(t => (t && Array.isArray(t.challenges) ? t : { ...t, challenges: [LANE.PRIMARY] })),
       };
       changed = true;
     }
@@ -641,6 +697,48 @@ export function AppProvider({ children }) {
     return profiles[profId]?.activeChallenge?.templateId === 'forge_daily';
   }, [activeProfile, profiles]);
 
+  // ── Challenge Combination: the optional SUPPORT lane ──────────────────────
+  // The primary lane is untouched — activeChallenge / challengeStart / tasks are
+  // exactly what they have always been. Everything below is additive, and every
+  // accessor returns the "no support challenge" answer for a profile that has
+  // none, so single-challenge behaviour is unchanged.
+
+  /** The support challenge descriptor, or null. */
+  const getSupportMeta = useCallback((profId = activeProfile) => {
+    return challengeOf(profiles[profId], LANE.SUPPORT);
+  }, [activeProfile, profiles]);
+
+  /** True when a second challenge is stacked on the primary. */
+  const hasSupport = useCallback((profId = activeProfile) => {
+    return hasSupportChallenge(profiles[profId]);
+  }, [activeProfile, profiles]);
+
+  /** The support challenge's own day number (null when absent or not yet begun). */
+  const getSupportDayNumber = useCallback((profId = activeProfile) => {
+    return laneDayNumber(profiles[profId], LANE.SUPPORT);
+  }, [activeProfile, profiles]);
+
+  const getSupportStart = useCallback((profId = activeProfile) => {
+    return startOf(profiles[profId], LANE.SUPPORT);
+  }, [activeProfile, profiles]);
+
+  /** Descriptor + start + day number for a lane, in one call. */
+  const getLaneInfo = useCallback((lane, profId = activeProfile) => {
+    const prof = profiles[profId];
+    const meta = challengeOf(prof, lane);
+    if (!meta) return null;
+    return {
+      lane,
+      meta,
+      name: meta.name,
+      emoji: meta.emoji,
+      start: startOf(prof, lane),
+      dayNumber: laneDayNumber(prof, lane),
+      duration: meta.durationDays || null,
+      complete: laneIsComplete(prof, lane),
+    };
+  }, [activeProfile, profiles]);
+
   const getDayNumber = useCallback((profId = activeProfile) => {
     const start = profiles[profId]?.challengeStart;
     if (!start) return null;
@@ -808,7 +906,11 @@ export function AppProvider({ children }) {
       endDate,
       completed,
       completionDate: completed ? getTodayStr() : null,
-      tasks: prof.tasks || [],
+      // Only the PRIMARY lane's rows belong to this challenge's record. A
+      // support challenge's tasks archive with the support challenge, so a
+      // stacked attempt is never graded against requirements it did not own.
+      tasks: tasksForLane(prof.tasks, LANE.PRIMARY),
+      lane: LANE.PRIMARY,
       days: profDays,
       quoteData: challengeQuotes,
       weeklyReflections: { ...(weeklyReflections[profId] || {}) },
@@ -856,6 +958,83 @@ export function AppProvider({ children }) {
   }, [profiles, allDays, quoteData, weeklyReflections, getDayCompletion]);
 
   /**
+   * Archive entry for the SUPPORT challenge.
+   *
+   * Structurally identical to a primary archive so every existing archive
+   * reader, insight and result screen works on it unchanged. Two differences:
+   * `lane: 'support'` records which slot it ran in, and its `days` map is
+   * re-keyed to the SUPPORT challenge's own day numbers — so the archive reads
+   * as a self-contained challenge with its own Day 1, independent of whatever
+   * primary it happened to run beside.
+   */
+  const buildSupportArchiveEntry = useCallback((profId) => {
+    const prof = profiles[profId];
+    const meta = challengeOf(prof, LANE.SUPPORT);
+    const start = startOf(prof, LANE.SUPPORT);
+    if (!meta || !start) return null;
+    if (isScheduled({ challengeStart: start })) return null;   // never began
+    const rawDay = challengeDayNumber(start);
+    if (!rawDay) return null;
+
+    const tasks = tasksForLane(prof.tasks, LANE.SUPPORT);
+    if (!tasks.length) return null;
+    const dayNum = Math.min(rawDay, meta.durationDays || rawDay);
+    const profDays = allDays[profId] || {};
+
+    // Re-key the shared day records onto this challenge's own day numbering.
+    const days = {};
+    for (let i = 1; i <= dayNum; i++) {
+      const key = recordKeyForLaneDay(prof, LANE.SUPPORT, i);
+      const d = key == null ? null : profDays[key];
+      if (d) days[i] = { ...d, dayNumber: i };
+    }
+    if (Object.keys(days).length === 0) return null;
+
+    const scoreObj = computeChallengeScore(allDays, profiles, profId, rawDay, LANE.SUPPORT);
+    const cfg = getPassingConfig(meta);
+    const passed = scoreObj ? isChallengePassed(scoreObj, meta) : null;
+    const completed = meta.durationDays != null && rawDay >= meta.durationDays;
+
+    return {
+      id: `arch_sup_${Date.now()}`,
+      lane: LANE.SUPPORT,
+      archivedAt: getTodayStr(),
+      challenge: { ...meta },
+      challengeStart: start,
+      endDayNum: dayNum,
+      endDate: getDateForDayNumber(start, dayNum),
+      completed,
+      completionDate: completed ? getTodayStr() : null,
+      tasks,
+      days,
+      quoteData: {},
+      weeklyReflections: {},
+      weeklySessions: [],
+      weeklyRequirements: { tracked: false },
+      // Default 0. endSupportChallenge overwrites this with the XP that actually
+      // LEAVES the current challenge when the support rows are removed — a
+      // transfer, never a gain. Shared habits stay in the list, so their XP never
+      // moves and can never be counted twice; only support-only rows carry over.
+      xpEarned: 0,
+      badges: [],
+      comebackHistory: [],
+      xpOffset: 0,
+      xpStartDay: 1,
+      finalScore: scoreObj ? scoreObj.score : null,
+      scoreAvailable: !!(scoreObj && scoreObj.hasData),
+      passingScore: cfg.passingScore,
+      keystoneRequirement: cfg.keystoneRequirement,
+      keystoneAdherence: scoreObj ? scoreObj.keystoneAdherence : null,
+      passed,
+      completionBonus: 0,
+      bonusEarned: false,
+      taskXP: 0,
+      bonusXP: 0,
+      resultDate: completed ? getTodayStr() : null,
+    };
+  }, [profiles, allDays]);
+
+  /**
    * Start a new challenge. The current challenge (if any) is archived first —
    * nothing is deleted. Only active-challenge progress resets: day data,
    * challenge XP, and comeback state. Lifetime data (archives, quote
@@ -867,9 +1046,13 @@ export function AppProvider({ children }) {
    *               tasks (the outgoing list is preserved in the archive entry)
    */
   const startChallenge = useCallback((profId = activeProfile, options = null) => {
+    // Archive BOTH lanes before anything is replaced, so a stacked pair leaves
+    // two independent records rather than losing the support challenge.
     const entry = buildArchiveEntry(profId);
-    if (entry) {
-      setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
+    const supportEntry = buildSupportArchiveEntry(profId);
+    const newEntries = [entry, supportEntry].filter(Boolean);
+    if (newEntries.length) {
+      setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), ...newEntries] }));
     }
     const meta = options?.challenge ? { ...DEFAULT_CHALLENGE_META, ...options.challenge } : { ...DEFAULT_CHALLENGE_META };
     // A setup-time Cold Exposure Upgrade is required from day one — pin its
@@ -896,7 +1079,14 @@ export function AppProvider({ children }) {
         ...prev[profId],
         challengeStart: startDate,
         activeChallenge: meta,
-        ...(options?.tasks ? { tasks: options.tasks.map((t, i) => ({ ...t, source: 'template', order: i })) } : {}),
+        // Starting a NEW primary clears the support lane: a support challenge is
+        // chosen to complement one specific primary, so it never silently
+        // carries over onto a different one. (Its progress was archived above,
+        // through buildArchiveEntry, before anything was replaced.)
+        supportChallenge: null,
+        supportChallengeStart: null,
+        pendingPrimaryChoice: null,
+        ...(options?.tasks ? { tasks: options.tasks.map((t, i) => ({ ...t, source: 'template', order: i, challenges: [LANE.PRIMARY] })) } : {}),
         // Bonus Missions are per-challenge: seed from the new challenge (or clear).
         bonusMissions: (options?.bonusMissions || []).map((m, i) => ({ ...m, source: 'template', recurring: true, order: i })),
         xpOffset: 0,
@@ -914,6 +1104,160 @@ export function AppProvider({ children }) {
       return next;
     });
   }, [activeProfile, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+
+  // ── Support challenge lifecycle ───────────────────────────────────────────
+
+
+  /**
+   * Stack a SUPPORT challenge alongside the running primary.
+   *
+   * The primary is not touched in any way: its descriptor, start date, day
+   * records, XP, weekly sessions and archives all stay exactly as they are. Only
+   * the shared daily task list grows — and only by the support challenge's
+   * NON-duplicate requirements, because mergeSupportTasks folds any habit both
+   * challenges require into the single row that already exists.
+   *
+   * Returns false when it cannot stack (no primary, one already stacked, or a
+   * conflicting pairing); the caller surfaces the reason.
+   */
+  const addSupportChallenge = useCallback((options, profId = activeProfile) => {
+    const prof = profiles[profId];
+    if (!prof?.challengeStart || !options?.challenge) return false;
+    if (hasSupportChallenge(prof)) return false;                 // never more than two
+    if (prof.activeChallenge?.templateId === 'forge_daily') return false;
+    const primaryId = prof.activeChallenge?.templateId;
+    if (primaryId && primaryId === options.challenge.templateId) return false;
+    if (!canStack(primaryId, options.challenge.templateId)) return false;
+
+    const startDate = options.startDate || getTodayStr();
+    const meta = { ...DEFAULT_CHALLENGE_META, ...options.challenge };
+    if (hasWeeklyRequirements(meta) && !meta.weeklyRequirementsStartDate) {
+      meta.weeklyRequirementsStartDate = startDate;
+    }
+    if (isColdExposureEnabled(meta)) meta.coldExposureUpgradeStartDate = startDate;
+    if (options.futureSelfLetter) {
+      meta.futureSelfLetter = { ...options.futureSelfLetter, writtenAt: getTodayStr() };
+    }
+    const supportTasks = (options.tasks || []).map(t => ({ ...t, source: 'template' }));
+    const { tasks } = mergeSupportTasks(prof.tasks || [], supportTasks);
+
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: {
+        ...prev[profId],
+        supportChallenge: meta,
+        supportChallengeStart: startDate,
+        tasks,
+      },
+    }));
+    return true;
+  }, [activeProfile, profiles, setProfiles]);
+
+  /**
+   * What adding a support challenge would do to the daily list — the shared
+   * habits it would merge and how many rows it would actually add. Pure preview,
+   * changes nothing.
+   */
+  const previewSupportChallenge = useCallback((supportTasks, profId = activeProfile) => {
+    return previewMerge(profiles[profId]?.tasks || [], supportTasks || []);
+  }, [activeProfile, profiles]);
+
+  /**
+   * End the support challenge. Archives it first when it produced any real
+   * progress, then removes its rows from the daily list. The PRIMARY challenge
+   * is completely unaffected — same descriptor, same start date, same day
+   * records, same XP, same score.
+   */
+  const endSupportChallenge = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    if (!hasSupportChallenge(prof)) return false;
+    const nextTasks = stripSupportTasks(prof.tasks || []);
+
+    // XP in Forge is DERIVED: the current task list is re-applied to every logged
+    // day. Dropping the support challenge's rows would therefore silently erase
+    // XP the user genuinely earned on days they genuinely completed. Measure that
+    // difference once, here, and bank it in BOTH places so nothing moves and
+    // nothing duplicates:
+    //
+    //   • the support ARCHIVE takes it as xpEarned  → Lifetime XP is unchanged
+    //     (computeLifetimeXP sums archives + the current challenge's raw total,
+    //     which is about to drop by exactly this amount — a transfer, not a gain);
+    //   • xpOffset takes it too → the visible Challenge XP total is unchanged,
+    //     so ending a support challenge never looks like a punishment.
+    //
+    // Only support-ONLY rows contribute: a shared habit stays in the list, so its
+    // XP never moves and can never be counted a second time.
+    const dayNum = getDayNumber(profId);
+    let carriedXP = 0;
+    if (dayNum) {
+      const before = computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum);
+      const after = computeTotalXP(
+        allDays,
+        { ...profiles, [profId]: { ...prof, tasks: nextTasks, supportChallenge: null, supportChallengeStart: null } },
+        profId, getDayCompletion, dayNum, dayNum,
+      );
+      carriedXP = Math.max(0, before.rawTotal - after.rawTotal);
+    }
+
+    const entry = buildSupportArchiveEntry(profId);
+    if (entry) {
+      setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), { ...entry, xpEarned: carriedXP, taskXP: carriedXP }] }));
+    }
+
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: {
+        ...prev[profId],
+        supportChallenge: null,
+        supportChallengeStart: null,
+        tasks: nextTasks,
+        xpOffset: (prev[profId].xpOffset ?? 0) + carriedXP,
+      },
+    }));
+    return true;
+  }, [activeProfile, profiles, allDays, getDayCompletion, getDayNumber, setProfiles, setArchives, buildSupportArchiveEntry]);
+
+  /**
+   * Promote the running SUPPORT challenge into the PRIMARY slot.
+   *
+   * Offered (never forced) when the primary finishes. Day records are re-keyed
+   * from the old primary's numbering onto the support challenge's own Day 1, so
+   * every completion already logged against it survives the move and its
+   * progress continues from where it actually is — not from day 1.
+   */
+  const promoteSupportToPrimary = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    if (!hasSupportChallenge(prof)) return false;
+    const oldStart = prof.challengeStart;
+    const newStart = prof.supportChallengeStart;
+    const meta = { ...prof.supportChallenge };
+    // Support rows become the new primary's rows; primary-only rows retire with
+    // the challenge that owned them (exactly as any challenge switch works).
+    const tasks = tasksForLane(prof.tasks, LANE.SUPPORT)
+      .map((t, i) => { const { mergedFrom, targetConflict, ...rest } = t; return { ...rest, challenges: [LANE.PRIMARY], order: i }; });
+
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: {
+        ...prev[profId],
+        challengeStart: newStart,
+        activeChallenge: meta,
+        tasks,
+        supportChallenge: null,
+        supportChallengeStart: null,
+        pendingPrimaryChoice: null,
+        lastCompletion: null,
+        weeklySessions: hasWeeklyRequirements(meta) ? (prev[profId].weeklySessions || []) : [],
+      },
+    }));
+    setAllDays(prev => ({ ...prev, [profId]: rekeyDays(prev[profId] || {}, oldStart, newStart) }));
+    return true;
+  }, [activeProfile, profiles, setProfiles, setAllDays]);
+
+  /** Dismiss the "what next?" prompt shown when a primary finishes beside a support. */
+  const clearPrimaryChoice = useCallback((profId = activeProfile) => {
+    setProfiles(prev => ({ ...prev, [profId]: { ...prev[profId], pendingPrimaryChoice: null } }));
+  }, [activeProfile, setProfiles]);
 
   // Build the Challenge Complete summary shown after a challenge finishes.
   function buildCompletionSummary(entry, profId = activeProfile) {
@@ -1010,6 +1354,47 @@ export function AppProvider({ children }) {
     if (entry) {
       setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
     }
+
+    // ── A support challenge is still running ────────────────────────────────
+    // Finishing the primary must not quietly end it. The primary slot drops to
+    // the Forge Daily baseline (the app's "no active primary" state) anchored to
+    // the SUPPORT's Day 1, and the day records are re-keyed to that anchor so
+    // the support challenge's own progress is fully preserved. The user is then
+    // prompted to promote it, choose a new primary, or stay as they are —
+    // pendingPrimaryChoice records that the decision is theirs to make.
+    if (hasSupportChallenge(prof)) {
+      const supportStart = prof.supportChallengeStart;
+      const supportTasks = tasksForLane(prof.tasks, LANE.SUPPORT)
+        .map(t => { const { mergedFrom, targetConflict, ...rest } = t; return rest; });
+      const { tasks } = mergeSupportTasks(
+        FORGE_DAILY_TASKS.map(t => ({ ...t, source: 'template', challenges: [LANE.PRIMARY] })),
+        supportTasks,
+      );
+      setProfiles(prev => ({
+        ...prev,
+        [profId]: {
+          ...prev[profId],
+          challengeStart: supportStart,
+          activeChallenge: { ...FORGE_DAILY_META },
+          tasks,
+          bonusMissions: [],
+          lastCompletion: summary,
+          pendingPrimaryChoice: {
+            finishedName: prof.activeChallenge?.name || null,
+            supportName: prof.supportChallenge?.name || null,
+            supportEmoji: prof.supportChallenge?.emoji || null,
+          },
+          xpOffset: 0,
+          xpStartDay: 1,
+          comebackMode: { active: false, dayStart: null, dismissedAt: null },
+          comebackHistory: [],
+          weeklySessions: hasWeeklyRequirements(prof.supportChallenge) ? (prev[profId].weeklySessions || []) : [],
+        },
+      }));
+      setAllDays(prev => ({ ...prev, [profId]: rekeyDays(prev[profId] || {}, prof.challengeStart, supportStart) }));
+      return;
+    }
+
     setProfiles(prev => ({
       ...prev,
       [profId]: {
@@ -1033,6 +1418,18 @@ export function AppProvider({ children }) {
       return next;
     });
   }, [activeProfile, profiles, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+
+  /**
+   * The SUPPORT challenge has run past its final day: archive it and clear the
+   * support slot. The primary challenge continues completely untouched — this
+   * never resets, re-anchors or re-scores it.
+   */
+  const completeSupportChallenge = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    if (!hasSupportChallenge(prof)) return false;
+    if (!laneIsComplete(prof, LANE.SUPPORT)) return false;
+    return endSupportChallenge(profId);
+  }, [activeProfile, profiles, endSupportChallenge]);
 
   /** Dismiss the Challenge Complete screen (stay on Forge Daily). */
   const dismissCompletion = useCallback((profId = activeProfile) => {
@@ -1686,6 +2083,10 @@ export function AppProvider({ children }) {
       // Scheduled / future challenge starts
       getChallengeStatus, isChallengeScheduled, getDaysUntilStart,
       rescheduleChallenge, startChallengeNow, CHALLENGE_STATE,
+      // Challenge Combination (primary + optional support)
+      getSupportMeta, hasSupport, getSupportDayNumber, getSupportStart, getLaneInfo,
+      addSupportChallenge, previewSupportChallenge, endSupportChallenge,
+      completeSupportChallenge, promoteSupportToPrimary, clearPrimaryChoice, LANE,
       // Bonus Missions
       toggleBonusMission, addBonusMission, removeBonusMission, reorderBonusMissions,
       // Rank ceremony / Hall of Legends

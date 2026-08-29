@@ -146,12 +146,25 @@ function NotificationScheduler() {
 // stays frozen on "Day N of N". Checks on mount and every minute (to catch a
 // date rollover while the app is open).
 function ChallengeLifecycle() {
-  const { activeProfile, profile, getRawDayNumber, getChallengeMeta, completeChallenge } = useApp();
+  const {
+    activeProfile, profile, getRawDayNumber, getChallengeMeta, completeChallenge,
+    getSupportDayNumber, getSupportMeta, completeSupportChallenge,
+  } = useApp();
 
   useEffect(() => {
     if (!activeProfile || !profile?.challengeStart) return undefined;
 
     function check() {
+      // The two lanes finish INDEPENDENTLY. The support challenge is checked
+      // first and completed on its own terms — archiving it and clearing the
+      // support slot — which never touches the primary's descriptor, start date,
+      // day records, XP or score.
+      const sMeta = getSupportMeta();
+      if (sMeta?.durationDays != null) {
+        const sDay = getSupportDayNumber();
+        if (sDay != null && sDay > sMeta.durationDays) completeSupportChallenge();
+      }
+
       const meta = getChallengeMeta();
       const duration = meta.durationDays;
       if (duration == null) return;                 // Forge Daily never completes
@@ -163,7 +176,9 @@ function ChallengeLifecycle() {
     check();
     const id = setInterval(check, 60 * 1000);
     return () => clearInterval(id);
-  }, [activeProfile, profile?.challengeStart, profile?.activeChallenge, getRawDayNumber, getChallengeMeta, completeChallenge]);
+  }, [activeProfile, profile?.challengeStart, profile?.activeChallenge, profile?.supportChallenge,
+      getRawDayNumber, getChallengeMeta, completeChallenge,
+      getSupportDayNumber, getSupportMeta, completeSupportChallenge]);
 
   return null;
 }

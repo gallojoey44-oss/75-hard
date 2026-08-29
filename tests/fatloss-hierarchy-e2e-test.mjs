@@ -145,12 +145,22 @@ const daysFirst = await page.evaluate(() => JSON.parse(localStorage.getItem('all
 check('19: task definitions and challenge rules untouched (ignoring additive weekly fields)',
   await page.evaluate(({ before }) => {
     const b = JSON.parse(before).me, a = JSON.parse(localStorage.getItem('profiles')).me;
+    // Additive-only migration fields: weekly requirements, and the Challenge
+    // Combination support lane + per-task lane provenance. Nothing else may change.
     const strip = (o) => { const c = { ...o, activeChallenge: { ...o.activeChallenge } };
-      delete c.weeklySessions; delete c.activeChallenge.weeklyRequirementsStartDate; return JSON.stringify(c); };
+      delete c.weeklySessions; delete c.activeChallenge.weeklyRequirementsStartDate;
+      delete c.supportChallenge; delete c.supportChallengeStart;
+      c.tasks = (c.tasks || []).map(t => { const { challenges, ...rest } = t; return rest; });
+      return JSON.stringify(c); };
     return strip(b) === strip(a);
   }, { before: profilesBefore }));
-check('19: the task snapshot itself is unchanged', await page.evaluate(({ before }) =>
-  JSON.stringify(JSON.parse(before).me.tasks) === JSON.stringify(JSON.parse(localStorage.getItem('profiles')).me.tasks), { before: profilesBefore }));
+check('19: the task snapshot itself is unchanged (bar the additive lane tag)', await page.evaluate(({ before }) => {
+  const bare = ts => JSON.stringify((ts || []).map(t => { const { challenges, ...rest } = t; return rest; }));
+  return bare(JSON.parse(before).me.tasks) === bare(JSON.parse(localStorage.getItem('profiles')).me.tasks);
+}, { before: profilesBefore }));
+check('19: every pre-existing task is tagged to the PRIMARY lane only', await page.evaluate(() =>
+  JSON.parse(localStorage.getItem('profiles')).me.tasks.every(t =>
+    Array.isArray(t.challenges) && t.challenges.length === 1 && t.challenges[0] === 'primary')));
 check('19: seeded task completions preserved exactly', [1, 2, 3, 4, 5].every(i =>
   daysFirst[i].tasks.fl_protein === true && daysFirst[i].tasks.fl_steps === true && daysFirst[i].tasks.fl_photo === true));
 check('19: no task was auto-completed that the user never did', [1, 2, 3, 4, 5].every(i =>

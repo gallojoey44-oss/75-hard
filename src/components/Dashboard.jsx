@@ -4,6 +4,7 @@ import BuildBanner from './BuildBanner';
 import QuoteOfTheDay from './QuoteOfTheDay';
 import RankUpCeremony from './RankUpCeremony';
 import ChallengePerformance from './ChallengePerformance';
+import SupportProgress from './SupportProgress';
 import {
   computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
@@ -604,6 +605,7 @@ export default function Dashboard({ setView }) {
     isChallengeScheduled,
     setActiveProfile,
     startComeback, dismissComeback, completeComeback,
+    getLaneInfo, promoteSupportToPrimary, clearPrimaryChoice, LANE,
     initRankBaseline, recordRankUp,
   } = useApp();
 
@@ -626,6 +628,11 @@ export default function Dashboard({ setView }) {
   const totalDone = dayNum
     ? Array.from({ length: dayNum }, (_, i) => i + 1).filter(n => getDayCompletion(n) === 100).length
     : 0;
+
+  // Challenge Combination: the optional second lane. Null for the overwhelming
+  // majority of profiles, which then render exactly as they always have.
+  const supportInfo = getLaneInfo(LANE.SUPPORT);
+  const primaryChoice = profile?.pendingPrimaryChoice || null;
 
   const otherProfile = activeProfile === 'me' ? 'girlfriend' : 'me';
 
@@ -761,6 +768,27 @@ export default function Dashboard({ setView }) {
   if (completionSummary) {
     return (
       <>
+        {/* The primary finished while a support challenge was still running.
+            The three options are offered here, on the completion screen the user
+            actually sees — Forge never promotes or ends anything on their behalf. */}
+        {primaryChoice && supportInfo && (
+          <div className="primary-choice-card">
+            <div className="pc-title">🏁 {primaryChoice.finishedName} is complete</div>
+            <p className="pc-body">
+              {primaryChoice.supportEmoji} <strong>{primaryChoice.supportName}</strong> is still
+              running and its progress is safe. What do you want as your primary goal now?
+            </p>
+            <button className="btn btn-primary btn-full" onClick={() => promoteSupportToPrimary()}>
+              Promote {primaryChoice.supportName} to Primary
+            </button>
+            <button className="btn btn-secondary btn-full" onClick={() => { clearPrimaryChoice(); setShowNextGoal(true); }}>
+              Choose a new Primary Challenge
+            </button>
+            <button className="btn btn-ghost btn-full" onClick={() => clearPrimaryChoice()}>
+              Continue with no Primary for now
+            </button>
+          </div>
+        )}
         <ChallengeComplete
           summary={completionSummary}
           onStartNew={() => setShowNextGoal(true)}
@@ -916,6 +944,7 @@ export default function Dashboard({ setView }) {
 
       {/* Challenge Performance — percentage score, passing line, status */}
       <ChallengePerformance setView={setView} />
+      <SupportProgress />
 
       {/* Quote of the Day — identity and motivation live on Home */}
       <QuoteOfTheDay />
@@ -961,6 +990,34 @@ export default function Dashboard({ setView }) {
         <button className="btn btn-primary btn-full" style={{ marginBottom: 14 }} onClick={() => completeChallenge()}>
           🏁 Finish Challenge
         </button>
+      )}
+
+      {/* Challenge stack — PRIMARY stays visually dominant; SUPPORT is a
+          compact secondary row beneath it. Each keeps its own day count,
+          duration and progress. */}
+      {supportInfo && (
+        <div className="stack-card">
+          <div className="stack-lane primary">
+            <div className="stack-role">PRIMARY</div>
+            <div className="stack-name">{meta.emoji} {meta.name}</div>
+            <div className="stack-progress">
+              {isBaseline
+                ? 'No active primary challenge'
+                : `Day ${dayNum || '—'} / ${duration}`}
+            </div>
+            <div className="stack-bar"><div className="stack-bar-fill" style={{ width: `${Math.min(100, ((dayNum || 0) / duration) * 100)}%` }} /></div>
+          </div>
+          <div className="stack-lane support">
+            <div className="stack-role">SUPPORT</div>
+            <div className="stack-name">{supportInfo.emoji} {supportInfo.name}</div>
+            <div className="stack-progress">
+              {supportInfo.dayNumber
+                ? `Day ${supportInfo.dayNumber} / ${supportInfo.duration}`
+                : `Starts ${formatDateShort(supportInfo.start)}`}
+            </div>
+            <div className="stack-bar"><div className="stack-bar-fill" style={{ width: `${Math.min(100, ((supportInfo.dayNumber || 0) / (supportInfo.duration || 1)) * 100)}%` }} /></div>
+          </div>
+        </div>
       )}
 
       {/* Hero Ring — challenge day count (baseline shows a simpler tile) */}

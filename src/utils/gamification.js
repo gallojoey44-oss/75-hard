@@ -3,6 +3,7 @@ import { isColdExposureRequiredForDate, COLD_SHOWER_TASK_ID } from '../data/chal
 import { readDayMetric, dayHasAnyMetric } from './insightsUtils';
 import { computeWeeklyRequirements } from './weeklyRequirements';
 import { isScheduled } from './challengeSchedule';
+import { LANE, challengeOf, startOf, tasksForLane, recordKeyForLaneDay } from './challengeStack';
 
 /**
  * The effective required-task list for a specific challenge day. The only
@@ -494,21 +495,32 @@ function scoreDayRequired(dayData, tasks) {
  * idempotent and needs no stored record — it re-derives from the local date
  * every render, correct across reloads, timezones, and DST).
  */
-export function computeChallengeScore(allDays, profiles, profId, currentRawDay) {
+export function computeChallengeScore(allDays, profiles, profId, currentRawDay, lane = LANE.PRIMARY) {
+  const prof = profiles[profId];
+  const meta = challengeOf(prof, lane);
+  const challengeStart = startOf(prof, lane);
   // Weekly Requirements (Fat Loss) add their own earned/available XP on top of
   // the daily-task totals, using the same finalised-vs-current fairness rule.
   const weekly = computeWeeklyRequirements({
-    sessions: profiles[profId]?.weeklySessions,
-    meta: profiles[profId]?.activeChallenge,
-    challengeStart: profiles[profId]?.challengeStart,
+    sessions: prof?.weeklySessions,
+    meta,
+    challengeStart,
     currentRawDay,
   });
-  const prof = profiles[profId];
-  const meta = prof?.activeChallenge;
   const duration = meta?.durationDays;
-  const tasks = prof?.tasks || [];
+  // Per-challenge adherence is a FILTER over the one shared daily task list: a
+  // habit both challenges require appears in both lanes' sets, so completing it
+  // once counts toward both — while still paying XP only once, because it is a
+  // single row. Absent provenance means primary, so a single-challenge profile
+  // scores over exactly the same task list it always did.
+  const tasks = tasksForLane(prof?.tasks, lane);
   if (!duration || !currentRawDay || tasks.length === 0) return null;
   const profDays = allDays[profId] || {};
+  // Support days resolve to the day record through the shared calendar date, so
+  // the two challenges can have completely different start dates.
+  const recordFor = lane === LANE.SUPPORT
+    ? (n) => { const k = recordKeyForLaneDay(prof, LANE.SUPPORT, n); return k == null ? undefined : profDays[k]; }
+    : (n) => profDays[n];
   const keystoneTasks = keystoneHabitsOf(tasks);
   const fullDayAvail = tasks.reduce((s, t) => s + getTaskXP(t), 0);
 
@@ -526,10 +538,10 @@ export function computeChallengeScore(allDays, profiles, profId, currentRawDay) 
   // is excluded from any day before its activation date, so enabling it mid-
   // challenge never adds a denominator, a miss, or a penalty to earlier days.
   for (let i = 1; i <= finalizedThrough; i++) {
-    const d = profDays[i];
+    const d = recordFor(i);
     if (d?.isMWD) { mwdDays++; continue; } // protected — excluded from scoring
     finalizedDays++;
-    const dayTasks = requiredTasksForDay(tasks, meta, prof.challengeStart, i);
+    const dayTasks = requiredTasksForDay(tasks, meta, challengeStart, i);
     const s = scoreDayRequired(d, dayTasks);
     earned += s.earned; available += s.available;
     const doneCount = d ? dayTasks.filter(t => d.tasks?.[t.id]).length : 0;
@@ -542,12 +554,12 @@ export function computeChallengeScore(allDays, profiles, profId, currentRawDay) 
   // unchecked tasks are not counted (not yet missed) on either side.
   let todayEvaluated = 0, todayScored = false, hasInProgress = false;
   if (inProgressDay && inProgressDay > finalizedThrough) {
-    const d = profDays[inProgressDay];
+    const d = recordFor(inProgressDay);
     if (d?.isMWD) {
       mwdDays++;
     } else if (d) {
       hasInProgress = true;
-      const dayTasks = requiredTasksForDay(tasks, meta, prof.challengeStart, inProgressDay);
+      const dayTasks = requiredTasksForDay(tasks, meta, challengeStart, inProgressDay);
       for (const t of dayTasks) {
         if (d.tasks?.[t.id]) { const xp = getTaskXP(t); earned += xp; available += xp; todayEvaluated += xp; }
       }
@@ -583,6 +595,8 @@ export function computeChallengeScore(allDays, profiles, profId, currentRawDay) 
     inProgressDay: (inProgressDay && inProgressDay > finalizedThrough) ? inProgressDay : null,
     elapsed, duration, remainingAvailable, fullDayAvail,
     weekly,
+    lane,
+    challengeName: meta?.name || null,
     hasData: scoredDays > 0 && available > 0,
     // A confirmed score requires at least one finalised day. Before that (the
     // very first day), the score is "still building" rather than a real figure.

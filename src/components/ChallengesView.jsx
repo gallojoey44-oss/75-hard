@@ -12,6 +12,7 @@ import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeCon
 import { FutureSelfLetterForm } from './FutureSelfLetter';
 import { dateOffsetFromToday, startsInWords } from '../utils/challengeSchedule';
 import ScheduledStartCard from './ScheduledStart';
+import SupportChallengePicker from './SupportChallengePicker';
 import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
 
 // Overall challenge difficulty — fixed per challenge, independent of the
@@ -407,6 +408,7 @@ export default function ChallengesView({ setView }) {
     startChallenge, addColdExposureUpgrade,
     isChallengeTemplateOutdated, syncActiveChallengeWithTemplate, isForgeDaily,
     isChallengeScheduled,
+    getSupportMeta, getSupportDayNumber, getSupportStart, endSupportChallenge,
   } = useApp();
 
   // Challenge library filtered by the active profile (e.g. Women's Hormone
@@ -420,6 +422,8 @@ export default function ChallengesView({ setView }) {
   const [pendingStart, setPendingStart] = useState(null);
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const [showColdConfirm, setShowColdConfirm] = useState(false);
+  const [showSupportPicker, setShowSupportPicker] = useState(false);
+  const [showEndSupport, setShowEndSupport] = useState(false);
 
   const meta      = getChallengeMeta();
   const baseline  = isForgeDaily();
@@ -430,6 +434,8 @@ export default function ChallengesView({ setView }) {
   // A scheduled attempt is prepared but not running — it gets the pre-start card
   // instead of the active-challenge summary (no Day N, no score, no streak).
   const scheduled = isChallengeScheduled();
+  const supportMeta = getSupportMeta();
+  const supportDay = getSupportDayNumber();
   // Forge Daily is the baseline, not a "challenge" — so the tab shows the
   // no-active-challenge state and the library to start a real one.
   const isRunning = !!profile?.challengeStart && !baseline && !scheduled;
@@ -497,7 +503,7 @@ export default function ChallengesView({ setView }) {
           <div className="active-challenge-card">
             <div className="acc-label-row">
               <span className="acc-dot" />
-              <span className="acc-label">Active Challenge</span>
+              <span className="acc-label">{supportMeta ? 'Primary Challenge' : 'Active Challenge'}</span>
             </div>
             <div className="acc-name">
               {meta.emoji} {meta.name}
@@ -530,6 +536,26 @@ export default function ChallengesView({ setView }) {
               </div>
               <span className="acc-progress-label">{Math.round(((dayNum || 0) / duration) * 100)}% complete</span>
             </div>
+            {/* Support Challenge slot — at most one, always subordinate to the
+                primary above it. */}
+            {supportMeta ? (
+              <div className="acc-support">
+                <div className="acc-support-label">Support Challenge</div>
+                <div className="acc-support-row">
+                  <span className="acc-support-name">{supportMeta.emoji} {supportMeta.name}</span>
+                  <span className="acc-support-day">
+                    {supportDay ? `Day ${supportDay} of ${supportMeta.durationDays}` : `Starts ${formatDateLong(getSupportStart())}`}
+                  </span>
+                </div>
+                <button className="acc-support-end" onClick={() => setShowEndSupport(true)}>
+                  End Support Challenge
+                </button>
+              </div>
+            ) : (
+              <button className="btn btn-secondary btn-full acc-add-support" onClick={() => setShowSupportPicker(true)}>
+                ➕ Add a Support Challenge
+              </button>
+            )}
             {isChallengeTemplateOutdated() && (
               <div className="tpl-update-box">
                 <div className="tpl-update-notice">🆕 A newer version of this challenge template is available.</div>
@@ -643,6 +669,40 @@ export default function ChallengesView({ setView }) {
               <button className="btn btn-ghost" onClick={() => setShowColdConfirm(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={() => { addColdExposureUpgrade(); setShowColdConfirm(false); }}>
                 Confirm Upgrade
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add a Support Challenge — grouped by compatibility with the primary */}
+      {showSupportPicker && (
+        <SupportChallengePicker
+          onClose={() => setShowSupportPicker(false)}
+          onSwitchPrimary={(template) => {
+            // The user chose the conflicting challenge instead. That is a new
+            // PRIMARY, not a stack — the normal start flow runs, which archives
+            // the current challenge first.
+            const durationDays = getDefaultDuration(template);
+            setPendingStart({ template, variant: 'standard', durationDays, step: 'letter' });
+          }}
+        />
+      )}
+
+      {/* End the support challenge — the primary is untouched */}
+      {showEndSupport && supportMeta && (
+        <div className="modal-overlay" onClick={() => setShowEndSupport(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h3>End {supportMeta.name}?</h3>
+            <p>
+              Its tasks come off your daily list and its progress is archived.
+              {' '}<strong>{meta.name}</strong> keeps running exactly as it is — same day count,
+              same score, same XP.
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setShowEndSupport(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { endSupportChallenge(); setShowEndSupport(false); }}>
+                End Support Challenge
               </button>
             </div>
           </div>

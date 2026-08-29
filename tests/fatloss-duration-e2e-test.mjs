@@ -182,8 +182,13 @@ check('20: legacy scores/XP/tasks untouched by load', await page.evaluate(() => 
 check('20: only the additive weekly fields differ', await page.evaluate(({ before }) => {
   const b = JSON.parse(before.split('||')[0]).me;
   const a = JSON.parse(localStorage.getItem('profiles')).me;
+  // Additive-only migration fields: weekly requirements, and the Challenge
+  // Combination support lane + per-task lane provenance. Nothing else may change.
   const strip = (o) => { const c = { ...o, activeChallenge: { ...o.activeChallenge } };
-    delete c.weeklySessions; delete c.activeChallenge.weeklyRequirementsStartDate; return JSON.stringify(c); };
+    delete c.weeklySessions; delete c.activeChallenge.weeklyRequirementsStartDate;
+    delete c.supportChallenge; delete c.supportChallengeStart;
+    c.tasks = (c.tasks || []).map(t => { const { challenges, ...rest } = t; return rest; });
+    return JSON.stringify(c); };
   return strip(b) === strip(a);
 }, { before: beforeLegacy }));
 const legacySecond = await page.evaluate(() => localStorage.getItem('profiles') + '||' + localStorage.getItem('archives') + '||' + localStorage.getItem('allDays'));

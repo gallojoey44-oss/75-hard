@@ -4801,3 +4801,100 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .start-when-sub { font-size: 12px; color: var(--text3); }
 .start-when-btn .inline-input { width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; }
+
+/* ── Challenge Combination (primary + support) ─────────────────────────────── */
+/* Primary stays visually dominant: larger type, full-strength accent. Support is
+   a deliberately quieter secondary row. */
+.stack-card { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;
+  padding: 14px; border-radius: var(--radius-lg); background: var(--bg2); border: 1px solid var(--border); }
+.stack-lane { padding: 10px 12px; border-radius: var(--radius); border-left: 4px solid; }
+.stack-lane.primary { background: rgba(139,92,246,0.12); border-color: #8B5CF6; }
+.stack-lane.support { background: rgba(59,130,246,0.08); border-color: #3B82F6; }
+.stack-role { font-size: 10px; font-weight: 800; letter-spacing: 1.2px; color: var(--text3); }
+.stack-lane.primary .stack-role { color: #A78BFA; }
+.stack-lane.support .stack-role { color: #60A5FA; }
+.stack-lane.primary .stack-name { font-size: 17px; font-weight: 800; color: var(--text); margin-top: 2px; }
+.stack-lane.support .stack-name { font-size: 14px; font-weight: 700; color: var(--text2); margin-top: 2px; }
+.stack-progress { font-size: 12px; color: var(--text3); margin-top: 2px; }
+.stack-bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.12); margin-top: 8px; overflow: hidden; }
+.stack-lane.primary .stack-bar-fill { height: 100%; background: #8B5CF6; }
+.stack-lane.support .stack-bar-fill { height: 100%; background: #3B82F6; }
+
+/* Support slot on the Challenges tab */
+.acc-support { margin-top: 14px; padding: 12px; border-radius: var(--radius);
+  background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.3); }
+.acc-support-label { font-size: 10px; font-weight: 800; letter-spacing: 1.2px; color: #60A5FA; }
+.acc-support-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.acc-support-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.acc-support-day { font-size: 12px; color: var(--text3); }
+.acc-support-end { margin-top: 8px; background: none; border: none; padding: 4px 0;
+  color: var(--text3); font-size: 12px; font-weight: 600; cursor: pointer; }
+.acc-add-support { margin-top: 14px; }
+
+/* Support challenge picker */
+.sup-picker { max-height: 82vh; overflow-y: auto; }
+.sup-lead { font-size: 13px; color: var(--text2); line-height: 1.6; }
+.sup-group { margin-top: 16px; }
+.sup-group-title { font-size: 13px; font-weight: 800; letter-spacing: 0.3px; }
+.sup-group-blurb { font-size: 12px; color: var(--text3); margin: 2px 0 8px; line-height: 1.5; }
+.sup-option { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left;
+  padding: 12px 14px; margin-bottom: 8px; border-radius: var(--radius); cursor: pointer;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text); }
+.sup-option.highly_compatible { border-color: rgba(16,185,129,0.4); }
+.sup-option.conditional { border-color: rgba(245,158,11,0.4); }
+.sup-option.conflicting { border-color: rgba(239,68,68,0.4); opacity: 0.85; }
+.sup-option-head { display: flex; align-items: center; gap: 8px; }
+.sup-option-emoji { font-size: 18px; }
+.sup-option-name { font-size: 15px; font-weight: 700; flex: 1; }
+.sup-option-why { font-size: 12px; color: var(--text3); line-height: 1.5; }
+.sup-empty { font-size: 13px; color: var(--text3); }
+.sup-conflict-pair { font-size: 15px; font-weight: 700; text-align: center; margin: 6px 0; }
+.sup-vs { color: var(--text3); font-weight: 600; margin: 0 6px; }
+.sup-conflict-why { font-size: 13px; color: var(--text2); line-height: 1.6; }
+.sup-conflict-note { font-size: 13px; color: var(--text3); line-height: 1.6; }
+.sup-conflict-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.sup-role-note { font-size: 12px; color: var(--text3); margin-bottom: 12px; }
+.sup-field { margin-bottom: 14px; }
+.sup-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.6px;
+  text-transform: uppercase; color: var(--text3); margin-bottom: 6px; }
+.sup-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.sup-chip { padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text2); }
+.sup-chip.active { background: rgba(139,92,246,0.2); border-color: #8B5CF6; color: var(--text); }
+.sup-date { width: 100%; margin-top: 8px; }
+.sup-hint { font-size: 12px; color: var(--text3); margin-top: 6px; }
+.sup-merge { padding: 12px; border-radius: var(--radius); background: var(--bg2); border: 1px solid var(--border); }
+.sup-merge-title { font-size: 11px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text3); }
+.sup-merge-line { font-size: 13px; color: var(--text2); margin-top: 6px; line-height: 1.5; }
+.sup-merge-line.shared { color: #10B981; font-weight: 600; }
+.sup-merge-list { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--text2); line-height: 1.6; }
+.sup-merge-drop { color: var(--text3); }
+.sup-error { margin-top: 10px; font-size: 13px; color: var(--danger); }
+
+/* A daily task that satisfies both challenges at once */
+.check-item.shared-habit { border-left: 3px solid rgba(59,130,246,0.55); }
+.check-supports { display: block; font-size: 11px; font-weight: 600; color: #60A5FA; margin-top: 2px; }
+
+/* Support challenge progress card */
+.support-perf { border-left: 4px solid #3B82F6; }
+.sp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sp-role { font-size: 10px; font-weight: 800; letter-spacing: 1.2px; color: #60A5FA; }
+.sp-name { font-size: 14px; font-weight: 700; color: var(--text); flex: 1; }
+.sp-day { font-size: 12px; color: var(--text3); }
+.sp-score-row { display: flex; align-items: baseline; gap: 8px; margin-top: 10px; }
+.sp-score { font-size: 26px; font-weight: 800; }
+.sp-status { font-size: 13px; font-weight: 700; flex: 1; }
+.sp-pass { font-size: 11px; color: var(--text3); }
+.sp-bar { position: relative; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.12); margin-top: 8px; }
+.sp-bar-fill { height: 100%; border-radius: 3px; }
+.sp-bar-mark { position: absolute; top: -2px; width: 2px; height: 10px; background: var(--text3); }
+.sp-note { font-size: 12px; color: var(--text3); line-height: 1.55; margin-top: 10px; }
+.sp-pending { font-size: 13px; color: var(--text3); margin-top: 8px; line-height: 1.5; }
+
+/* "What next?" after the primary finishes beside a running support */
+.primary-choice-card { padding: 16px; margin-bottom: 14px; border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(139,92,246,0.05));
+  border: 1px solid rgba(139,92,246,0.4); }
+.pc-title { font-size: 17px; font-weight: 800; color: var(--text); }
+.pc-body { font-size: 13px; color: var(--text2); line-height: 1.6; margin: 6px 0 14px; }
+.primary-choice-card .btn { margin-bottom: 8px; }
