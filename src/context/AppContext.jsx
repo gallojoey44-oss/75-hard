@@ -12,6 +12,8 @@ import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay, computeChallengeChanges, computeWithinChallengeTrend, DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, LEGACY_PASSING_SCORE } from '../utils/gamification';
 import { buildTimeline } from '../utils/archiveUtils';
 import { computeWeeklyRequirements, hasWeeklyRequirements, makeSession, weeklyAdherence, WEEKLY_REQUIREMENT_TEMPLATE_IDS as WEEKLY_REQ_TEMPLATES } from '../utils/weeklyRequirements';
+import { makeVolumeEntry, weeklyVolume, tracksVolume } from '../utils/muscleVolume';
+import { makeExerciseEntry } from '../utils/exerciseLog';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS } from '../utils/gamification';
@@ -118,6 +120,11 @@ function emptyDay(date, dayNumber) {
     hoursSlept: 0,
     weight: 0,
     waist: 0,
+    // Optional physique measurements (Muscle Building). Additive: a record
+    // written before these existed simply has no value, which reads as 0.
+    chest: 0,
+    arms: 0,
+    thighs: 0,
     validated: false,
     isMWD: false,
     mwdTasks: {},
@@ -365,6 +372,17 @@ function migrateProfiles(stored) {
     // Weekly Requirements (Fat Loss) — every profile carries a session list.
     if (!Array.isArray(profiles[profId].weeklySessions)) {
       profiles[profId] = { ...profiles[profId], weeklySessions: [] };
+      changed = true;
+    }
+    // Muscle Building — hard-set volume entries and the exercise log. Additive
+    // and idempotent: an existing profile simply gains two empty lists, and no
+    // other challenge reads them, so nothing about an existing attempt changes.
+    if (!Array.isArray(profiles[profId].volumeSets)) {
+      profiles[profId] = { ...profiles[profId], volumeSets: [] };
+      changed = true;
+    }
+    if (!Array.isArray(profiles[profId].exerciseLog)) {
+      profiles[profId] = { ...profiles[profId], exerciseLog: [] };
       changed = true;
     }
     // An attempt that began before weekly tracking existed has no session
@@ -918,6 +936,10 @@ export function AppProvider({ children }) {
       // per-week targets/results, so an archive can be read back without
       // recomputing against a template that may later change.
       weeklySessions: [...(prof.weeklySessions || [])],
+      // Muscle Building per-attempt history, snapshotted so an archived
+      // challenge can be read back in full.
+      volumeSets: [...(prof.volumeSets || [])],
+      exerciseLog: [...(prof.exerciseLog || [])],
       weeklyRequirements: hasWeeklyRequirements(meta) ? (() => {
         const wr = computeWeeklyRequirements({
           sessions: prof.weeklySessions, meta, challengeStart: prof.challengeStart,
@@ -1094,6 +1116,10 @@ export function AppProvider({ children }) {
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
         comebackHistory: [],
         weeklySessions: [],
+        // Volume and exercise history belong to the attempt (they are archived
+        // with it just above), so a new attempt starts from a clean slate.
+        volumeSets: [],
+        exerciseLog: [],
         lastCompletion: null,
       },
     }));
@@ -1744,6 +1770,62 @@ export function AppProvider({ children }) {
     }));
   }, [activeProfile, setProfiles]);
 
+  // ── Muscle Building: weekly hard-set volume ───────────────────────────────
+  // Sets are stored individually, like weekly sessions, so they can be listed,
+  // dated and undone one at a time. Logging a set awards NO XP and never enters
+  // the challenge score — volume is a progress metric, not a currency.
+
+  const logVolumeSets = useCallback((muscle, sets = 1, dateStr, profId = activeProfile) => {
+    if (!profId || !muscle) return null;
+    if (!tracksVolume(profiles[profId]?.activeChallenge)) return null;
+    const entry = makeVolumeEntry(muscle, sets, dateStr || getTodayStr());
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: { ...prev[profId], volumeSets: [...(prev[profId]?.volumeSets || []), entry] },
+    }));
+    return entry;
+  }, [activeProfile, profiles, setProfiles]);
+
+  const removeVolumeEntry = useCallback((entryId, profId = activeProfile) => {
+    if (!profId || !entryId) return;
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: { ...prev[profId], volumeSets: (prev[profId]?.volumeSets || []).filter(v => v.id !== entryId) },
+    }));
+  }, [activeProfile, setProfiles]);
+
+  /** Weekly volume state for the active attempt's current challenge week. */
+  const getWeeklyVolume = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    return weeklyVolume({
+      entries: prof?.volumeSets,
+      meta: prof?.activeChallenge,
+      challengeStart: prof?.challengeStart,
+      rawDay: getRawDayNumber(profId),
+    });
+  }, [activeProfile, profiles, getRawDayNumber]);
+
+  // ── Muscle Building: exercise log (progressive overload) ──────────────────
+
+  const logExercise = useCallback((entryData, profId = activeProfile) => {
+    if (!profId) return null;
+    const entry = makeExerciseEntry({ ...entryData, date: entryData?.date || getTodayStr() });
+    if (!entry) return null;
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: { ...prev[profId], exerciseLog: [...(prev[profId]?.exerciseLog || []), entry] },
+    }));
+    return entry;
+  }, [activeProfile, setProfiles]);
+
+  const removeExerciseEntry = useCallback((entryId, profId = activeProfile) => {
+    if (!profId || !entryId) return;
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: { ...prev[profId], exerciseLog: (prev[profId]?.exerciseLog || []).filter(e => e.id !== entryId) },
+    }));
+  }, [activeProfile, setProfiles]);
+
   /** Resolved weekly-requirement state for the active attempt. */
   const getWeeklyRequirements = useCallback((profId = activeProfile) => {
     const prof = profiles[profId];
@@ -2080,6 +2162,9 @@ export function AppProvider({ children }) {
       addTask, updateTask, deleteTask, reorderTasks, addColdExposureUpgrade,
       // Weekly Requirements
       logWeeklySession, removeWeeklySession, getWeeklyRequirements,
+      // Muscle Building — volume, exercise log
+      logVolumeSets, removeVolumeEntry, getWeeklyVolume,
+      logExercise, removeExerciseEntry,
       // Scheduled / future challenge starts
       getChallengeStatus, isChallengeScheduled, getDaysUntilStart,
       rescheduleChallenge, startChallengeNow, CHALLENGE_STATE,

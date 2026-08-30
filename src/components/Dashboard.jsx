@@ -5,6 +5,7 @@ import QuoteOfTheDay from './QuoteOfTheDay';
 import RankUpCeremony from './RankUpCeremony';
 import ChallengePerformance from './ChallengePerformance';
 import SupportProgress from './SupportProgress';
+import MuscleBuildingPanel from './MuscleBuildingPanel';
 import {
   computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
@@ -943,6 +944,7 @@ export default function Dashboard({ setView }) {
       )}
 
       {/* Challenge Performance — percentage score, passing line, status */}
+      <MuscleBuildingPanel />
       <ChallengePerformance setView={setView} />
       <SupportProgress />
 

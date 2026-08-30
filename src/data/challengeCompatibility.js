@@ -97,6 +97,11 @@ export const COMPATIBILITY_PAIRS = [
     reason: 'Resistance training and adequate fuelling support hormone health rather than competing with it.',
   },
 
+  {
+    a: C.MUSCLE_BUILDING, b: C.RECOVERY, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Recovery work is exactly what a hypertrophy block needs alongside it — it protects the training quality that drives growth.',
+  },
+
   // ── Conditional ──────────────────────────────────────────────────────────
   {
     a: C.FAT_LOSS, b: C.HORMONE_HEALTH, rating: COMPATIBILITY.CONDITIONAL,

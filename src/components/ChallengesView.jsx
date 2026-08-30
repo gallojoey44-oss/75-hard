@@ -13,6 +13,8 @@ import { FutureSelfLetterForm } from './FutureSelfLetter';
 import { dateOffsetFromToday, startsInWords } from '../utils/challengeSchedule';
 import ScheduledStartCard from './ScheduledStart';
 import SupportChallengePicker from './SupportChallengePicker';
+import MuscleBuildingSetup from './MuscleBuildingSetup';
+import * as MB from '../data/muscleBuildingConfig';
 import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
 
 // Overall challenge difficulty — fixed per challenge, independent of the
@@ -175,6 +177,9 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
   const [expanded, setExpanded] = useState(false);
   const [variantTab, setVariantTab] = useState(isActive && activeVariant ? activeVariant : 'standard');
   const isVariantStart = template.start_flow === 'variant';
+  // A 'configured' challenge (Muscle Building) opens its own setup screen
+  // instead of the generic variant + duration chips.
+  const isConfiguredStart = template.start_flow === 'configured';
   const isCustom = template.id === 'custom_challenge_framework';
   const isMT = template.id === MENTAL_TRAINING_TEMPLATE_ID;
   const defaultDuration = getDefaultDuration(template);
@@ -293,7 +298,41 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
             )}
           </div>
 
-          {/* Difficulty selector */}
+          {/* Muscle Building preview — pillars, daily list and weekly training,
+              generated from muscleBuildingConfig so the card never drifts from
+              what the challenge actually creates. */}
+          {isConfiguredStart && (
+            <div className="mb-preview">
+              <div className="mb-pillars">
+                {(template.pillars || []).map(pl => (
+                  <span key={pl.id} className="mb-pillar-chip" title={pl.blurb}>{pl.icon} {pl.label}</span>
+                ))}
+              </div>
+              <div className="tpl-variant-section-label">Daily requirements</div>
+              <ul className="tpl-task-list">
+                {MB.buildStartTasks(MB.defaultSetup()).map(t => (
+                  <li key={t.id}>{t.icon} {t.name} ({t.xp} XP){t.keystoneHabit ? ' ⭐⭐⭐ Keystone' : ''}</li>
+                ))}
+              </ul>
+              <div className="tpl-variant-section-label">Weekly requirements</div>
+              <ul className="tpl-task-list weekly">
+                <li>🏋️ {MB.DEFAULT_TRAINING_DAYS} hypertrophy sessions per week (you choose 3–6 at setup) — {MB.XP.training} XP each</li>
+                <li>📊 ~{MB.DEFAULT_SET_TARGET} challenging sets per major muscle group — a progress metric, no XP</li>
+              </ul>
+              <div className="tpl-variant-section-label">Optional optimization</div>
+              <ul className="tpl-task-list optional">
+                {MB.OPTIMIZATION_HABITS.map(h => (
+                  <li key={h.id}>{h.icon} {h.setupLabel} — {h.xp} XP</li>
+                ))}
+              </ul>
+              <div className="tpl-panel-note">
+                <strong>{template.training_quality?.headline}.</strong> {template.training_quality?.body}
+              </div>
+            </div>
+          )}
+
+          {/* Difficulty selector — variant-based challenges only. */}
+          {!isConfiguredStart && (<>
           <div className="tpl-detail-label" style={{ margin: '12px 0 6px' }}>Choose Your Difficulty</div>
           <div className="tpl-variant-tabs" style={{ margin: '0 0 8px' }}>
             {VARIANT_TABS.map(v => {
@@ -327,6 +366,7 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
             <strong>{PHILOSOPHY.headline}.</strong> {PHILOSOPHY.body}
           </div>
           <VariantPanel variant={template.variants[variantTab]} template={template} />
+          </>)}
 
           {/* Cold Exposure Upgrade — Mental Training only. Optional, disabled by
               default, chosen fresh each attempt, and locked once the challenge
@@ -386,7 +426,12 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
               Start {template.challenge_name}
             </button>
           )}
-          {!isActive && template.startable && !isVariantStart && (
+          {!isActive && template.startable && isConfiguredStart && (
+            <button className="btn btn-primary challenge-card-action" onClick={() => onStart({ configured: true })}>
+              Start {template.challenge_name}
+            </button>
+          )}
+          {!isActive && template.startable && !isVariantStart && !isConfiguredStart && (
             <button className="btn btn-primary challenge-card-action" onClick={() => onStart(null)}>
               Start Challenge
             </button>
@@ -449,6 +494,27 @@ export default function ChallengesView({ setView }) {
   function beginChallenge(letter, startDate) {
     const ps = pendingStart;
     if (!ps) return;
+    // Muscle Building builds its whole attempt — meta, weekly training
+    // requirement and daily task list — from the setup object, entirely inside
+    // muscleBuildingConfig. Nothing about it is assembled here.
+    if (ps.mbSetup) {
+      startChallenge(undefined, {
+        challenge: {
+          ...MB.buildChallengeMeta(ps.mbSetup),
+          passingScore: ps.template.passing_score ?? DEFAULT_PASSING_SCORE,
+          keystoneRequirement: ps.template.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
+          rewardXP: ps.template.rewards?.xp || 0,
+          badgeId: ps.template.rewards?.badge_id || null,
+        },
+        tasks: MB.buildStartTasks(ps.mbSetup),
+        bonusMissions: [],
+        futureSelfLetter: letter,
+        startDate,
+      });
+      setPendingStart(null);
+      setView('today');
+      return;
+    }
     if (ps.legacy75) {
       startChallenge(undefined, { futureSelfLetter: letter, startDate });
     } else {
@@ -623,7 +689,9 @@ export default function ChallengesView({ setView }) {
               activeVariant={isRunning && meta.templateId === t.id ? meta.variant : null}
               setView={setView}
               onStart={(payload) => {
-                if (t.start_flow === 'variant' && payload) {
+                if (t.start_flow === 'configured' && payload?.configured) {
+                  setPendingStart({ template: t, step: 'mbSetup' });
+                } else if (t.start_flow === 'variant' && payload) {
                   setPendingStart({
                     template: t,
                     ...payload,
@@ -725,6 +793,17 @@ export default function ChallengesView({ setView }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Muscle Building setup — duration, training days, targets, optional
+          habits and physique tracking, all read from muscleBuildingConfig. */}
+      {pendingStart?.step === 'mbSetup' && (
+        <MuscleBuildingSetup
+          onCancel={() => setPendingStart(null)}
+          onSubmit={(setup) => setPendingStart(p => ({
+            ...p, mbSetup: setup, durationDays: setup.durationDays, variant: 'standard', step: 'letter',
+          }))}
+        />
       )}
 
       {/* Future Self Letter — required before a challenge begins */}

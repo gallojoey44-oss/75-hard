@@ -25,14 +25,32 @@ export const WEEKLY_REQUIREMENT_DEFS = [
 
 export const WEEKLY_REQUIREMENT_TEMPLATE_IDS = new Set(['fat_loss_phase']);
 
-/** True when this challenge attempt tracks weekly requirements. */
+/**
+ * True when this challenge attempt tracks weekly requirements.
+ *
+ * Two ways to qualify, checked in this order:
+ *   1. the ATTEMPT carries its own `weeklyRequirementDefs` — the data-driven
+ *      path, used by Muscle Building, whose training target (3–6 sessions/week)
+ *      is chosen at setup and therefore cannot live in a module constant;
+ *   2. the template id is in the legacy set — Fat Loss, whose fixed 3 lifts +
+ *      2 Zone 2 predate per-attempt defs and must keep working untouched.
+ */
 export function hasWeeklyRequirements(meta) {
+  if (Array.isArray(meta?.weeklyRequirementDefs) && meta.weeklyRequirementDefs.length) return true;
   return !!meta && WEEKLY_REQUIREMENT_TEMPLATE_IDS.has(meta.templateId);
 }
 
-/** The requirement definitions for an attempt ([] when unsupported). */
+/**
+ * The requirement definitions for an attempt ([] when unsupported).
+ *
+ * Per-attempt defs win, so an attempt configured at setup keeps its own targets
+ * for its whole life even if this file's defaults change later.
+ */
 export function getWeeklyRequirementDefs(meta) {
-  return hasWeeklyRequirements(meta) ? WEEKLY_REQUIREMENT_DEFS : [];
+  if (Array.isArray(meta?.weeklyRequirementDefs) && meta.weeklyRequirementDefs.length) {
+    return meta.weeklyRequirementDefs;
+  }
+  return (meta && WEEKLY_REQUIREMENT_TEMPLATE_IDS.has(meta.templateId)) ? WEEKLY_REQUIREMENT_DEFS : [];
 }
 
 /** 1-based challenge week containing a 1-based challenge day. */

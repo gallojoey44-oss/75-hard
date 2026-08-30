@@ -33,6 +33,12 @@ export const HABIT_KEYS = {
   FOCUS_BLOCK: 'focus_block',
   PRAYER: 'prayer',
   COLD_EXPOSURE: 'cold_exposure',
+  // Muscle Building
+  HYPERTROPHY_TRAINING: 'hypertrophy_training',
+  CALORIE_TARGET: 'calorie_target',
+  STRESS_RECOVERY: 'stress_recovery',
+  PROTEIN_DISTRIBUTION: 'protein_distribution',
+  CREATINE: 'creatine',
 };
 
 /** Human labels for habit keys — used in merge explanations. */
@@ -51,6 +57,11 @@ export const HABIT_LABELS = {
   [HABIT_KEYS.FOCUS_BLOCK]: 'Focus block',
   [HABIT_KEYS.PRAYER]: 'Prayer',
   [HABIT_KEYS.COLD_EXPOSURE]: 'Cold exposure',
+  [HABIT_KEYS.HYPERTROPHY_TRAINING]: 'Hypertrophy training',
+  [HABIT_KEYS.CALORIE_TARGET]: 'Nutrition / energy target',
+  [HABIT_KEYS.STRESS_RECOVERY]: 'Recovery practice',
+  [HABIT_KEYS.PROTEIN_DISTRIBUTION]: 'Protein distribution',
+  [HABIT_KEYS.CREATINE]: 'Creatine',
 };
 
 /**

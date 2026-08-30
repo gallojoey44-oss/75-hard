@@ -1,4 +1,5 @@
 import { HABIT_KEYS } from './habitKeys';
+import * as MB from './muscleBuildingConfig';
 
 // Official Forge challenge template library.
 // Display metadata (emoji, startable) lives alongside the template data;
@@ -211,6 +212,7 @@ export const NEXT_GOALS = [
   { id: 'sleep',    label: 'Sleep',                 emoji: '😴', templateId: 'sleep_reset_challenge' },
   { id: 'fatloss',  label: 'Fat Loss',              emoji: '⚡', templateId: 'fat_loss_phase' },
   { id: 'strength', label: 'Strength',              emoji: '💪', templateId: 'strength_phase' },
+  { id: 'muscle',   label: 'Muscle Building',       emoji: '🏗️', templateId: MB.MUSCLE_BUILDING_TEMPLATE_ID },
   { id: 'recovery', label: 'Recovery',              emoji: '🔋', templateId: 'recovery_phase' },
   { id: 'skin',     label: 'Skin Health',           emoji: '✨', templateId: null },
   { id: 'hormone',  label: "Women's Hormone Health", emoji: '🌸', templateId: null, audience: 'female' },
@@ -651,6 +653,48 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
     },
+  },
+  {
+    // Muscle Building — every field below is derived from muscleBuildingConfig,
+    // so the challenge is edited there rather than here.
+    id: MB.MUSCLE_BUILDING_TEMPLATE_ID,
+    overall_difficulty: 'Medium/Hard',
+    emoji: MB.IDENTITY.emoji,
+    startable: true,
+    // A dedicated setup screen (duration, training days, targets, optional
+    // habits, physique tracking) rather than the generic variant picker.
+    start_flow: 'configured',
+    template_version: 1,
+    task_id_prefix: 'mb_',
+    challenge_name: MB.IDENTITY.name,
+    subtitle: MB.IDENTITY.subtitle,
+    purpose: MB.IDENTITY.goal,
+    duration_options_days: MB.DURATIONS,
+    default_duration_days: MB.DEFAULT_DURATION,
+    duration_labels: MB.DURATION_LABELS,
+    completion_bonus_by_duration: MB.COMPLETION_BONUS_BY_DURATION,
+    pillars: MB.PILLARS,
+    metrics_targeted: ['workout_effort', 'recovery_rating', 'sleep_quality', 'energy_rating', 'stress_rating'],
+    insights_triggers: {
+      pre_recommendation: 'user selects muscle gain goal OR bodyweight is stable with high training adherence',
+      in_progress_monitoring: 'training adherence, weekly hard sets, bodyweight trend, exercise performance trend',
+    },
+    success_threshold: 'training_adherence >= 0.80 AND protein_adherence >= 0.80 AND weekly volume targets broadly met',
+    rewards: { xp: 900, badge_id: 'iron_will' },
+    safety_flags: {
+      contraindications: ['acute injury', 'medical restriction from resistance training'],
+      notes: 'Train with good form and scale intensity if recovery, sleep, or pain worsens.',
+    },
+    evidence_level: 'strong',
+    risk_level: 'medium',
+    inspiration_sources: ['Brad Schoenfeld', 'Eric Helms', 'Mike Israetel', 'Layne Norton'],
+    // Educational, never scored.
+    training_quality: MB.RIR_GUIDANCE,
+    why: MB.WHY,
+    // No `program` block: ProgramSections renders the Fat Loss-style
+    // transformation content, which this challenge does not ship. Its card
+    // preview is generated from the config instead.
+    tagline: 'Weekly hard sets and scheduled sessions matter more than any single workout.',
   },
   {
     id: 'mental_training_phase',

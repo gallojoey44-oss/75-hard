@@ -6,6 +6,7 @@ import BonusMissions from './BonusMissions';
 import WeeklyRequirements from './WeeklyRequirements';
 import ChallengePerformance from './ChallengePerformance';
 import SupportProgress from './SupportProgress';
+import MuscleBuildingPanel from './MuscleBuildingPanel';
 import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
@@ -19,6 +20,7 @@ import { KEYSTONE_EXPLAINER, WEEKLY_REFLECTION_PROMPTS } from '../data/challenge
 import { getTemplateById } from '../data/challengeTemplates';
 import ScheduledStartCard from './ScheduledStart';
 import { supportsLabel } from '../utils/challengeStack';
+import * as MB from '../data/muscleBuildingConfig';
 
 const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
 
@@ -134,7 +136,7 @@ function GratitudePrayer({ dayData, onUpdate, onToggleComplete }) {
 
 // ── Body metrics (Fat Loss Challenge) ────────────────────────────────────────
 
-function BodyMetrics({ dayData, dayNumber, onUpdate }) {
+function BodyMetrics({ dayData, dayNumber, onUpdate, extraMeasurements = [] }) {
   const isWaistDay = dayNumber % 7 === 1; // days 1, 8, 15, 22, 29
   return (
     <div className="section-card body-metrics-card">
@@ -170,6 +172,19 @@ function BodyMetrics({ dayData, dayNumber, onUpdate }) {
             onChange={e => onUpdate({ waist: parseFloat(e.target.value) || 0 })}
           />
         </label>
+        {/* Extra measurements the user opted into at challenge setup. Nothing is
+            required — an unselected measurement never renders a field. */}
+        {extraMeasurements.map(m => (
+          <label key={m.id} className="body-metric-field">
+            <span className="body-metric-label">{m.icon} {m.label} ({m.unit})</span>
+            <input
+              type="number" inputMode="decimal" step="0.1" min="0" className="inline-input"
+              placeholder="optional"
+              value={dayData?.[m.field] || ''}
+              onChange={e => onUpdate({ [m.field]: parseFloat(e.target.value) || 0 })}
+            />
+          </label>
+        ))}
       </div>
     </div>
   );
@@ -459,6 +474,13 @@ export default function DailyView({ editDayNum, setView }) {
   const hasGratitudeTask = tasks.some(t => t.id === 'mt_gratitude');
   const meta = getChallengeMeta();
   const isFatLoss = meta.templateId === 'fat_loss_phase';
+  // Muscle Building shows the same progress-tracking card, plus whichever extra
+  // measurements the user opted into at setup. Nothing is required.
+  const mbCfg = MB.mbConfig(meta);
+  const mbExtraMeasurements = mbCfg
+    ? MB.MEASUREMENTS.filter(m => m.field && m.id !== 'weight' && m.id !== 'waist' && mbCfg.measurements?.[m.id])
+    : [];
+  const showBodyMetrics = isFatLoss || !!mbCfg;
 
   // Keystone display: keystones pinned to the top of the checklist.
   const displayTasks = sortTasksByKeystone(tasks);
@@ -660,11 +682,12 @@ export default function DailyView({ editDayNum, setView }) {
       )}
 
       {/* ── Body metrics (Fat Loss Challenge) ── */}
-      {isMe && isFatLoss && !isMWD && (
+      {isMe && showBodyMetrics && !isMWD && (
         <BodyMetrics
           dayData={dayData}
           dayNumber={selectedDayNum}
           onUpdate={handleUpdate}
+          extraMeasurements={mbExtraMeasurements}
         />
       )}
 
@@ -722,11 +745,12 @@ export default function DailyView({ editDayNum, setView }) {
             ))}
           </div>
 
-          {isFatLoss && (
+          {showBodyMetrics && (
             <BodyMetrics
               dayData={dayData}
               dayNumber={selectedDayNum}
               onUpdate={handleUpdate}
+              extraMeasurements={mbExtraMeasurements}
             />
           )}
 
@@ -788,6 +812,7 @@ export default function DailyView({ editDayNum, setView }) {
       {/* Challenge Performance — placed after the daily actions so the user
           first sees what to do, then how it affects their overall score.
           (Bonus Missions never affect the required challenge score.) */}
+      <MuscleBuildingPanel />
       <ChallengePerformance />
       <SupportProgress />
 
