@@ -81,6 +81,13 @@ export function getUnlockedRewards(highestRank) {
   return out;
 }
 
+/**
+ * Bare XP → rank, with NO permanent-floor awareness.
+ *
+ * Superseded by resolveRankState in utils/rank.js, which every screen uses.
+ * Kept only because it is a pure helper over the frozen ladder; do not use it
+ * to display a rank, or the permanent floor will not be applied.
+ */
 export function getRankInfo(xp) {
   let current = RANKS[0];
   let next = RANKS[1] || null;

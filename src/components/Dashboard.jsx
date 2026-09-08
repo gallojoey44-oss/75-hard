@@ -7,7 +7,7 @@ import ChallengePerformance from './ChallengePerformance';
 import SupportProgress from './SupportProgress';
 import MuscleBuildingPanel from './MuscleBuildingPanel';
 import {
-  computeTotalXP, computeTodayXP, computeLifetimeXP, getRankInfo,
+  computeTotalXP, computeTodayXP,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
   getRankReward, getUnlockedRewards, computeGrowthSummary, buildFutureSelfMessage,
   DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, computeChallengeChanges, computeWithinChallengeTrend,
@@ -270,16 +270,31 @@ function XPWidget({ rankInfo, challengeXP, todayXP, onToggleDetails, showDetails
         <span className="xp-split-item">🔥 Challenge: <strong>{challengeXP.toLocaleString()}</strong></span>
         <span className="xp-split-item">🏛 Lifetime: <strong>{rankInfo.xp.toLocaleString()}</strong></span>
       </div>
+      {/* Progress runs from the CURRENT tier's floor to the NEXT tier's
+          threshold: 0% sitting on the floor, 100% on reaching the next tier.
+          `xpToNext` always uses the real next-tier threshold. */}
       <div className="xp-bar-wrap">
         <div className="xp-bar-track">
           <div className="xp-bar-fill" style={{ width: `${rankInfo.progress}%` }} />
         </div>
         {rankInfo.next ? (
-          <span className="xp-next-label">{(rankInfo.next.minXP - rankInfo.xp).toLocaleString()} XP to {rankInfo.next.name}</span>
+          <span className="xp-next-label">
+            {rankInfo.xpToNext.toLocaleString()} XP to {rankInfo.next.name}
+            {/* At the floor the user is at the START of a rank they already
+                hold — never about to earn it again. */}
+            {rankInfo.atFloor && (
+              <span className="xp-floor-note"> · start of {rankInfo.current.name}</span>
+            )}
+          </span>
         ) : (
-          <span className="xp-next-label">Max rank — Unbreakable</span>
+          <span className="xp-next-label">Max rank — {rankInfo.current.name}</span>
         )}
       </div>
+      {rankInfo.floored && (
+        <div className="xp-floor-row">
+          🔒 {rankInfo.current.name} is permanently unlocked — your Lifetime XP cannot fall below {rankInfo.floorXP.toLocaleString()}.
+        </div>
+      )}
       {(todayXP.gained > 0 || todayXP.lost > 0) && (
         <div className="xp-today-row">
           {todayXP.gained > 0 && <span className="xp-today-gain">+{todayXP.gained}</span>}
@@ -314,7 +329,7 @@ function RankLadderCard({ rankInfo, rankHistory = [], highestRank = 0 }) {
             </div>
             <div className="rank-ladder-summary-row">
               <span className="rank-ladder-summary-label">XP to next rank</span>
-              <span className="rank-ladder-summary-value">{(rankInfo.next.minXP - rankInfo.xp).toLocaleString()}</span>
+              <span className="rank-ladder-summary-value">{rankInfo.xpToNext.toLocaleString()}</span>
             </div>
           </>
         ) : (
@@ -329,8 +344,8 @@ function RankLadderCard({ rankInfo, rankHistory = [], highestRank = 0 }) {
       </div>
       <div className="rank-ladder-list">
         {RANKS.map(r => {
-          const status = r.rank < rankInfo.current.rank ? 'done'
-            : r.rank === rankInfo.current.rank ? 'current' : 'locked';
+          const status = r.rank < rankInfo.highestRank ? 'done'
+            : r.rank === rankInfo.highestRank ? 'current' : 'locked';
           return (
             <div key={r.rank} className={`rank-ladder-row ${status}`}>
               <span className="rank-ladder-status">
@@ -425,7 +440,7 @@ function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, t
         {rankInfo.next && (
           <div className="rank-detail-row">
             <span className="rank-detail-label">XP to Next</span>
-            <span className="rank-detail-value">{(rankInfo.next.minXP - rankInfo.xp).toLocaleString()}</span>
+            <span className="rank-detail-value">{rankInfo.xpToNext.toLocaleString()}</span>
           </div>
         )}
         <div className="rank-detail-row">
@@ -607,7 +622,7 @@ export default function Dashboard({ setView }) {
     setActiveProfile,
     startComeback, dismissComeback, completeComeback,
     getLaneInfo, promoteSupportToPrimary, clearPrimaryChoice, LANE,
-    initRankBaseline, recordRankUp,
+    getRankState, clearPendingRankUp,
   } = useApp();
 
   const [showSwitch, setShowSwitch] = useState(false);
@@ -639,9 +654,13 @@ export default function Dashboard({ setView }) {
 
   const profileArchives = archives[activeProfile] || [];
   const xpData     = dayNum ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum) : { total: 0, rawTotal: 0 };
-  const lifetimeXP = computeLifetimeXP(profileArchives, xpData.rawTotal || 0);
-  // Rank is based on Lifetime XP — it survives starting a new challenge
-  const rankInfo = getRankInfo(lifetimeXP);
+  // Rank and Lifetime XP come from the ONE normalized rank state (see
+  // utils/rank.js): effective XP is the calculated total clamped up to the
+  // permanent floor of the highest rank ever unlocked. Home never derives its
+  // own figure, so it can never disagree with Settings, the Ladder or a
+  // notification.
+  const rankInfo   = getRankState();
+  const lifetimeXP = rankInfo.xp;
   const todayXP  = dayNum ? computeTodayXP(allDays, profiles, activeProfile, getDayCompletion, dayNum) : { gained: 0, lost: 0, streakBonus: 0 };
 
   // Badges are lifetime achievements: current challenge + everything archived
@@ -654,7 +673,11 @@ export default function Dashboard({ setView }) {
       badgeIds.add(arch.challenge.badgeId);
     }
   }
-  if (lifetimeXP >= 7500) badgeIds.add('true_warrior_rank');
+  // Rank-gated badge — resolved from the central ladder, never a hardcoded
+  // threshold, and from the permanent rank so losing XP cannot revoke it.
+  if (rankInfo.highestRank >= (RANKS.find(r => r.name === 'True Warrior')?.rank ?? Infinity)) {
+    badgeIds.add('true_warrior_rank');
+  }
   const challengeDone = !!(dayNum && !isBaseline && dayNum >= duration);
   if (challengeDone && meta.badgeId) badgeIds.add(meta.badgeId);
   const badges = BADGE_DEFS.filter(b => badgeIds.has(b.id));
@@ -713,31 +736,30 @@ export default function Dashboard({ setView }) {
     prevXpRef.current = lifetimeXP;
   }, [lifetimeXP]);
 
-  // Lifetime Rank detection → ceremony. Existing users are baselined silently on
-  // first load (no retroactive ceremony); only a genuine new rank triggers it,
-  // and the persisted highestRank guarantees it never replays.
+  // Lifetime Rank ceremony. The UNLOCK itself is persisted by the state layer
+  // (AppContext), which is what makes it durable and idempotent — this only
+  // presents the celebration for an unlock that already happened. A profile
+  // baselined from pre-existing evidence sets no marker, so an already-earned
+  // rank is never celebrated retroactively.
   useEffect(() => {
     if (!activeProfile) return;
-    const cur = rankInfo.current.rank;
-    const stored = profile?.highestRank;
-    if (stored == null) { initRankBaseline(activeProfile, cur); return; }
-    if (cur > stored && rankHandledRef.current[activeProfile] !== cur) {
-      rankHandledRef.current[activeProfile] = cur;
-      recordRankUp(activeProfile, stored, cur, lifetimeXP);
-      const growth = computeGrowthSummary(timeline, { streak });
-      const letter = meta.futureSelfLetter
-        || [...profileArchives].reverse().map(a => a.challenge?.futureSelfLetter).find(Boolean)
-        || null;
-      setRankCeremony({
-        fromRank: stored,
-        toRank: cur,
-        growth,
-        futureSelf: buildFutureSelfMessage(letter),
-        reward: getRankReward(cur),
-      });
-    }
+    const pending = profile?.pendingRankUp;
+    if (!pending || rankHandledRef.current[activeProfile] === pending.toRank) return;
+    rankHandledRef.current[activeProfile] = pending.toRank;
+    const growth = computeGrowthSummary(timeline, { streak });
+    const letter = meta.futureSelfLetter
+      || [...profileArchives].reverse().map(a => a.challenge?.futureSelfLetter).find(Boolean)
+      || null;
+    setRankCeremony({
+      fromRank: pending.fromRank,
+      toRank: pending.toRank,
+      growth,
+      futureSelf: buildFutureSelfMessage(letter),
+      reward: getRankReward(pending.toRank),
+    });
+    clearPendingRankUp(activeProfile);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProfile, rankInfo.current.rank, profile?.highestRank, lifetimeXP]);
+  }, [activeProfile, profile?.pendingRankUp?.toRank]);
 
   // Challenge Complete screen takes priority — shown once after a challenge ends.
   // "Changes During This Challenge" is always DERIVED from the archived day
@@ -927,7 +949,7 @@ export default function Dashboard({ setView }) {
         <RankLadderCard
           rankInfo={rankInfo}
           rankHistory={profile.rankHistory || []}
-          highestRank={profile.highestRank ?? rankInfo.current.rank}
+          highestRank={rankInfo.highestRank}
         />
       )}
 

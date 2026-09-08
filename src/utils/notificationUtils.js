@@ -9,7 +9,8 @@
 //   needs the Vercel API routes deployed with VAPID keys (see .env.example).
 //   Never claim closed-app delivery works before that is configured.
 
-import { HIGH_VALUE_TASK_IDS, MWD_TASKS, getRankInfo, getTaskXP, topIncompleteKeystone } from './gamification';
+import { HIGH_VALUE_TASK_IDS, MWD_TASKS, getTaskXP, topIncompleteKeystone } from './gamification';
+import { resolveRankState } from './rank';
 import { getInstallId, getTimezone } from './installId';
 
 // A keystone task's display name without its duration suffix ("Mental
@@ -409,9 +410,11 @@ export function buildReminder(type, ctx) {
       };
     }
     case 'milestone': {
-      const rankInfo = getRankInfo(ctx.lifetimeXP || 0);
+      // Prefer the caller's resolved rank state (floor-aware); fall back to
+      // deriving from the supplied XP only when it was not passed.
+      const rankInfo = ctx.rankState || resolveRankState({ rawLifetimeXP: ctx.lifetimeXP || 0 });
       if (!rankInfo.next) return null;
-      const toNext = rankInfo.next.minXP - rankInfo.xp;
+      const toNext = rankInfo.xpToNext;
       if (toNext > 150) return null; // only when a rank-up is genuinely close
       return {
         title: `🏆 ${toNext.toLocaleString()} XP to ${rankInfo.next.name}`,

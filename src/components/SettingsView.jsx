@@ -6,7 +6,7 @@ import QuoteLibrary from './QuoteLibrary';
 import NotificationSettings from './NotificationSettings';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 import BuildBanner, { BUILD_VERSION } from './BuildBanner';
-import { computeTotalXP, computeLifetimeXP, getRankInfo, BADGE_DEFS, LEGACY_PASSING_SCORE } from '../utils/gamification';
+import { computeTotalXP, BADGE_DEFS, LEGACY_PASSING_SCORE } from '../utils/gamification';
 
 const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints', 'archives', 'notifPrefs', 'weeklyReflections'];
 
@@ -35,6 +35,7 @@ export default function SettingsView({ setView }) {
     archives, restoreArchive, deleteArchive, deleteAllProfileData,
     isChallengeTemplateOutdated, syncActiveChallengeWithTemplate,
     isChallengeScheduled, rescheduleChallenge, startChallengeNow, getDaysUntilStart,
+    getRankState,
   } = useApp();
 
   const [editingName, setEditingName] = useState(false);
@@ -535,8 +536,11 @@ export default function SettingsView({ setView }) {
         {(() => {
           const dayNum = getDayNumber();
           const xpData = dayNum ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum) : { total: 0, rawTotal: 0 };
-          const lifetimeXP = computeLifetimeXP(archives[activeProfile], xpData.rawTotal || 0);
-          const rankInfo = getRankInfo(lifetimeXP);
+          // Same normalized rank state Home uses — effective Lifetime XP is
+          // never below the permanent floor, so these two screens cannot
+          // disagree about either the rank or the number beside it.
+          const rankInfo = getRankState();
+          const lifetimeXP = rankInfo.xp;
           return (
             <>
               <div className="settings-row">
@@ -549,10 +553,18 @@ export default function SettingsView({ setView }) {
                 <span className="settings-row-label">Challenge XP</span>
                 <span className="settings-row-value">{xpData.total.toLocaleString()} XP</span>
               </div>
-              <div className="settings-row" style={{ marginBottom: 12 }}>
+              <div className="settings-row" style={{ marginBottom: rankInfo.floorXP > 0 ? 4 : 12 }}>
                 <span className="settings-row-label">Lifetime XP</span>
                 <span className="settings-row-value">{lifetimeXP.toLocaleString()} XP</span>
               </div>
+              {rankInfo.floorXP > 0 && (
+                <div className="settings-row" style={{ marginBottom: 12 }}>
+                  <span className="settings-row-label">Permanent floor</span>
+                  <span className="settings-row-value">
+                    {rankInfo.floorXP.toLocaleString()} XP · {rankInfo.current.name}
+                  </span>
+                </div>
+              )}
             </>
           );
         })()}

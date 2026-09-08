@@ -16,7 +16,8 @@ import { makeVolumeEntry, weeklyVolume, tracksVolume } from '../utils/muscleVolu
 import { makeExerciseEntry } from '../utils/exerciseLog';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
-import { keystoneHabitsOf, RANKS } from '../utils/gamification';
+import { keystoneHabitsOf, RANKS, computeLifetimeXP } from '../utils/gamification';
+import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -349,9 +350,11 @@ function migrateProfiles(stored) {
       profiles[profId] = { ...profiles[profId], bonusMissions: [] };
       changed = true;
     }
-    // Rank history (Hall of Legends). highestRank is intentionally left unset so
-    // the app seeds it silently from the user's current lifetime rank on first
-    // load — existing users never get a retroactive rank-up ceremony.
+    // Rank history (Hall of Legends). highestRank is intentionally NOT written
+    // here: the rank state layer (syncRankUnlock) seeds it on first load from
+    // the strongest stored evidence — the persisted rank, this history, and the
+    // rank the current Lifetime XP proves — so a profile is never demoted and
+    // never gets a retroactive ceremony. It is the permanent XP floor.
     if (!Array.isArray(profiles[profId].rankHistory)) {
       profiles[profId] = { ...profiles[profId], rankHistory: [] };
       changed = true;
@@ -1934,43 +1937,10 @@ export function AppProvider({ children }) {
   // date, lifetimeXP }. highestRank is the max rank number reached and gates
   // the once-per-rank ceremony (it never replays a previously earned rank).
 
-  function rankHistoryEntry(rank, date, lifetimeXP) {
-    const meta = RANKS[rank - 1] || {};
-    return { rank, name: meta.name, philosophy: meta.philosophy, date, lifetimeXP };
-  }
-
-  // Silent one-time baseline for existing users: seed highestRank + backfill
-  // history for ranks already earned WITHOUT triggering a ceremony. Dates are
-  // unknown for pre-existing ranks (recorded as null → shown as "Earned").
-  const initRankBaseline = useCallback((profId, currentRank) => {
-    setProfiles(prev => {
-      const p = prev[profId];
-      if (!p || p.highestRank != null) return prev; // already initialized
-      const history = [];
-      for (let r = 1; r <= currentRank; r++) {
-        history.push(rankHistoryEntry(r, null, RANKS[r - 1]?.minXP ?? 0));
-      }
-      return { ...prev, [profId]: { ...p, highestRank: currentRank, rankHistory: history } };
-    });
-  }, [setProfiles]);
-
-  // Record a genuine rank-up: append history for every newly crossed rank and
-  // raise highestRank. Idempotent — ranks already in history are not duplicated.
-  const recordRankUp = useCallback((profId, fromRank, toRank, lifetimeXP) => {
-    setProfiles(prev => {
-      const p = prev[profId];
-      if (!p || toRank <= (p.highestRank ?? 0)) return prev;
-      const have = new Set((p.rankHistory || []).map(h => h.rank));
-      const additions = [];
-      for (let r = (p.highestRank ?? fromRank) + 1; r <= toRank; r++) {
-        if (!have.has(r)) additions.push(rankHistoryEntry(r, getTodayStr(), lifetimeXP));
-      }
-      return {
-        ...prev,
-        [profId]: { ...p, highestRank: toRank, rankHistory: [...(p.rankHistory || []), ...additions] },
-      };
-    });
-  }, [setProfiles]);
+  // NOTE: the former initRankBaseline / recordRankUp pair has been retired.
+  // Both wrote highestRank from the Home screen, which meant the permanent rank
+  // was only persisted when Home happened to be open — and neither ever fed the
+  // XP floor. syncRankUnlock (above) is now the single writer.
 
   // ── Quote actions ──────────────────────────────────────────────────────
 
@@ -2087,6 +2057,138 @@ export function AppProvider({ children }) {
     }));
   }, [activeProfile, setDismissedHints]);
 
+  // ── Lifetime rank + permanent rank floor ─────────────────────────────────
+  //
+  // ONE source of truth. Every screen that shows a rank, Lifetime XP, tier
+  // progress or "XP to next rank" reads getRankState() — so it is structurally
+  // impossible for one screen to show a rank while another shows XP below that
+  // rank's threshold.
+  //
+  // The floor is enforced HERE, in the state layer, not in any component: raw
+  // Lifetime XP is recomputed from archives plus the current challenge (and so
+  // falls whenever a task is unchecked, a challenge is recalculated or history
+  // is edited), and the effective figure is that raw total clamped up to the
+  // threshold of the highest rank ever unlocked.
+
+  /** The calculated (unfloored) Lifetime XP for a profile. */
+  const getRawLifetimeXP = useCallback((profId = activeProfile) => {
+    const dayNum = getDayNumber(profId);
+    const xpData = dayNum
+      ? computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum)
+      : { rawTotal: 0 };
+    return computeLifetimeXP(archives[profId] || [], xpData.rawTotal || 0);
+  }, [activeProfile, allDays, profiles, archives, getDayCompletion, getDayNumber]);
+
+  /**
+   * The normalized rank state: effective XP (never below the permanent floor),
+   * current and next rank, tier progress and XP to the next tier.
+   */
+  const getRankState = useCallback((profId = activeProfile) => {
+    return resolveRankState({
+      rawLifetimeXP: getRawLifetimeXP(profId),
+      highestRank: profiles[profId]?.highestRank ?? null,
+    });
+  }, [activeProfile, profiles, getRawLifetimeXP]);
+
+  /** The permanent XP floor for a profile. */
+  const getRankFloorXP = useCallback((profId = activeProfile) => {
+    return rankFloorXP(profiles[profId]?.highestRank ?? 0);
+  }, [activeProfile, profiles]);
+
+  /**
+   * Persist a rank unlock. Monotonic and idempotent: highestRank only ever
+   * rises, ranks already in history are never duplicated, and re-running with
+   * the same state is a no-op (so a reload can never lose or replay an unlock).
+   *
+   * `silent` marks the one-time baseline for a profile that predates this
+   * field — the rank is recorded without a ceremony, because it was earned
+   * before Forge started tracking the moment.
+   */
+  const syncRankUnlock = useCallback((profId, unlockedRank, { silent = false, atXP = 0 } = {}) => {
+    if (!profId || !unlockedRank) return;
+    setProfiles(prev => {
+      const p = prev[profId];
+      if (!p) return prev;
+      const stored = Number.isFinite(p.highestRank) ? p.highestRank : null;
+      if (stored != null && unlockedRank <= stored) return prev;   // never decrement, never replay
+      const have = new Set((p.rankHistory || []).map(h => h.rank));
+      const additions = [];
+      for (let r = 1; r <= unlockedRank; r++) {
+        if (have.has(r)) continue;
+        const meta = RANKS[r - 1] || {};
+        additions.push({
+          rank: r,
+          name: meta.name,
+          philosophy: meta.philosophy,
+          // A backfilled rank has no known date; a genuine unlock does.
+          date: silent ? null : getTodayStr(),
+          lifetimeXP: silent ? (meta.minXP ?? 0) : atXP,
+        });
+      }
+      return {
+        ...prev,
+        [profId]: {
+          ...p,
+          highestRank: unlockedRank,
+          rankHistory: [...(p.rankHistory || []), ...additions],
+          // Consumed by the rank-up ceremony. Only a genuine unlock sets it, so
+          // the silent baseline never triggers a retroactive celebration.
+          ...(silent ? {} : { pendingRankUp: { fromRank: stored ?? unlockedRank, toRank: unlockedRank, atXP } }),
+        },
+      };
+    });
+  }, [setProfiles]);
+
+  /** Clear the ceremony marker once it has been shown. */
+  const clearPendingRankUp = useCallback((profId = activeProfile) => {
+    setProfiles(prev => (prev[profId]?.pendingRankUp
+      ? { ...prev, [profId]: { ...prev[profId], pendingRankUp: null } }
+      : prev));
+  }, [activeProfile, setProfiles]);
+
+  /**
+   * Keep the persisted permanent rank in step with reality, for BOTH profiles
+   * independently — a profile's rank history can never be influenced by the
+   * other one.
+   *
+   * Running in the state layer (rather than on the Home screen) is what makes
+   * the unlock durable: ranking up while logging tasks on Today, then reloading,
+   * still keeps the rank and its floor.
+   */
+  useEffect(() => {
+    for (const profId of Object.keys(profiles)) {
+      const prof = profiles[profId];
+      if (!prof) continue;
+      const raw = getRawLifetimeXP(profId);
+      const stored = Number.isFinite(prof.highestRank) ? prof.highestRank : null;
+
+      // Two kinds of evidence, deliberately distinguished:
+      //
+      //   EVIDENCE  — a tier the user has ALREADY earned, proven by the stored
+      //               permanent rank or by the Hall of Legends history. Always
+      //               honoured (so a profile whose XP dipped below the tier it
+      //               demonstrably reached is normalized UP, never demoted), and
+      //               never celebrated, because it is not new.
+      //   XP        — the tier the current calculated total reaches. Passing a
+      //               tier this way is a genuine unlock and does get a ceremony.
+      //
+      // Taking the max of all sources is what makes highestRank monotonic: no
+      // path here can ever lower it.
+      const historic = (prof.rankHistory || []).reduce((m, h) => Math.max(m, h?.rank || 0), 0);
+      const evidence = Math.max(stored ?? 0, historic);
+      const byXP = resolveRankState({ rawLifetimeXP: raw, highestRank: evidence }).highestRank;
+      const target = Math.max(evidence, byXP);
+      if (target <= (stored ?? 0) && stored != null) continue;   // nothing to do
+
+      // Silent when the rank was already earned (a first-load baseline, or a
+      // tier recovered from history) — a ceremony only ever marks a tier the
+      // user has just crossed for the first time.
+      const silent = stored == null || target <= evidence;
+      syncRankUnlock(profId, target, { silent, atXP: Math.max(raw, rankFloorXP(target)) });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profiles, allDays, archives]);
+
   // ── XP actions ────────────────────────────────────────────────────────────
 
   const resetXP = useCallback(() => {
@@ -2175,7 +2277,8 @@ export function AppProvider({ children }) {
       // Bonus Missions
       toggleBonusMission, addBonusMission, removeBonusMission, reorderBonusMissions,
       // Rank ceremony / Hall of Legends
-      initRankBaseline, recordRankUp,
+      // Lifetime rank + permanent floor (single source of truth)
+      getRankState, getRawLifetimeXP, getRankFloorXP, clearPendingRankUp,
       MENTAL_OPTIONS,
       // Quote
       quoteData,

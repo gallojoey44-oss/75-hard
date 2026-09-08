@@ -11,7 +11,7 @@ import { applyUpdate } from './utils/swUtils.js';
 import { getTodayStr } from './utils/dateUtils';
 import { getDueReminders, getNotificationSupport, showNotification, markFired, syncPushSchedule } from './utils/notificationUtils';
 import { getTimezone } from './utils/installId';
-import { computeTotalXP, computeLifetimeXP, getMWDComplete } from './utils/gamification';
+import { computeTotalXP, getMWDComplete } from './utils/gamification';
 import { buildTimeline, entriesInLastNDays } from './utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from './utils/insightsUtils';
 
@@ -49,7 +49,7 @@ function UpdateBanner() {
 function NotificationScheduler() {
   const {
     activeProfile, profile, profiles, allDays, archives, notifPrefs,
-    getChallengeMeta, getDayNumber, getDayCompletion,
+    getChallengeMeta, getDayNumber, getDayCompletion, getRankState,
   } = useApp();
 
   // Signature of the last schedule pushed to the server — avoids redundant
@@ -82,7 +82,10 @@ function NotificationScheduler() {
       const dayData = (allDays[activeProfile] || {})[dayNum] || null;
       const meta = getChallengeMeta();
       const xpData = computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum);
-      const lifetimeXP = computeLifetimeXP(archives[activeProfile], xpData.rawTotal || 0);
+      // Effective Lifetime XP from the shared rank state — notifications quote
+      // the same figure the app displays, floor included.
+      const rankState = getRankState();
+      const lifetimeXP = rankState.xp;
       const timeline = buildTimeline(profile, allDays[activeProfile] || {}, archives[activeProfile] || []);
       const avg7 = computeAveragesFromEntries(entriesInLastNDays(timeline, 7));
       const bottleneck = getPriorityBottleneck(avg7, profile?.sleepTarget ?? 8);
@@ -96,6 +99,7 @@ function NotificationScheduler() {
         hasSetback: false,
         challengeName: meta.name,
         lifetimeXP,
+        rankState,
         challengeXP: xpData.total,
         bottleneckLabel: bottleneck?.bottleneck ? bottleneck.label : null,
       };
@@ -136,7 +140,7 @@ function NotificationScheduler() {
     tick();
     const id = setInterval(tick, 60 * 1000);
     return () => clearInterval(id);
-  }, [activeProfile, profile, profiles, allDays, archives, notifPrefs, getChallengeMeta, getDayNumber, getDayCompletion]);
+  }, [activeProfile, profile, profiles, allDays, archives, notifPrefs, getChallengeMeta, getDayNumber, getDayCompletion, getRankState]);
 
   return null;
 }
