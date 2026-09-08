@@ -14,6 +14,11 @@ import { buildTimeline } from '../utils/archiveUtils';
 import { computeWeeklyRequirements, hasWeeklyRequirements, makeSession, weeklyAdherence, WEEKLY_REQUIREMENT_TEMPLATE_IDS as WEEKLY_REQ_TEMPLATES } from '../utils/weeklyRequirements';
 import { makeVolumeEntry, weeklyVolume, tracksVolume } from '../utils/muscleVolume';
 import { makeExerciseEntry } from '../utils/exerciseLog';
+import {
+  makeCycleLog, logForDate, tracksCycles, groupCycles, logsInChallenge,
+  compareCycles, safetyFlags, persistentSymptomsAtCompletion,
+} from '../utils/cycleTracking';
+import { HORMONE_HEALTH_TEMPLATE_ID } from '../data/hormoneHealthConfig';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS, computeLifetimeXP } from '../utils/gamification';
@@ -386,6 +391,14 @@ function migrateProfiles(stored) {
     }
     if (!Array.isArray(profiles[profId].exerciseLog)) {
       profiles[profId] = { ...profiles[profId], exerciseLog: [] };
+      changed = true;
+    }
+    // Women's Hormone Health — menstrual symptom check-ins. Additive and
+    // idempotent: a profile simply gains an empty list, and no other challenge
+    // reads it, so nothing about an existing attempt changes. There is
+    // deliberately NO global cycle tracking — only this challenge writes here.
+    if (!Array.isArray(profiles[profId].cycleLogs)) {
+      profiles[profId] = { ...profiles[profId], cycleLogs: [] };
       changed = true;
     }
     // An attempt that began before weekly tracking existed has no session
@@ -943,6 +956,7 @@ export function AppProvider({ children }) {
       // challenge can be read back in full.
       volumeSets: [...(prof.volumeSets || [])],
       exerciseLog: [...(prof.exerciseLog || [])],
+      cycleLogs: [...(prof.cycleLogs || [])],
       weeklyRequirements: hasWeeklyRequirements(meta) ? (() => {
         const wr = computeWeeklyRequirements({
           sessions: prof.weeklySessions, meta, challengeStart: prof.challengeStart,
@@ -1123,6 +1137,7 @@ export function AppProvider({ children }) {
         // with it just above), so a new attempt starts from a clean slate.
         volumeSets: [],
         exerciseLog: [],
+        cycleLogs: [],
         lastCompletion: null,
       },
     }));
@@ -1326,7 +1341,33 @@ export function AppProvider({ children }) {
     });
     const trend = computeWithinChallengeTrend(days, entry.endDayNum);
 
+    // Women's Hormone Health: the three-cycle comparison. Built from the
+    // archived check-ins only — nothing is estimated, and a metric without real
+    // values at both ends simply does not appear.
+    const cycleSummary = (() => {
+      if (entry.challenge?.templateId !== HORMONE_HEALTH_TEMPLATE_ID) return null;
+      const cycles = groupCycles(entry.cycleLogs || []);
+      return {
+        tracked: true,
+        cycles: cycles.map(c => ({
+          index: c.index, stage: c.stage?.label || null, start: c.start, end: c.end, days: c.days,
+          avgPain: c.avgPain, worstPain: c.worstPain, avgEnergy: c.avgEnergy, avgMood: c.avgMood,
+          avgBloating: c.avgBloating, avgSleepQuality: c.avgSleepQuality,
+          lifeImpact: c.lifeImpact, exerciseDisruptedDays: c.exerciseDisruptedDays,
+          workDisruptedDays: c.workDisruptedDays, heavyFlowDays: c.heavyFlowDays,
+        })),
+        changes: compareCycles(cycles),
+        safetyFlags: safetyFlags(cycles, entry.cycleLogs || []),
+        // Severe symptoms that persisted despite completing the challenge. The
+        // completion screen uses this to say plainly that this is not a
+        // discipline failure and is worth medical attention.
+        persistentSymptoms: persistentSymptomsAtCompletion(cycles),
+        enoughData: cycles.length >= 2,
+      };
+    })();
+
     return {
+      cycleSummary,
       name: entry.challenge?.name,
       emoji: entry.challenge?.emoji,
       variant: entry.challenge?.variant,
@@ -1829,6 +1870,57 @@ export function AppProvider({ children }) {
     }));
   }, [activeProfile, setProfiles]);
 
+  // ── Women's Hormone Health: menstrual symptom check-ins ───────────────────
+  // Written ONLY by this challenge, and only for days the user chose to mark as
+  // menstrual days. Forge never infers a cycle phase and no other challenge
+  // reads these. Check-ins are outcome MEASUREMENTS — they award no XP and
+  // never enter the challenge score.
+
+  /** Create or update the check-in for a date. Idempotent per date. */
+  const saveCycleLog = useCallback((dateStr, values, profId = activeProfile) => {
+    if (!profId || !dateStr) return null;
+    if (!tracksCycles(profiles[profId]?.activeChallenge)) return null;
+    let saved = null;
+    setProfiles(prev => {
+      const p = prev[profId];
+      const list = p?.cycleLogs || [];
+      const existing = list.find(l => l.date === dateStr);
+      saved = existing
+        ? { ...existing, ...values, interference: { ...existing.interference, ...(values?.interference || {}) },
+            concerns: { ...existing.concerns, ...(values?.concerns || {}) } }
+        : makeCycleLog(dateStr, values);
+      return {
+        ...prev,
+        [profId]: {
+          ...p,
+          cycleLogs: existing ? list.map(l => (l.date === dateStr ? saved : l)) : [...list, saved],
+        },
+      };
+    });
+    return saved;
+  }, [activeProfile, profiles, setProfiles]);
+
+  /** Remove a check-in entirely (the user un-marks a menstrual day). */
+  const removeCycleLog = useCallback((dateStr, profId = activeProfile) => {
+    if (!profId || !dateStr) return;
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: { ...prev[profId], cycleLogs: (prev[profId]?.cycleLogs || []).filter(l => l.date !== dateStr) },
+    }));
+  }, [activeProfile, setProfiles]);
+
+  /** The check-in for a date, or null. */
+  const getCycleLog = useCallback((dateStr, profId = activeProfile) => {
+    return logForDate(profiles[profId]?.cycleLogs, dateStr);
+  }, [activeProfile, profiles]);
+
+  /** The attempt's check-ins grouped into cycles, with each cycle summarised. */
+  const getCycles = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    if (!tracksCycles(prof?.activeChallenge)) return [];
+    return groupCycles(logsInChallenge(prof?.cycleLogs, prof?.challengeStart, getRawDayNumber(profId)));
+  }, [activeProfile, profiles, getRawDayNumber]);
+
   /** Resolved weekly-requirement state for the active attempt. */
   const getWeeklyRequirements = useCallback((profId = activeProfile) => {
     const prof = profiles[profId];
@@ -2267,6 +2359,8 @@ export function AppProvider({ children }) {
       // Muscle Building — volume, exercise log
       logVolumeSets, removeVolumeEntry, getWeeklyVolume,
       logExercise, removeExerciseEntry,
+      // Women's Hormone Health — symptom check-ins
+      saveCycleLog, removeCycleLog, getCycleLog, getCycles,
       // Scheduled / future challenge starts
       getChallengeStatus, isChallengeScheduled, getDaysUntilStart,
       rescheduleChallenge, startChallengeNow, CHALLENGE_STATE,

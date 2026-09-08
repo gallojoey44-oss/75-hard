@@ -39,6 +39,11 @@ export const HABIT_KEYS = {
   STRESS_RECOVERY: 'stress_recovery',
   PROTEIN_DISTRIBUTION: 'protein_distribution',
   CREATINE: 'creatine',
+  // Women's Hormone Health
+  EXERCISE_SESSION: 'exercise_session',
+  OMEGA3_FOODS: 'omega3_foods',
+  IRON_RICH_FOODS: 'iron_rich_foods',
+  SYMPTOM_CHECKIN: 'symptom_checkin',
 };
 
 /** Human labels for habit keys — used in merge explanations. */
@@ -62,6 +67,10 @@ export const HABIT_LABELS = {
   [HABIT_KEYS.STRESS_RECOVERY]: 'Recovery practice',
   [HABIT_KEYS.PROTEIN_DISTRIBUTION]: 'Protein distribution',
   [HABIT_KEYS.CREATINE]: 'Creatine',
+  [HABIT_KEYS.EXERCISE_SESSION]: 'Exercise session',
+  [HABIT_KEYS.OMEGA3_FOODS]: 'Omega-3 foods',
+  [HABIT_KEYS.IRON_RICH_FOODS]: 'Iron-rich foods',
+  [HABIT_KEYS.SYMPTOM_CHECKIN]: 'Symptom check-in',
 };
 
 /**

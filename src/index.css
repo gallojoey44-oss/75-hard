@@ -4991,3 +4991,133 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .xp-floor-note { color: var(--text3); font-weight: 600; }
 .xp-floor-row { margin-top: 8px; padding: 7px 10px; border-radius: 10px; font-size: 11px; line-height: 1.5;
   background: rgba(139,92,246,0.12); border: 1px solid rgba(139,92,246,0.35); color: var(--text2); }
+
+/* ── Women's Hormone Health ────────────────────────────────────────────────── */
+/* Setup */
+.hh-setup { max-height: 86vh; overflow-y: auto; }
+.hh-setup-sub { font-size: 13px; font-weight: 700; color: #F472B6; margin: -4px 0 4px; }
+.hh-setup-goal { font-size: 12px; color: var(--text3); line-height: 1.6; margin: 0 0 10px; }
+.hh-disclaimer { font-size: 12px; line-height: 1.6; padding: 10px 12px; border-radius: var(--radius);
+  background: rgba(244,114,182,0.10); border: 1px solid rgba(244,114,182,0.3); color: var(--text2); margin-bottom: 16px; }
+.hh-field { margin-bottom: 16px; }
+.hh-label { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--text3); margin-bottom: 7px; }
+.hh-shape { display: flex; gap: 10px; flex-wrap: wrap; }
+.hh-shape-item { font-size: 13px; color: var(--text2); padding: 5px 10px; border-radius: 999px;
+  background: var(--bg2); border: 1px solid var(--border); }
+.hh-hint { font-size: 12px; color: var(--text3); line-height: 1.55; margin-top: 7px; }
+.hh-stage { padding: 9px 11px; margin-bottom: 6px; border-radius: var(--radius);
+  background: var(--bg2); border: 1px solid var(--border); }
+.hh-stage-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.hh-stage-blurb { font-size: 12px; color: var(--text3); line-height: 1.55; margin-top: 3px; }
+.hh-req-note { display: block; font-size: 11px; color: var(--text3); margin-top: 2px; }
+.hh-exercise-rule { padding: 12px; border-radius: var(--radius); margin-bottom: 16px;
+  background: rgba(139,92,246,0.10); border: 1px solid rgba(139,92,246,0.32); }
+.hh-rule-headline { font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 9px; }
+.hh-rule-cols { display: flex; gap: 10px; flex-wrap: wrap; }
+.hh-rule-col { flex: 1 1 180px; }
+.hh-rule-col-title { font-size: 12px; font-weight: 700; color: var(--text2); }
+.hh-rule-col-blurb { font-size: 12px; color: var(--text3); line-height: 1.55; margin-top: 3px; }
+.hh-rule-notice { font-size: 12px; color: var(--text2); line-height: 1.6; margin-top: 10px;
+  padding-top: 9px; border-top: 1px solid var(--border); }
+.hh-disclosure { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 0;
+  background: none; border: none; cursor: pointer; color: var(--text); font-size: 13px; font-weight: 700; }
+.hh-disclosure-note { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--text3); }
+.hh-targets { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.hh-inline { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 13px; color: var(--text2); }
+.hh-inline .inline-input { width: 110px; }
+.hh-inline.full { flex-direction: column; align-items: stretch; gap: 4px; }
+.hh-inline.full .inline-input { width: 100%; }
+.hh-supplements { margin-top: 6px; }
+.hh-supp-headline { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.hh-supp-item { font-size: 12px; color: var(--text2); line-height: 1.55; padding: 5px 0;
+  border-bottom: 1px solid var(--border); }
+.hh-caution { font-size: 11px; color: var(--text3); line-height: 1.55; margin-top: 8px; font-style: italic; }
+.hh-safety { padding: 12px; border-radius: var(--radius); margin-bottom: 14px;
+  background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.32); }
+.hh-safety-title { font-size: 13px; font-weight: 800; color: var(--text); }
+.hh-safety-body { font-size: 12px; color: var(--text2); line-height: 1.6; margin: 6px 0 0; }
+.hh-safety-reassurance { font-size: 12px; color: var(--text); font-weight: 600; line-height: 1.6; margin: 8px 0 0; }
+.hh-check { display: flex; align-items: flex-start; gap: 9px; padding: 8px 0; font-size: 13px;
+  color: var(--text2); cursor: pointer; line-height: 1.5; }
+.hh-check input { margin-top: 3px; flex-shrink: 0; }
+
+/* Panel */
+.hh-panel { padding: 16px; margin-bottom: 14px; border-radius: var(--radius-lg);
+  background: var(--bg2); border: 1px solid var(--border); border-left: 4px solid #F472B6; }
+.hh-panel-head { margin-bottom: 12px; }
+.hh-panel-title { display: block; font-size: 16px; font-weight: 800; color: var(--text); }
+.hh-panel-sub { display: block; font-size: 11px; font-weight: 700; color: #F472B6; letter-spacing: 0.3px; }
+.hh-block { padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border); }
+.hh-block:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+.hh-block-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.hh-block-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0;
+  background: none; border: none; cursor: pointer; text-align: left; }
+.hh-block-meta { margin-left: auto; font-size: 11px; color: var(--text3); }
+.hh-caret { font-size: 11px; color: var(--text3); }
+.hh-period-btn { width: 100%; padding: 11px; border-radius: var(--radius); font-size: 14px; font-weight: 700;
+  cursor: pointer; background: rgba(244,114,182,0.14); border: 1px solid rgba(244,114,182,0.38); color: var(--text); }
+.hh-checkin { margin-top: 10px; }
+.hh-note { font-size: 11px; color: var(--text3); line-height: 1.55; margin-top: 7px; }
+.hh-scale { margin-top: 12px; }
+.hh-scale-head { display: flex; align-items: baseline; gap: 8px; }
+.hh-scale-label { font-size: 12px; font-weight: 600; color: var(--text2); flex: 1; }
+.hh-scale-value { font-size: 13px; font-weight: 800; color: #F472B6; }
+.hh-scale-row { display: flex; gap: 3px; margin-top: 5px; }
+.hh-dot { flex: 1; min-width: 0; padding: 6px 0; border-radius: 6px; font-size: 11px; font-weight: 600;
+  cursor: pointer; background: var(--bg); border: 1px solid var(--border); color: var(--text3); }
+.hh-dot.active { background: rgba(244,114,182,0.28); border-color: #F472B6; color: var(--text); }
+.hh-scale-ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); margin-top: 3px; }
+.hh-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.hh-chip { padding: 6px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
+  background: var(--bg); border: 1px solid var(--border); color: var(--text2); }
+.hh-chip.active { background: rgba(244,114,182,0.24); border-color: #F472B6; color: var(--text); }
+.hh-chip.active.warn { background: rgba(245,158,11,0.22); border-color: rgba(245,158,11,0.6); }
+.hh-impact { display: flex; align-items: baseline; gap: 9px; margin-top: 12px; padding: 9px 12px;
+  border-radius: var(--radius); background: var(--bg); border: 1px solid var(--border); }
+.hh-impact-score { font-size: 22px; font-weight: 800; }
+.hh-impact-label { font-size: 12px; color: var(--text3); }
+.hh-impact.good .hh-impact-score { color: #10B981; }
+.hh-impact.info .hh-impact-score { color: #60A5FA; }
+.hh-impact.warn .hh-impact-score { color: #F59E0B; }
+.hh-concerns { margin-top: 12px; font-size: 12px; color: var(--text2); }
+.hh-concerns summary { cursor: pointer; font-weight: 600; }
+.hh-remove { width: 100%; margin-top: 12px; padding: 7px; background: none; border: none;
+  color: var(--text3); font-size: 12px; font-weight: 600; cursor: pointer; }
+.hh-stage-row { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.hh-stage-row-title { font-size: 12px; font-weight: 700; color: var(--text2); }
+.hh-stage-row.done .hh-stage-row-title { color: var(--text); }
+.hh-stage-stats { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text3); margin-top: 3px; }
+.hh-stage-stats strong { color: #F472B6; }
+.hh-stage-stats.sub { font-size: 11px; }
+.hh-changes { margin-top: 10px; }
+.hh-changes-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--text3); margin-bottom: 6px; }
+.hh-change { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 4px 0; color: var(--text2); }
+.hh-change.headline { font-weight: 700; color: var(--text); }
+.hh-change.improved .hh-change-values { color: #10B981; }
+.hh-change.worsened .hh-change-values { color: #F59E0B; }
+.hh-sub-title { font-size: 12px; font-weight: 700; color: var(--text2); margin-top: 12px; }
+.hh-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--text2); line-height: 1.7; }
+.hh-examples { font-size: 11px; color: var(--text3); line-height: 1.6; margin-top: 4px; }
+.hh-safety-block { background: rgba(245,158,11,0.08); border-radius: var(--radius); padding: 12px; }
+.hh-flag { font-size: 12px; color: var(--text2); line-height: 1.55; padding: 5px 0; }
+
+/* Completion screen cycle results */
+.cc-cycles { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.cc-cycle { flex: 1 1 130px; padding: 10px; border-radius: var(--radius);
+  background: var(--bg2); border: 1px solid var(--border); }
+.cc-cycle-title { font-size: 11px; font-weight: 700; color: var(--text3); }
+.cc-cycle-impact { font-size: 15px; font-weight: 800; color: #F472B6; margin-top: 3px; }
+.cc-cycle-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.cc-safety { margin-top: 12px; padding: 11px; border-radius: var(--radius);
+  background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.32); text-align: left; }
+.cc-safety-title { font-size: 13px; font-weight: 800; color: var(--text); }
+.cc-safety-flag { font-size: 12px; color: var(--text2); line-height: 1.55; margin-top: 5px; }
+.cc-safety-body { font-size: 12px; color: var(--text2); line-height: 1.6; margin: 6px 0 0; }
+.cc-safety-body.strong { color: var(--text); font-weight: 600; }
+/* Task guidance and shared-habit marker on the card layout */
+.gf-task-desc { display: block; font-size: 11px; color: var(--text3); line-height: 1.5; margin-top: 3px; font-weight: 400; }
+.gf-task-supports { display: block; font-size: 11px; font-weight: 600; color: #60A5FA; margin-top: 3px; }
+.gf-task-card.shared-habit { border-left: 3px solid rgba(59,130,246,0.55); }

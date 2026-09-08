@@ -51,10 +51,9 @@ export const COMPATIBILITY_META = {
 };
 
 /**
- * Stable challenge ids used by the table. Several of these are Forge templates
- * today; the rest are reserved ids for challenges that are planned but not yet
- * built. Rows for a challenge that does not exist yet are simply never reached —
- * they cost nothing and make the pairing correct the day the template lands.
+ * Stable challenge ids used by the table. A row for a challenge that has no
+ * template yet is simply never reached — it costs nothing and makes the pairing
+ * correct the day that template lands.
  */
 export const CHALLENGE_IDS = {
   FAT_LOSS: 'fat_loss_phase',
@@ -98,6 +97,18 @@ export const COMPATIBILITY_PAIRS = [
   },
 
   {
+    a: C.HORMONE_HEALTH, b: C.MENTAL_TRAINING, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Mental training adds no physical or recovery load, and stress skills directly support the symptom side of a cycle.',
+  },
+  {
+    a: C.HORMONE_HEALTH, b: C.SLEEP_RESET, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Sleep is already this challenge\'s keystone habit — a sleep challenge reinforces exactly the same thing.',
+  },
+  {
+    a: C.HORMONE_HEALTH, b: C.RECOVERY, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Recovery work pairs naturally with a challenge built around scaling intensity to how you feel.',
+  },
+  {
     a: C.MUSCLE_BUILDING, b: C.RECOVERY, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
     reason: 'Recovery work is exactly what a hypertrophy block needs alongside it — it protects the training quality that drives growth.',
   },
@@ -110,6 +121,10 @@ export const COMPATIBILITY_PAIRS = [
   {
     a: C.STRENGTH, b: C.MUSCLE_BUILDING, rating: COMPATIBILITY.CONDITIONAL,
     reason: 'Both compete for the same recovery budget. Doable if total weekly training volume stays realistic.',
+  },
+  {
+    a: C.HORMONE_HEALTH, b: C.STRENGTH, rating: COMPATIBILITY.CONDITIONAL,
+    reason: 'A fixed strength programme can pull against scaling intensity on symptomatic days. Workable if you let yourself adapt sessions rather than forcing every one.',
   },
   {
     a: C.STRENGTH, b: C.FAT_LOSS, rating: COMPATIBILITY.CONDITIONAL,

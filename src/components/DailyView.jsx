@@ -7,6 +7,7 @@ import WeeklyRequirements from './WeeklyRequirements';
 import ChallengePerformance from './ChallengePerformance';
 import SupportProgress from './SupportProgress';
 import MuscleBuildingPanel from './MuscleBuildingPanel';
+import HormoneHealthPanel from './HormoneHealthPanel';
 import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
@@ -24,16 +25,24 @@ import * as MB from '../data/muscleBuildingConfig';
 
 const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
 
-function GfTaskCard({ task, checked, onToggle, index }) {
+function GfTaskCard({ task, checked, onToggle, index, supports = null }) {
   const color = task.color || TASK_COLORS[index % TASK_COLORS.length];
   return (
-    <div className={`gf-task-card${checked ? ' done-card' : ''}`}>
+    <div className={`gf-task-card${checked ? ' done-card' : ''}${supports ? ' shared-habit' : ''}`}>
       <div className="gf-task-top" style={{ background: color }} />
       <div className="gf-task-body">
         <div className="gf-task-num" style={{ background: color + 'CC' }}>
           {index + 1}
         </div>
-        <span className={`gf-task-name${checked ? ' done' : ''}`}>{task.name}</span>
+        <span className={`gf-task-name${checked ? ' done' : ''}`}>
+          {task.name}
+          {/* A task's own guidance — what counts, what is optional, what is not
+              required. Without this the challenge's copy never reaches the user
+              on this layout. */}
+          {task.desc && <span className="gf-task-desc">{task.desc}</span>}
+          {/* One behaviour, two challenges: satisfies both, pays XP once. */}
+          {supports && <span className="gf-task-supports">🔗 {supports}</span>}
+        </span>
         <button
           className={`gf-task-check${checked ? ' done' : ''}`}
           style={checked ? {} : { borderColor: color + '80' }}
@@ -741,6 +750,7 @@ export default function DailyView({ editDayNum, setView }) {
                 index={i}
                 checked={!!dayData?.tasks?.[task.id]}
                 onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
+                supports={supportsLabel(task, profile)}
               />
             ))}
           </div>
@@ -813,6 +823,7 @@ export default function DailyView({ editDayNum, setView }) {
           first sees what to do, then how it affects their overall score.
           (Bonus Missions never affect the required challenge score.) */}
       <MuscleBuildingPanel />
+      <HormoneHealthPanel />
       <ChallengePerformance />
       <SupportProgress />
 

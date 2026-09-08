@@ -14,8 +14,25 @@ import { dateOffsetFromToday, startsInWords } from '../utils/challengeSchedule';
 import ScheduledStartCard from './ScheduledStart';
 import SupportChallengePicker from './SupportChallengePicker';
 import MuscleBuildingSetup from './MuscleBuildingSetup';
+import HormoneHealthSetup from './HormoneHealthSetup';
 import * as MB from '../data/muscleBuildingConfig';
+import * as HH from '../data/hormoneHealthConfig';
+
 import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
+
+/**
+ * Challenges with a `start_flow: 'configured'` bring their own setup screen and
+ * their own meta/task builders. Adding another one is an entry here — nothing
+ * in the start flow below branches on a template id.
+ */
+const CONFIGURED_SETUPS = {
+  [MB.MUSCLE_BUILDING_TEMPLATE_ID]: {
+    Setup: MuscleBuildingSetup, buildMeta: MB.buildChallengeMeta, buildTasks: MB.buildStartTasks,
+  },
+  [HH.HORMONE_HEALTH_TEMPLATE_ID]: {
+    Setup: HormoneHealthSetup, buildMeta: HH.buildChallengeMeta, buildTasks: HH.buildStartTasks,
+  },
+};
 
 // Overall challenge difficulty — fixed per challenge, independent of the
 // Beginner/Standard/Hard mode chosen inside it.
@@ -180,6 +197,13 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
   // A 'configured' challenge (Muscle Building) opens its own setup screen
   // instead of the generic variant + duration chips.
   const isConfiguredStart = template.start_flow === 'configured';
+  // The exact requirements this challenge's own config would generate.
+  const configuredPreview = (() => {
+    const cfg = CONFIGURED_SETUPS[template.id];
+    if (!cfg) return null;
+    const meta = cfg.buildMeta();
+    return { daily: cfg.buildTasks(), weekly: meta.weeklyRequirementDefs || [] };
+  })();
   const isCustom = template.id === 'custom_challenge_framework';
   const isMT = template.id === MENTAL_TRAINING_TEMPLATE_ID;
   const defaultDuration = getDefaultDuration(template);
@@ -301,33 +325,53 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
           {/* Muscle Building preview — pillars, daily list and weekly training,
               generated from muscleBuildingConfig so the card never drifts from
               what the challenge actually creates. */}
-          {isConfiguredStart && (
+          {/* A configured challenge previews the exact daily and weekly
+              requirements its own config module would create. */}
+          {isConfiguredStart && configuredPreview && (
             <div className="mb-preview">
-              <div className="mb-pillars">
-                {(template.pillars || []).map(pl => (
-                  <span key={pl.id} className="mb-pillar-chip" title={pl.blurb}>{pl.icon} {pl.label}</span>
-                ))}
-              </div>
+              {template.pillars?.length > 0 && (
+                <div className="mb-pillars">
+                  {template.pillars.map(pl => (
+                    <span key={pl.id} className="mb-pillar-chip" title={pl.blurb}>{pl.icon} {pl.label}</span>
+                  ))}
+                </div>
+              )}
               <div className="tpl-variant-section-label">Daily requirements</div>
               <ul className="tpl-task-list">
-                {MB.buildStartTasks(MB.defaultSetup()).map(t => (
+                {configuredPreview.daily.map(t => (
                   <li key={t.id}>{t.icon} {t.name} ({t.xp} XP){t.keystoneHabit ? ' ⭐⭐⭐ Keystone' : ''}</li>
                 ))}
               </ul>
-              <div className="tpl-variant-section-label">Weekly requirements</div>
-              <ul className="tpl-task-list weekly">
-                <li>🏋️ {MB.DEFAULT_TRAINING_DAYS} hypertrophy sessions per week (you choose 3–6 at setup) — {MB.XP.training} XP each</li>
-                <li>📊 ~{MB.DEFAULT_SET_TARGET} challenging sets per major muscle group — a progress metric, no XP</li>
-              </ul>
-              <div className="tpl-variant-section-label">Optional optimization</div>
-              <ul className="tpl-task-list optional">
-                {MB.OPTIMIZATION_HABITS.map(h => (
-                  <li key={h.id}>{h.icon} {h.setupLabel} — {h.xp} XP</li>
-                ))}
-              </ul>
-              <div className="tpl-panel-note">
-                <strong>{template.training_quality?.headline}.</strong> {template.training_quality?.body}
-              </div>
+              {configuredPreview.weekly.length > 0 && (
+                <>
+                  <div className="tpl-variant-section-label">Weekly requirements</div>
+                  <ul className="tpl-task-list weekly">
+                    {configuredPreview.weekly.map(d => (
+                      <li key={d.id}>{d.icon} {d.label} — {d.perWeek}× per week ({d.xp} XP each)</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {template.id === MB.MUSCLE_BUILDING_TEMPLATE_ID && (
+                <>
+                  <div className="tpl-variant-section-label">Optional optimization</div>
+                  <ul className="tpl-task-list optional">
+                    {MB.OPTIMIZATION_HABITS.map(h => (
+                      <li key={h.id}>{h.icon} {h.setupLabel} — {h.xp} XP</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {template.training_quality && (
+                <div className="tpl-panel-note">
+                  <strong>{template.training_quality.headline}.</strong> {template.training_quality.body}
+                </div>
+              )}
+              {template.exercise_guidance && (
+                <div className="tpl-panel-note">
+                  <strong>{template.exercise_guidance.principle}</strong> {template.exercise_guidance.notice}
+                </div>
+              )}
             </div>
           )}
 
@@ -494,19 +538,20 @@ export default function ChallengesView({ setView }) {
   function beginChallenge(letter, startDate) {
     const ps = pendingStart;
     if (!ps) return;
-    // Muscle Building builds its whole attempt — meta, weekly training
-    // requirement and daily task list — from the setup object, entirely inside
-    // muscleBuildingConfig. Nothing about it is assembled here.
-    if (ps.mbSetup) {
+    // A configured challenge builds its whole attempt — meta, weekly
+    // requirements and daily task list — from its own config module. Nothing
+    // about it is assembled here.
+    const configured = CONFIGURED_SETUPS[ps.template?.id];
+    if (ps.configuredSetup && configured) {
       startChallenge(undefined, {
         challenge: {
-          ...MB.buildChallengeMeta(ps.mbSetup),
+          ...configured.buildMeta(ps.configuredSetup),
           passingScore: ps.template.passing_score ?? DEFAULT_PASSING_SCORE,
           keystoneRequirement: ps.template.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
           rewardXP: ps.template.rewards?.xp || 0,
           badgeId: ps.template.rewards?.badge_id || null,
         },
-        tasks: MB.buildStartTasks(ps.mbSetup),
+        tasks: configured.buildTasks(ps.configuredSetup),
         bonusMissions: [],
         futureSelfLetter: letter,
         startDate,
@@ -690,7 +735,7 @@ export default function ChallengesView({ setView }) {
               setView={setView}
               onStart={(payload) => {
                 if (t.start_flow === 'configured' && payload?.configured) {
-                  setPendingStart({ template: t, step: 'mbSetup' });
+                  setPendingStart({ template: t, step: 'configuredSetup' });
                 } else if (t.start_flow === 'variant' && payload) {
                   setPendingStart({
                     template: t,
@@ -795,16 +840,24 @@ export default function ChallengesView({ setView }) {
         </div>
       )}
 
-      {/* Muscle Building setup — duration, training days, targets, optional
-          habits and physique tracking, all read from muscleBuildingConfig. */}
-      {pendingStart?.step === 'mbSetup' && (
-        <MuscleBuildingSetup
-          onCancel={() => setPendingStart(null)}
-          onSubmit={(setup) => setPendingStart(p => ({
-            ...p, mbSetup: setup, durationDays: setup.durationDays, variant: 'standard', step: 'letter',
-          }))}
-        />
-      )}
+      {/* A configured challenge's own setup screen, resolved from the registry
+          rather than branched on by template id. */}
+      {pendingStart?.step === 'configuredSetup' && CONFIGURED_SETUPS[pendingStart.template?.id] && (() => {
+        const { Setup } = CONFIGURED_SETUPS[pendingStart.template.id];
+        return (
+          <Setup
+            onCancel={() => setPendingStart(null)}
+            onSubmit={(setup) => setPendingStart(p => ({
+              ...p,
+              configuredSetup: setup,
+              // A challenge with a fixed length reports its own duration.
+              durationDays: setup.durationDays || getDefaultDuration(p.template),
+              variant: 'standard',
+              step: 'letter',
+            }))}
+          />
+        );
+      })()}
 
       {/* Future Self Letter — required before a challenge begins */}
       {pendingStart?.step === 'letter' && (

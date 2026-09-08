@@ -1,5 +1,6 @@
 import { HABIT_KEYS } from './habitKeys';
 import * as MB from './muscleBuildingConfig';
+import * as HH from './hormoneHealthConfig';
 
 // Official Forge challenge template library.
 // Display metadata (emoji, startable) lives alongside the template data;
@@ -215,7 +216,7 @@ export const NEXT_GOALS = [
   { id: 'muscle',   label: 'Muscle Building',       emoji: '🏗️', templateId: MB.MUSCLE_BUILDING_TEMPLATE_ID },
   { id: 'recovery', label: 'Recovery',              emoji: '🔋', templateId: 'recovery_phase' },
   { id: 'skin',     label: 'Skin Health',           emoji: '✨', templateId: null },
-  { id: 'hormone',  label: "Women's Hormone Health", emoji: '🌸', templateId: null, audience: 'female' },
+  { id: 'hormone',  label: "Women's Hormone Health", emoji: '🌸', templateId: HH.HORMONE_HEALTH_TEMPLATE_ID, audience: 'female' },
   { id: 'custom',   label: 'Custom',                emoji: '🎯', templateId: 'custom_challenge_framework' },
 ];
 
@@ -816,6 +817,43 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
     },
+  },
+  {
+    // Women's Hormone Health — every field below is derived from
+    // hormoneHealthConfig, so the challenge is edited there rather than here.
+    id: HH.HORMONE_HEALTH_TEMPLATE_ID,
+    overall_difficulty: 'Medium',
+    emoji: HH.IDENTITY.emoji,
+    startable: true,
+    // Female-only, following the existing audience convention.
+    audience: 'female',
+    start_flow: 'configured',
+    template_version: 1,
+    task_id_prefix: 'hh_',
+    challenge_name: HH.IDENTITY.name,
+    subtitle: HH.IDENTITY.subtitle,
+    purpose: HH.IDENTITY.goal,
+    tagline: HH.IDENTITY.disclaimer,
+    // Fixed length — roughly three cycles, so progress is a trend rather than
+    // one period. Deliberately no shorter versions.
+    duration_options_days: [HH.DURATION_DAYS],
+    default_duration_days: HH.DURATION_DAYS,
+    metrics_targeted: ['sleep_quality', 'energy_rating', 'mood_rating', 'stress_rating', 'recovery_rating'],
+    insights_triggers: {
+      pre_recommendation: 'user reports menstrual symptoms interfering with training or daily life',
+      in_progress_monitoring: 'sleep adherence, exercise consistency, symptom check-ins, Life Impact Score across cycles',
+    },
+    success_threshold: 'habit adherence >= 0.80 AND Life Impact Score trending down across available cycles',
+    rewards: { xp: 1200, badge_id: 'iron_will' },
+    safety_flags: {
+      contraindications: ['pregnancy', 'diagnosed condition requiring medical management'],
+      notes: HH.SAFETY.message.body,
+    },
+    evidence_level: 'moderate',
+    risk_level: 'low',
+    inspiration_sources: ['Stacy Sims', 'Lauren Colenso-Semple', 'Kelly Casperson'],
+    exercise_guidance: HH.EXERCISE_GUIDANCE,
+    why: HH.WHY,
   },
   {
     id: 'recovery_phase',

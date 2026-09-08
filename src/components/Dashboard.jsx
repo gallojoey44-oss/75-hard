@@ -6,6 +6,7 @@ import RankUpCeremony from './RankUpCeremony';
 import ChallengePerformance from './ChallengePerformance';
 import SupportProgress from './SupportProgress';
 import MuscleBuildingPanel from './MuscleBuildingPanel';
+import HormoneHealthPanel from './HormoneHealthPanel';
 import {
   computeTotalXP, computeTodayXP,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
@@ -92,6 +93,70 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
             </div>
             {summary.weeklyRequirements.missedUnits > 0 && (
               <div className="cc-changes-sub">{summary.weeklyRequirements.missedUnits} missed session{summary.weeklyRequirements.missedUnits === 1 ? '' : 's'} across finalized weeks.</div>
+            )}
+          </div>
+        )}
+
+        {/* Women's Hormone Health — the three-cycle result. The headline is the
+            Life Impact Score: how much the cycle interfered with life, compared
+            across cycles rather than judged from any single period. */}
+        {summary.cycleSummary?.tracked && (
+          <div className="cc-section">
+            <div className="cc-section-title">Across Your Cycles</div>
+            {summary.cycleSummary.cycles.length > 0 && (
+              <div className="cc-cycles">
+                {summary.cycleSummary.cycles.map(c => (
+                  <div key={c.index} className="cc-cycle">
+                    <div className="cc-cycle-title">Cycle {c.index}{c.stage ? ` · ${c.stage}` : ''}</div>
+                    <div className="cc-cycle-impact">
+                      {c.lifeImpact != null ? `Life Impact ${c.lifeImpact}/10` : 'Not enough data'}
+                    </div>
+                    <div className="cc-cycle-sub">
+                      {c.days} logged {c.days === 1 ? 'day' : 'days'}
+                      {c.avgPain != null ? ` · avg pain ${c.avgPain}` : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {summary.cycleSummary.enoughData && summary.cycleSummary.changes.length > 0 ? (
+              <div className="cc-changes">
+                {summary.cycleSummary.changes.map(c => (
+                  <div key={c.key} className={`cc-change ${c.changed ? (c.improved ? 'improved' : 'worsened') : 'flat'}`}>
+                    <div className="cc-change-label">{c.label}</div>
+                    <div className="cc-change-values">{c.from} → {c.to}{c.unit ? ` ${c.unit}` : ''}</div>
+                    <div className="cc-change-verdict">
+                      {c.changed ? (c.improved ? 'Improved' : 'Worse') : 'Unchanged'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="cc-changes-sub">
+                Not enough logged cycles to compare. Nothing here is estimated — a comparison
+                needs at least two cycles with check-ins.
+              </div>
+            )}
+            {summary.cycleSummary.safetyFlags?.length > 0 && (
+              <div className="cc-safety">
+                <div className="cc-safety-title">⚕️ Worth getting checked</div>
+                {summary.cycleSummary.safetyFlags.map(f => (
+                  <div key={f.id} className="cc-safety-flag">{f.text}</div>
+                ))}
+              </div>
+            )}
+            {summary.cycleSummary.persistentSymptoms && (
+              <div className="cc-safety">
+                <div className="cc-safety-title">If symptoms are still severe</div>
+                <p className="cc-safety-body">
+                  Your symptoms stayed significant across this challenge. That is worth taking to a
+                  healthcare professional — conditions like endometriosis, adenomyosis, fibroids or
+                  anaemia can cause this and are not fixable by habits alone.
+                </p>
+                <p className="cc-safety-body strong">
+                  This is not a discipline problem and it does not mean you did the challenge wrong.
+                </p>
+              </div>
             )}
           </div>
         )}
@@ -967,6 +1032,7 @@ export default function Dashboard({ setView }) {
 
       {/* Challenge Performance — percentage score, passing line, status */}
       <MuscleBuildingPanel />
+      <HormoneHealthPanel />
       <ChallengePerformance setView={setView} />
       <SupportProgress />
 
