@@ -834,10 +834,15 @@ export const CHALLENGE_TEMPLATES = [
     subtitle: HH.IDENTITY.subtitle,
     purpose: HH.IDENTITY.goal,
     tagline: HH.IDENTITY.disclaimer,
-    // Fixed length — roughly three cycles, so progress is a trend rather than
-    // one period. Deliberately no shorter versions.
-    duration_options_days: [HH.DURATION_DAYS],
-    default_duration_days: HH.DURATION_DAYS,
+    // Two lengths, 8 or 12 weeks. The requirements are identical — the longer
+    // version is not harder, it simply allows more time to build the habits and
+    // usually yields more cycle observations to compare.
+    duration_options_days: HH.DURATIONS,
+    default_duration_days: HH.DEFAULT_DURATION,
+    recommended_duration_days: HH.DEFAULT_DURATION,
+    duration_labels: HH.DURATION_LABELS,
+    completion_bonus_by_duration: HH.COMPLETION_BONUS_BY_DURATION,
+    duration_options: HH.DURATION_OPTIONS,
     metrics_targeted: ['sleep_quality', 'energy_rating', 'mood_rating', 'stress_rating', 'recovery_rating'],
     insights_triggers: {
       pre_recommendation: 'user reports menstrual symptoms interfering with training or daily life',

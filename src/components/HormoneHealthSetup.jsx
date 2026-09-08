@@ -4,10 +4,10 @@ import * as HH from '../data/hormoneHealthConfig';
 /**
  * Women's Hormone Health setup.
  *
- * Deliberately short. The duration is fixed at 84 days and there are no
- * difficulty variants, so the only things worth asking are the personal targets
- * — and even those are pre-filled. Everything rendered here comes from
- * hormoneHealthConfig; this component holds no challenge constants.
+ * Deliberately short. There are no difficulty variants, so the only things worth
+ * asking are the length and the personal targets — and the targets are all
+ * pre-filled. Everything rendered here comes from hormoneHealthConfig; this
+ * component holds no challenge constants.
  *
  * The one thing it insists on is that the user has read what this challenge
  * does and does not claim, and what to do if symptoms are severe.
@@ -29,22 +29,41 @@ export default function HormoneHealthSetup({ onCancel, onSubmit }) {
         {/* What this is not — stated before anything else. */}
         <div className="hh-disclaimer">{HH.IDENTITY.disclaimer}</div>
 
+        {/* ── Duration ── */}
         <div className="hh-field">
-          <div className="hh-label">The shape of it</div>
-          <div className="hh-shape">
-            <span className="hh-shape-item"><strong>{HH.DURATION_DAYS} days</strong> · 12 weeks</span>
-            <span className="hh-shape-item">~{HH.CYCLES_COVERED} cycles</span>
+          <div className="hh-label">How long?</div>
+          <div className="hh-durations">
+            {HH.DURATION_OPTIONS.map(o => (
+              <button
+                key={o.days}
+                className={`hh-duration${s.durationDays === o.days ? ' active' : ''}`}
+                onClick={() => set({ durationDays: o.days })}
+                aria-pressed={s.durationDays === o.days}
+              >
+                <span className="hh-duration-head">
+                  {o.weeks} Weeks — {o.label}
+                  {o.days === HH.DEFAULT_DURATION && <span className="hh-duration-rec">Recommended</span>}
+                </span>
+                <span className="hh-duration-days">{o.days} days</span>
+                <span className="hh-duration-blurb">{o.blurb}</span>
+              </button>
+            ))}
+          </div>
+          <div className="hh-hint">{HH.durationOption(s.durationDays).detail}</div>
+          <div className="hh-hint">
+            The habits, XP, exercise philosophy, nutrition and symptom tracking are exactly the
+            same in both. The longer version is not harder — it just gives you more time.
           </div>
           <div className="hh-hint">
-            Long enough to compare three periods against each other. One period tells you
-            almost nothing; three tell you whether something is actually changing.
+            Cycle length varies, so this usually covers around {HH.typicalCycles(s.durationDays)} cycles —
+            but at the end Forge compares whatever cycles you actually logged, not a number it assumed.
           </div>
         </div>
 
         {/* ── The three stages ── */}
         <div className="hh-field">
           <div className="hh-label">How progress is measured</div>
-          {HH.CYCLE_STAGES.map(st => (
+          {HH.stagesForDuration(s.durationDays).map(st => (
             <div key={st.cycle} className="hh-stage">
               <div className="hh-stage-title">{st.title}</div>
               <div className="hh-stage-blurb">{st.blurb}</div>

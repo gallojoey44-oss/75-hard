@@ -42,14 +42,79 @@ check('no copy promises a cure or symptom-free outcome', (() => {
 check('graduation is framed without promising everyone improves',
   /Not everyone becomes symptom-free, and that is not a failure/i.test(HH.GRADUATION.caveat));
 
-// ══ Duration ════════════════════════════════════════════════════════════════
-check('the challenge is 84 days / 12 weeks', HH.DURATION_DAYS === 84 && HH.DURATION_DAYS / 7 === 12);
-check('it covers roughly three cycles', HH.CYCLES_COVERED === 3);
-check('the attempt stores that duration', meta.durationDays === 84);
-check('no shorter versions are offered — a single fixed length', (() => {
-  // The template exposes exactly one duration option.
-  return HH.DURATION_DAYS === 84;
+// ══ Durations ═══════════════════════════════════════════════════════════════
+check('two durations are offered: 56 and 84 days', HH.DURATIONS.join() === '56,84');
+check('they are 8 and 12 weeks',
+  HH.DURATION_OPTIONS.map(o => o.weeks).join() === '8,12' &&
+  HH.DURATION_OPTIONS.every(o => o.days / 7 === o.weeks));
+check('8 weeks is labelled Standard, 12 weeks Recommended',
+  HH.durationOption(56).label === 'Standard' && HH.durationOption(84).label === 'Recommended');
+check('the headlines read "8 Weeks — Standard" and "12 Weeks — Recommended"',
+  HH.durationOption(56).headline === '8 Weeks — Standard' &&
+  HH.durationOption(84).headline === '12 Weeks — Recommended');
+check('12 weeks is the default and the recommended option', HH.DEFAULT_DURATION === 84);
+check('the required UI copy is present for each option',
+  HH.durationOption(56).blurb === 'Build the foundations and compare how your cycle responds.' &&
+  HH.durationOption(84).blurb === 'Give the habits more time and get a clearer picture across multiple cycles.');
+check('8 weeks is framed as the minimum recommended version',
+  /minimum recommended version/i.test(HH.durationOption(56).detail));
+check('12 weeks is framed as the clearer read, not the harder one',
+  /clearest read/i.test(HH.durationOption(84).detail) &&
+  /separates a genuine trend from normal month-to-month variation/i.test(HH.durationOption(84).detail));
+check('the default attempt is 84 days', meta.durationDays === 84);
+check('an 8-week attempt stores 56 days',
+  HH.buildChallengeMeta({ ...setup, durationDays: 56 }).durationDays === 56);
+check('the attempt records its own chosen length',
+  HH.buildChallengeMeta({ ...setup, durationDays: 56 }).hormoneHealth.durationDays === 56);
+check('an unknown duration falls back to the recommended one',
+  HH.buildChallengeMeta({ ...setup, durationDays: 999 }).durationDays === 84);
+check('the longer version earns a larger completion bonus',
+  HH.COMPLETION_BONUS_BY_DURATION[56] < HH.COMPLETION_BONUS_BY_DURATION[84] &&
+  HH.buildChallengeMeta({ ...setup, durationDays: 56 }).completionBonusXP === HH.COMPLETION_BONUS_BY_DURATION[56]);
+
+// ══ The two versions are IDENTICAL apart from length ════════════════════════
+const short8 = HH.buildChallengeMeta({ ...setup, durationDays: 56 });
+const long12 = HH.buildChallengeMeta({ ...setup, durationDays: 84 });
+check('the daily habits are identical between the two durations',
+  JSON.stringify(HH.buildStartTasks({ ...setup, durationDays: 56 })) ===
+  JSON.stringify(HH.buildStartTasks({ ...setup, durationDays: 84 })));
+check('the weekly requirements are identical',
+  JSON.stringify(short8.weeklyRequirementDefs) === JSON.stringify(long12.weeklyRequirementDefs));
+check('the 12-week version is not harder — only duration and bonus differ', (() => {
+  const strip = (m) => {
+    const { durationDays, completionBonusXP, hormoneHealth, ...rest } = m;
+    const { durationDays: _d, ...hh } = hormoneHealth;
+    return JSON.stringify({ ...rest, hormoneHealth: hh });
+  };
+  return strip(short8) === strip(long12);
 })());
+
+// ══ Cycles are never assumed — only counted ═════════════════════════════════
+check('8 weeks typically covers ~2 cycles, 12 weeks ~3',
+  HH.typicalCycles(56) === 2 && HH.typicalCycles(84) === 3);
+// The typical count is a DISPLAY hint only — the comparison is built from the
+// cycles actually logged, never from the number a duration was expected to yield.
+check('an 8-week attempt that logged three cycles compares all three', (() => {
+  const three = groupCycles([
+    ...[1, 2].map(n => makeCycleLog(d(n), { pain: 8 })),
+    ...[24, 25].map(n => makeCycleLog(d(n), { pain: 5 })),
+    ...[47, 48].map(n => makeCycleLog(d(n), { pain: 3 })),
+  ]);
+  const cmp = compareCycles(three);
+  return three.length === 3 && cmp.find(c => c.key === 'avgPain').from === 8 &&
+    cmp.find(c => c.key === 'avgPain').to === 3;
+})());
+check('a 12-week attempt that logged only one cycle fabricates no comparison',
+  compareCycles(groupCycles([makeCycleLog(d(1), { pain: 7 })])).length === 0);
+check('an 8-week attempt shows two stages by default',
+  HH.stagesForDuration(56).map(s => s.label).join() === 'Baseline,Improvement');
+check('a 12-week attempt shows three',
+  HH.stagesForDuration(84).map(s => s.label).join() === 'Baseline,Improvement,Consolidation');
+check('an 8-week attempt that logs a third cycle still shows it — nothing is hidden',
+  HH.stagesForDuration(56, 3).length === 3);
+check('a fourth logged cycle gets its own stage rather than disappearing',
+  HH.stagesForDuration(84, 4).length === 4 && HH.stagesForDuration(84, 4)[3].cycle === 4);
+check('at least one stage always shows', HH.stagesForDuration(56, 0).length >= 1);
 
 // ══ Keystone habit: Sleep & Recovery ════════════════════════════════════════
 check('sleep is THE keystone habit', keystoneHabitsOf(tasks).map(t => t.id).join() === 'hh_sleep');
@@ -205,7 +270,7 @@ check('each cycle knows its day span', cycles[0].days === 4 && cycles[2].days ==
 check('cycles are numbered in order', cycles.map(c => c.index).join() === '1,2,3');
 check('each cycle carries its stage label',
   cycles.map(c => c.stage.label).join() === 'Baseline,Improvement,Consolidation');
-check('the three stages are Baseline / Improvement / Consolidation',
+check('the stage ladder is Baseline / Improvement / Consolidation',
   HH.CYCLE_STAGES.map(s => s.label).join() === 'Baseline,Improvement,Consolidation');
 check('cycle averages are computed', cycles[0].avgPain === 8 && cycles[2].avgPain === 3);
 check('worst pain is tracked separately from the average', cycles[0].worstPain === 8);

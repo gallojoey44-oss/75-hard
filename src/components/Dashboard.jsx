@@ -97,7 +97,7 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
           </div>
         )}
 
-        {/* Women's Hormone Health — the three-cycle result. The headline is the
+        {/* Women's Hormone Health — the cycle-by-cycle result. The headline is the
             Life Impact Score: how much the cycle interfered with life, compared
             across cycles rather than judged from any single period. */}
         {summary.cycleSummary?.tracked && (

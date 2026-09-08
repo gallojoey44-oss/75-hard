@@ -47,7 +47,7 @@ async function init(which = 'girlfriend') {
   await page.reload(); await page.waitForSelector('.dashboard', { timeout: 5000 });
 }
 
-async function startHormoneHealth() {
+async function startHormoneHealth(weeks = null) {
   await gotoTab('Challenges');
   await page.waitForTimeout(300);
   const card = page.locator('.challenge-card', { hasText: "Women's Hormone Health" });
@@ -55,6 +55,10 @@ async function startHormoneHealth() {
   await page.waitForTimeout(300);
   await card.locator('button', { hasText: "Start Women's Hormone Health" }).click();
   await page.waitForSelector('.hh-setup', { timeout: 5000 });
+  if (weeks) {
+    await page.locator('.hh-duration', { hasText: `${weeks} Weeks` }).click();
+    await page.waitForTimeout(200);
+  }
   await page.locator('.hh-safety .hh-check input').check();
   await page.locator('.hh-setup button', { hasText: 'Continue' }).click();
   await page.waitForSelector('.letter-modal, textarea', { timeout: 5000 });
@@ -87,7 +91,7 @@ const card = page.locator('.challenge-card', { hasText: "Women's Hormone Health"
 await card.locator('.challenge-card-header').click();
 await page.waitForTimeout(300);
 const cardText = await card.textContent();
-check('the card states the 84-day length', /84 days/.test(cardText), cardText.slice(0, 120));
+check('the card offers both lengths', /56 or 84 days/.test(cardText), cardText.slice(0, 140));
 check('the card previews the real daily requirements',
   /Sleep 7\.5–9 hours/.test(cardText) && /Eat mostly whole foods/.test(cardText) && /8,000\+ steps/.test(cardText));
 check('the card previews the weekly requirements',
@@ -102,8 +106,41 @@ check('setup shows the name and subtitle',
   /Women's Hormone Health/.test(setupText) && /Build habits\. Reclaim your month\./.test(setupText));
 check('setup states what the challenge does NOT claim',
   /does not claim to balance hormones/i.test(setupText) && /treat any medical condition/i.test(setupText));
-check('setup shows 84 days / 12 weeks / ~3 cycles',
-  /84 days/.test(setupText) && /12 weeks/.test(setupText) && /3 cycles/.test(setupText));
+// ── Duration selector ──
+check('setup offers both durations',
+  (await page.locator('.hh-duration').count()) === 2);
+check('the options read "8 Weeks — Standard" and "12 Weeks — Recommended"',
+  /8 Weeks — Standard/.test(setupText) && /12 Weeks — Recommended/.test(setupText));
+check('each option states its day count', /56 days/.test(setupText) && /84 days/.test(setupText));
+check('the required blurbs are shown',
+  /Build the foundations and compare how your cycle responds\./.test(setupText) &&
+  /Give the habits more time and get a clearer picture across multiple cycles\./.test(setupText));
+check('12 weeks is highlighted as Recommended and pre-selected',
+  /Recommended/.test(setupText) &&
+  /12 Weeks/.test(await page.locator('.hh-duration.active').textContent()));
+check('setup says the two versions are otherwise identical',
+  /exactly the\s+same in both/.test(setupText.replace(/\s+/g, ' ')) ||
+  /are exactly the same in both/.test(setupText.replace(/\s+/g, ' ')));
+check('setup says the longer version is not harder',
+  /longer version is not harder/i.test(setupText));
+check('setup does not assume a fixed number of cycles',
+  /Cycle length varies/i.test(setupText) &&
+  /compares whatever cycles you actually logged/i.test(setupText));
+check('12 weeks shows three stages by default',
+  (await page.locator('.hh-stage').count()) === 3);
+// Switching to 8 weeks updates the framing without changing any requirement.
+const before12 = await page.evaluate(() =>
+  [...document.querySelectorAll('.tpl-task-list li')].map(x => x.textContent).join('|'));
+await page.locator('.hh-duration', { hasText: '8 Weeks' }).click();
+await page.waitForTimeout(250);
+const after8 = await page.evaluate(() =>
+  [...document.querySelectorAll('.tpl-task-list li')].map(x => x.textContent).join('|'));
+check('choosing 8 weeks changes NO daily or weekly requirement', before12 === after8);
+check('8 weeks shows two stages', (await page.locator('.hh-stage').count()) === 2);
+check('8 weeks is framed as the minimum recommended version',
+  /minimum recommended version/i.test(await page.textContent('.hh-setup')));
+await page.locator('.hh-duration', { hasText: '12 Weeks' }).click();
+await page.waitForTimeout(200);
 check('setup explains the three stages',
   /Cycle 1 — Baseline/.test(setupText) && /Cycle 2 — Improvement/.test(setupText) && /Cycle 3 — Consolidation/.test(setupText));
 check('setup lists the daily habits with XP and marks the keystone',
@@ -136,7 +173,7 @@ await init('girlfriend');
 await startHormoneHealth();
 let p = await prof();
 check('the attempt is created', p.activeChallenge.templateId === 'womens_hormone_health' && p.challengeStart === TODAY);
-check('it is 84 days long', p.activeChallenge.durationDays === 84);
+check('the default attempt is 84 days', p.activeChallenge.durationDays === 84);
 check('the attempt carries its own config block', !!p.activeChallenge.hormoneHealth);
 check('the safety acknowledgment is recorded', p.activeChallenge.hormoneHealth.acknowledgedSafety === true);
 check('weekly requirements are stored on the attempt',
@@ -145,6 +182,39 @@ check('exercise is 3 per week, omega-3 is 2, iron-rich is 4', (() => {
   const byId = Object.fromEntries(p.activeChallenge.weeklyRequirementDefs.map(d => [d.id, d.perWeek]));
   return byId.hh_exercise === 3 && byId.hh_omega3 === 2 && byId.hh_iron === 4;
 })());
+
+// ══ An 8-week attempt is identical apart from its length ═══════════════════
+const twelveTasks = JSON.stringify(p.tasks.map(t => ({ id: t.id, name: t.name, xp: t.xp, keystone: t.keystone })));
+const twelveWeekly = JSON.stringify(p.activeChallenge.weeklyRequirementDefs);
+await init('girlfriend');
+await startHormoneHealth(8);
+const p8 = await prof();
+check('choosing 8 Weeks creates a 56-day attempt', p8.activeChallenge.durationDays === 56);
+check('the attempt records the chosen length', p8.activeChallenge.hormoneHealth.durationDays === 56);
+check('its daily habits are identical to the 12-week version',
+  JSON.stringify(p8.tasks.map(t => ({ id: t.id, name: t.name, xp: t.xp, keystone: t.keystone }))) === twelveTasks);
+check('its weekly requirements are identical',
+  JSON.stringify(p8.activeChallenge.weeklyRequirementDefs) === twelveWeekly);
+check('sleep is still the keystone at the same XP',
+  p8.tasks.find(t => t.keystoneHabit)?.id === 'hh_sleep' && p8.tasks.find(t => t.id === 'hh_sleep').xp === 40);
+await gotoTab('Today');
+check('the 8-week attempt shows "of 56"', /of 56/.test(await page.textContent('.day-selector')));
+check('it renders the same six daily tasks', (await page.locator('.gf-task-card').count()) === 6);
+check('it has the same three weekly requirements', (await page.locator('.wr-row').count()) === 3);
+check('the same panel, guidance and check-in are available',
+  (await page.locator('.hh-panel').count()) === 1 && (await page.locator('.hh-period-btn').count()) === 1);
+await page.locator('.hh-block-toggle', { hasText: 'Cycle progress' }).click();
+await page.waitForTimeout(300);
+const p8panel = await page.textContent('.hh-panel');
+check('an 8-week attempt shows two cycle stages',
+  /Cycle 1 — Baseline/.test(p8panel) && /Cycle 2 — Improvement/.test(p8panel) &&
+  !/Cycle 3 — Consolidation/.test(p8panel));
+
+// Back to the 12-week attempt for the remainder of the suite.
+await init('girlfriend');
+await startHormoneHealth();
+p = await prof();
+await gotoTab('Today');
 
 // ══ Daily habits ════════════════════════════════════════════════════════════
 const names = p.tasks.map(t => t.name);

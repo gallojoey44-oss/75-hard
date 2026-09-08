@@ -11,8 +11,8 @@ import { getTodayStr, formatDateShort } from '../utils/dateUtils';
  *
  * The symptom check-in is the only thing that appears by default, and only as a
  * single unobtrusive prompt — there is no daily questionnaire. Everything else
- * (three-cycle progress, the exercise rule, comfort tools, supplements, safety)
- * is collapsed until asked for.
+ * (cycle progress, the exercise rule, comfort tools, supplements, safety) is
+ * collapsed until asked for.
  *
  * All copy and thresholds come from hormoneHealthConfig; this component holds no
  * challenge constants.
@@ -37,7 +37,9 @@ export default function HormoneHealthPanel() {
   const today = getTodayStr();
   const log = getCycleLog(today);
   const cycles = getCycles();
-  const stages = cycleProgress(cycles);
+  // Stages follow the attempt's chosen length, extended to cover any extra
+  // cycles actually logged — cycle length varies, so the count is never assumed.
+  const stages = cycleProgress(cycles, HH.stagesForDuration(cfg.durationDays || meta.durationDays, cycles.length));
   const changes = compareCycles(cycles);
   const flags = safetyFlags(cycles, profile?.cycleLogs);
   const impact = log ? lifeImpactForLog(log) : null;
@@ -160,12 +162,12 @@ export default function HormoneHealthPanel() {
         )}
       </div>
 
-      {/* ── Three-cycle progress ── */}
+      {/* ── Cycle progress ── */}
       <div className="hh-block">
         <button className="hh-block-toggle" onClick={() => setOpenProgress(v => !v)}>
           <span className="hh-block-title">📈 Cycle progress</span>
           <span className="hh-block-meta">
-            {cycles.length ? `${cycles.length} of ${HH.CYCLES_COVERED} logged` : 'no cycles logged yet'}
+            {cycles.length ? `${cycles.length} logged` : 'no cycles logged yet'}
           </span>
           <span className="hh-caret">{openProgress ? '▾' : '▸'}</span>
         </button>

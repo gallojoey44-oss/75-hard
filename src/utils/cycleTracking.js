@@ -5,7 +5,7 @@ import {
 } from '../data/hormoneHealthConfig';
 
 /**
- * Menstrual symptom check-ins, Life Impact scoring and three-cycle comparison.
+ * Menstrual symptom check-ins, Life Impact scoring and cycle-to-cycle comparison.
  *
  * Scope, deliberately narrow: this is used ONLY by the Women's Hormone Health
  * challenge. There is no global cycle tracking, Forge never infers a cycle
@@ -216,11 +216,15 @@ export function compareCycles(cycles) {
 }
 
 /**
- * The three-cycle progress view: each stage with its cycle data (or null when
- * that cycle has not happened yet).
+ * The cycle progress view: each stage with its cycle data (or null when that
+ * cycle has not happened yet).
+ *
+ * `stages` lets the caller pass a duration-appropriate list — an 8-week attempt
+ * shows fewer stages than a 12-week one, and both extend if the user actually
+ * logs more cycles than expected. Defaults to the full ladder.
  */
-export function cycleProgress(cycles) {
-  return CYCLE_STAGES.map(stage => ({
+export function cycleProgress(cycles, stages = CYCLE_STAGES) {
+  return (stages || CYCLE_STAGES).map(stage => ({
     ...stage,
     cycleData: (cycles || []).find(c => c.index === stage.cycle) || null,
   }));

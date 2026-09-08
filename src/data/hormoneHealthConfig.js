@@ -1,11 +1,11 @@
 import { HABIT_KEYS } from './habitKeys';
 
 /**
- * Women's Hormone Health — 84 days / 12 weeks.
+ * Women's Hormone Health — 8 or 12 weeks.
  *
  * EVERYTHING challenge-specific lives in this file: the daily and weekly
  * requirements, XP weighting, symptom check-in fields, Life Impact scoring, the
- * three-cycle stages, the educational copy and the medical-safety thresholds.
+ * durations, the cycle stages, the educational copy and the safety thresholds.
  * The template entry, setup screen, challenge panel and completion summary are
  * all generated from the constants below.
  *
@@ -34,12 +34,60 @@ export const IDENTITY = {
 };
 
 // ── Duration ────────────────────────────────────────────────────────────────
-// Fixed at 84 days — roughly three menstrual cycles — so progress is judged on a
-// trend rather than on one period. No shorter versions.
-export const DURATION_DAYS = 84;
-export const CYCLES_COVERED = 3;
+// Two lengths. The habits, XP, exercise philosophy, nutrition, symptom tracking
+// and safety guidance are IDENTICAL between them — the longer version is not
+// harder, it simply gives the habits more time to settle and usually yields more
+// cycle observations to compare.
+export const DURATIONS = [56, 84];
+export const DEFAULT_DURATION = 84;          // 12 weeks — the recommended option
 
-// ── The three stages ────────────────────────────────────────────────────────
+export const DURATION_OPTIONS = [
+  {
+    days: 56,
+    weeks: 8,
+    label: 'Standard',
+    headline: '8 Weeks — Standard',
+    blurb: 'Build the foundations and compare how your cycle responds.',
+    detail: 'The minimum recommended version. Long enough to build the core habits and, for many people, to capture a first cycle-to-cycle comparison.',
+    // Roughly how many cycles this tends to cover. A guide for the UI only —
+    // never used to assume how many cycles actually happened, because cycle
+    // length varies from person to person.
+    typicalCycles: 2,
+  },
+  {
+    days: 84,
+    weeks: 12,
+    label: 'Recommended',
+    headline: '12 Weeks — Recommended',
+    blurb: 'Give the habits more time and get a clearer picture across multiple cycles.',
+    detail: 'The clearest read on whether this is actually helping. More time for the habits to become established, and usually more cycle observations — which is what separates a genuine trend from normal month-to-month variation.',
+    typicalCycles: 3,
+  },
+];
+
+export const DURATION_LABELS = Object.fromEntries(DURATION_OPTIONS.map(o => [o.days, o.label]));
+export const COMPLETION_BONUS_BY_DURATION = { 56: 800, 84: 1200 };
+
+/** The option metadata for a duration, defaulting to the recommended one. */
+export function durationOption(days) {
+  return DURATION_OPTIONS.find(o => o.days === days) || DURATION_OPTIONS.find(o => o.days === DEFAULT_DURATION);
+}
+
+/**
+ * Roughly how many cycles a duration TENDS to cover.
+ *
+ * A display hint only. Cycle length varies, so the challenge never assumes a
+ * number of cycles occurred — every comparison is built from the cycles the user
+ * actually logged.
+ */
+export function typicalCycles(durationDays) {
+  return durationOption(durationDays).typicalCycles;
+}
+
+// ── Cycle stages ────────────────────────────────────────────────────────────
+// The ladder of stages. How many are SHOWN follows the chosen duration and the
+// cycles actually logged (see stagesForDuration) — a short cycle can produce a
+// third period inside 8 weeks, and that is never hidden.
 export const CYCLE_STAGES = [
   { cycle: 1, label: 'Baseline', title: 'Cycle 1 — Baseline / Foundation',
     blurb: 'Establish the habits and get an honest picture of your current symptoms. Nothing here is a test — this is the measurement you compare against.' },
@@ -48,6 +96,23 @@ export const CYCLE_STAGES = [
   { cycle: 3, label: 'Consolidation', title: 'Cycle 3 — Consolidation',
     blurb: 'Is the change holding? One good cycle can be luck. Two in a row is a trend.' },
 ];
+
+/**
+ * The stages to display for a duration, extended to cover any extra cycles the
+ * user actually logged. Never fewer than the cycles they have — a fourth cycle
+ * gets a stage rather than disappearing.
+ */
+export function stagesForDuration(durationDays, loggedCycles = 0) {
+  const want = Math.max(typicalCycles(durationDays), loggedCycles, 1);
+  const out = [];
+  for (let n = 1; n <= want; n++) {
+    out.push(CYCLE_STAGES[n - 1] || {
+      cycle: n, label: `Cycle ${n}`, title: `Cycle ${n}`,
+      blurb: 'Another cycle of data to compare against the ones before it.',
+    });
+  }
+  return out;
+}
 
 // ── XP weighting ────────────────────────────────────────────────────────────
 // Forge's existing scale (keystones 40, supporting tasks 10–25). Priority, per
@@ -276,13 +341,15 @@ export const WHY = {
   [HABIT_KEYS.HYDRATION]: 'Ordinary hydration supports energy and comfort. Your normal target is the target — no special products needed.',
   [HABIT_KEYS.OMEGA3_FOODS]: 'Fatty fish provides omega-3 fats, which have some evidence for menstrual pain. Food first, because whole fish brings protein and micronutrients with it.',
   [HABIT_KEYS.IRON_RICH_FOODS]: 'Menstrual bleeding loses iron. Regularly eating iron-rich food helps maintain your stores — and if your flow is heavy, it is worth asking a professional about testing.',
-  [HABIT_KEYS.SYMPTOM_CHECKIN]: 'A short check-in on menstrual days is what makes the three-cycle comparison possible. Without it there is nothing to compare.',
+  [HABIT_KEYS.SYMPTOM_CHECKIN]: 'A short check-in on menstrual days is what makes the cycle-to-cycle comparison possible. Without it there is nothing to compare.',
 };
 
 // ── Setup ───────────────────────────────────────────────────────────────────
 /** The editable configuration a new attempt starts from. */
 export function defaultSetup() {
   return {
+    // 12 weeks by default — the recommended option.
+    durationDays: DEFAULT_DURATION,
     sleepHours: SLEEP_TARGET.suggested,
     stepTarget: STEP_TARGET.suggested,
     stressMinutes: STRESS_MINUTES.suggested,
@@ -372,11 +439,14 @@ export function buildChallengeMeta(setup = defaultSetup()) {
     emoji: IDENTITY.emoji,
     subtitle: IDENTITY.subtitle,
     variant: 'standard',
-    durationDays: DURATION_DAYS,
+    // Either length. The requirements are identical — only the time available to
+    // build the habits and observe cycles differs.
+    durationDays: DURATIONS.includes(s.durationDays) ? s.durationDays : DEFAULT_DURATION,
     templateVersion: 1,
-    completionBonusXP: 1200,
+    completionBonusXP: COMPLETION_BONUS_BY_DURATION[s.durationDays] || COMPLETION_BONUS_BY_DURATION[DEFAULT_DURATION],
     // The attempt's own copy of its configuration.
     hormoneHealth: {
+      durationDays: DURATIONS.includes(s.durationDays) ? s.durationDays : DEFAULT_DURATION,
       sleepHours: s.sleepHours,
       stepTarget: s.stepTarget,
       stressMinutes: s.stressMinutes,

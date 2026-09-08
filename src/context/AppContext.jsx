@@ -1341,7 +1341,7 @@ export function AppProvider({ children }) {
     });
     const trend = computeWithinChallengeTrend(days, entry.endDayNum);
 
-    // Women's Hormone Health: the three-cycle comparison. Built from the
+    // Women's Hormone Health: the cycle-to-cycle comparison. Built from the
     // archived check-ins only — nothing is estimated, and a metric without real
     // values at both ends simply does not appear.
     const cycleSummary = (() => {
