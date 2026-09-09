@@ -60,20 +60,62 @@ const DEFAULT_TASKS_GF = [
   { ...DAILY_LOG_TASK, order: 12 },
 ];
 
-// Legacy profiles (before v3.4.0) have no activeChallenge descriptor —
-// they are always the original 75-day discipline challenge.
-export const DEFAULT_CHALLENGE_META = {
-  templateId: '75_day_discipline_challenge',
+export const DISCIPLINE_75_ID = '75_day_discipline_challenge';
+
+/**
+ * The 75-Day Discipline Challenge descriptor.
+ *
+ * This is ONE challenge in the library, not a default. It is used in exactly two
+ * places: when the user explicitly starts 75-Day, and to describe a legacy
+ * profile (pre-v3.4.0) that has a running challengeStart but no descriptor —
+ * those genuinely were the original 75-day challenge.
+ *
+ * It must NEVER be used as a fallback for "no active challenge". Forge began
+ * as a 75 Hard app, and that legacy assumption is what silently manufactured a
+ * phantom 75-Day attempt whenever a challenge ended.
+ */
+export const DISCIPLINE_75_META = {
+  templateId: DISCIPLINE_75_ID,
   name: '75-Day Discipline Challenge',
   emoji: '🔥',
   variant: null,
   durationDays: 75,
-  // Challenge Performance config (applied to newly started default challenges;
-  // existing active challenges keep whatever they were started with).
   passingScore: 80,
   keystoneRequirement: 70,
   completionBonusXP: 2500,
 };
+
+/**
+ * Scoring defaults for a NEWLY started attempt, applied only under whatever the
+ * chosen template supplies. Deliberately carries no identity and no duration —
+ * a new attempt's templateId, name, emoji, variant and durationDays must come
+ * from the selected challenge, so nothing can leak in from a previous one.
+ */
+const NEW_ATTEMPT_DEFAULTS = {
+  variant: null,
+  durationDays: null,
+  passingScore: DEFAULT_PASSING_SCORE,
+  keystoneRequirement: DEFAULT_KEYSTONE_REQUIREMENT,
+  completionBonusXP: 0,
+};
+
+/**
+ * The 75-Day Discipline Challenge's own daily task set.
+ *
+ * The 75-day template describes its variants in prose rather than as start_tasks,
+ * so its task list is these per-profile defaults. Naming them explicitly is what
+ * lets a 75-Day start install ITS OWN tasks instead of inheriting whatever the
+ * previous challenge left in the profile.
+ */
+export function discipline75Tasks(profId) {
+  const base = profId === 'girlfriend' ? DEFAULT_TASKS_GF : DEFAULT_TASKS_ME;
+  return base.map(t => ({ ...t }));
+}
+
+/** Task ids that legitimately belong to a 75-Day attempt (either profile). */
+const DISCIPLINE_75_TASK_IDS = new Set(
+  [...DEFAULT_TASKS_ME, ...DEFAULT_TASKS_GF].map(t => t.id),
+);
 
 const DEFAULT_QUOTE_SETTINGS = {
   enabledSources: [...SOURCES],
@@ -181,16 +223,21 @@ function saveLS(key, value) {
  * Safe migration — never removes or overwrites user data.
  * Runs once at startup.
  */
-function migrateProfiles(stored) {
+export function migrateProfiles(stored, days = {}) {
   const profiles = { ...stored };
   let changed = false;
 
   // Task-list migrations only apply to the original 75-day challenge —
   // profiles running a template challenge (e.g. Mental Training Phase) manage
-  // their task list through the template, not these defaults.
+  // their task list through the template, not these defaults. A profile with no
+  // challenge at all is NOT the 75-day challenge, so it is excluded: that
+  // "absent means 75-day" reading only holds for a legacy attempt, which by
+  // definition has a running start date.
   const onDefaultChallenge = (profId) => {
-    const meta = profiles[profId]?.activeChallenge;
-    return !meta || meta.templateId === '75_day_discipline_challenge';
+    const prof = profiles[profId];
+    const meta = prof?.activeChallenge;
+    if (meta) return meta.templateId === DISCIPLINE_75_ID;
+    return !!prof?.challengeStart;
   };
 
   // Ensure both profile slots always exist
@@ -483,6 +530,53 @@ function migrateProfiles(stored) {
     }
   }
 
+  // ── Repair: a 75-Day attempt that was auto-created by the old Start New
+  // Challenge flow ────────────────────────────────────────────────────────────
+  // The old startChallenge() treated a missing descriptor as "the default
+  // challenge" (75-Day) and a missing task list as "keep what's already there",
+  // so archiving a challenge and starting a new one manufactured a 75-Day
+  // attempt sitting on the PREVIOUS challenge's tasks.
+  //
+  // This repairs only attempts that provably came from that bug, using three
+  // independent signals that a genuine start cannot produce together:
+  //
+  //   1. no Future Self Letter — every challenge started from the library goes
+  //      through the letter step, so its absence means no one chose this;
+  //   2. zero logged days — nothing has ever been recorded under it, so there is
+  //      no history, XP or score to lose (and nothing to archive: it is dropped,
+  //      never written into the archives as a completed attempt);
+  //   3. the task list holds template tasks belonging to a DIFFERENT challenge —
+  //      the hybrid state itself.
+  //
+  // Custom (user-added) tasks are ignored by signal 3, so a user who customized
+  // their 75-Day list is never caught by it. Archives, lifetime XP and rank are
+  // not touched: the profile simply returns to no-active-challenge and the user
+  // picks what they actually want.
+  for (const profId of ['me', 'girlfriend']) {
+    const prof = profiles[profId];
+    const meta = prof?.activeChallenge;
+    if (!prof || meta?.templateId !== DISCIPLINE_75_ID) continue;
+    if (meta.futureSelfLetter) continue;                       // intentionally started
+    if (Object.keys(days?.[profId] || {}).length > 0) continue; // has real history
+    const leaked = (prof.tasks || []).some(
+      t => t?.source === 'template' && !DISCIPLINE_75_TASK_IDS.has(t.id),
+    );
+    if (!leaked) continue;                                      // consistent attempt
+
+    profiles[profId] = {
+      ...prof,
+      challengeStart: null,
+      activeChallenge: null,
+      supportChallenge: null,
+      supportChallengeStart: null,
+      tasks: FORGE_DAILY_TASKS.map((t, i) => ({ ...t, source: 'template', order: i, challenges: [LANE.PRIMARY] })),
+      bonusMissions: [],
+      xpOffset: 0,
+      xpStartDay: 1,
+    };
+    changed = true;
+  }
+
   // Task provenance defaults to the primary lane. A task written before the
   // Challenge Combination feature — template or user-added — belongs to the one
   // challenge that was running, so tagging it primary is exactly what it already
@@ -570,7 +664,7 @@ const AppContext = createContext(null);
 export function AppProvider({ children }) {
   const [activeProfile, setActiveProfileState] = useState(() => loadLS('activeProfile', null));
   const [profiles, setProfilesState] = useState(() =>
-    migrateProfiles(loadLS('profiles', makeDefaultProfiles()))
+    migrateProfiles(loadLS('profiles', makeDefaultProfiles()), loadLS('allDays', { me: {}, girlfriend: {} }))
   );
   const [allDays, setAllDaysState] = useState(() => migrateAllDays(loadLS('allDays', { me: {}, girlfriend: {} })));
   // Per-date quote data: { me: { '2024-01-15': { cycleOffset, reflectionNotes, reflectionComplete } }, girlfriend: {} }
@@ -706,8 +800,31 @@ export function AppProvider({ children }) {
   const profile = profiles[activeProfile] || null;
   const days = (activeProfile && allDays[activeProfile]) || {};
 
+  /**
+   * The active challenge descriptor.
+   *
+   * "No active challenge" is a first-class state and resolves to the Forge Daily
+   * baseline — never to 75-Day. The only case that still resolves to 75-Day is a
+   * legacy profile (pre-v3.4.0) with a real running start date but no stored
+   * descriptor, which genuinely was the original 75-day challenge.
+   */
   const getChallengeMeta = useCallback((profId = activeProfile) => {
-    return profiles[profId]?.activeChallenge || DEFAULT_CHALLENGE_META;
+    const prof = profiles[profId];
+    if (prof?.activeChallenge) return prof.activeChallenge;
+    if (prof?.challengeStart) return DISCIPLINE_75_META;   // legacy attempt
+    return FORGE_DAILY_META;                               // no active challenge
+  }, [activeProfile, profiles]);
+
+  /**
+   * True only when a REAL challenge is set up (running or scheduled). The Forge
+   * Daily baseline is not a challenge, so this is false there — it is the single
+   * predicate the UI uses to decide between "you have a challenge" and "choose
+   * one from the library".
+   */
+  const hasActiveChallenge = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    if (!prof?.challengeStart) return false;
+    return prof.activeChallenge?.templateId !== 'forge_daily';
   }, [activeProfile, profiles]);
 
   // Raw days since the challenge/baseline began — uncapped. Used to detect
@@ -902,7 +1019,7 @@ export function AppProvider({ children }) {
     // challenge in the user's history.
     if (isScheduled(prof)) return null;
 
-    const meta = prof.activeChallenge || DEFAULT_CHALLENGE_META;
+    const meta = prof.activeChallenge || DISCIPLINE_75_META;   // legacy attempt (has a start date, no descriptor)
     const dayNum = Math.min(getDayNumberFromStart(prof.challengeStart) || 1, meta.durationDays || 75);
     const xpData = computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum);
     const badges = computeBadges(allDays, profiles, profId, getDayCompletion, dayNum).map(b => b.id);
@@ -1085,6 +1202,15 @@ export function AppProvider({ children }) {
    *               tasks (the outgoing list is preserved in the archive entry)
    */
   const startChallenge = useCallback((profId = activeProfile, options = null) => {
+    // ── Activation is ALWAYS explicit ──────────────────────────────────────
+    // Selecting a challenge and activating one are separate actions. Without a
+    // chosen descriptor AND its own task set there is nothing to start, so this
+    // refuses rather than inventing an attempt. This is the structural reason a
+    // hybrid state (one challenge's metadata beside another's tasks) can no
+    // longer exist: both halves arrive together or neither is written.
+    if (!options?.challenge?.templateId) return false;
+    if (!options?.tasks?.length) return false;
+
     // Archive BOTH lanes before anything is replaced, so a stacked pair leaves
     // two independent records rather than losing the support challenge.
     const entry = buildArchiveEntry(profId);
@@ -1093,7 +1219,7 @@ export function AppProvider({ children }) {
     if (newEntries.length) {
       setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), ...newEntries] }));
     }
-    const meta = options?.challenge ? { ...DEFAULT_CHALLENGE_META, ...options.challenge } : { ...DEFAULT_CHALLENGE_META };
+    const meta = { ...NEW_ATTEMPT_DEFAULTS, ...options.challenge };
     // A setup-time Cold Exposure Upgrade is required from day one — pin its
     // activation to the challenge start (today) so date-aware grading matches.
 
@@ -1125,7 +1251,11 @@ export function AppProvider({ children }) {
         supportChallenge: null,
         supportChallengeStart: null,
         pendingPrimaryChoice: null,
-        ...(options?.tasks ? { tasks: options.tasks.map((t, i) => ({ ...t, source: 'template', order: i, challenges: [LANE.PRIMARY] })) } : {}),
+        // The new attempt's task list is generated from ITS OWN template/mode/
+        // duration/upgrades and REPLACES whatever was there. It is never merged
+        // with, or defaulted to, the outgoing challenge's list — that list has
+        // already been snapshotted into the archive entry above.
+        tasks: options.tasks.map((t, i) => ({ ...t, source: 'template', order: i, challenges: [LANE.PRIMARY] })),
         // Bonus Missions are per-challenge: seed from the new challenge (or clear).
         bonusMissions: (options?.bonusMissions || []).map((m, i) => ({ ...m, source: 'template', recurring: true, order: i })),
         xpOffset: 0,
@@ -1147,7 +1277,8 @@ export function AppProvider({ children }) {
       saveLS('weeklyReflections', next);
       return next;
     });
-  }, [activeProfile, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+    return true;
+  }, [activeProfile, buildArchiveEntry, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   // ── Support challenge lifecycle ───────────────────────────────────────────
 
@@ -1174,7 +1305,7 @@ export function AppProvider({ children }) {
     if (!canStack(primaryId, options.challenge.templateId)) return false;
 
     const startDate = options.startDate || getTodayStr();
-    const meta = { ...DEFAULT_CHALLENGE_META, ...options.challenge };
+    const meta = { ...NEW_ATTEMPT_DEFAULTS, ...options.challenge };
     if (hasWeeklyRequirements(meta) && !meta.weeklyRequirementsStartDate) {
       meta.weeklyRequirementsStartDate = startDate;
     }
@@ -1487,7 +1618,7 @@ export function AppProvider({ children }) {
       saveLS('weeklyReflections', next);
       return next;
     });
-  }, [activeProfile, profiles, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+  }, [activeProfile, profiles, buildArchiveEntry, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   /**
    * The SUPPORT challenge has run past its final day: archive it and clear the
@@ -1507,26 +1638,47 @@ export function AppProvider({ children }) {
   }, [activeProfile, setProfiles]);
 
   /**
-   * Activate Forge Daily — the permanent baseline. Archives any running
-   * challenge with logged data first (no loss). Used from the No Active
-   * Challenge state.
+   * Drop to Forge Daily — the app's NO ACTIVE CHALLENGE state.
+   *
+   * This is the whole of what "Start New Challenge" does to stored state: it
+   * archives the running attempt(s) exactly once and leaves the profile with no
+   * challenge. It deliberately does NOT instantiate anything — the user then
+   * picks a challenge from the library and configures it, and only that
+   * confirmation creates the next attempt.
+   *
+   * Forge Daily is open-ended (durationDays null), so this period is never
+   * counted as "Day 1 of" any challenge, and the user can keep logging while
+   * they decide. Archives, lifetime XP, rank and every previous attempt are
+   * untouched; only the live attempt's own slate is cleared.
    */
   const startForgeDaily = useCallback((profId = activeProfile) => {
-    const entry = buildArchiveEntry(profId);
-    if (entry) setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
+    // Both lanes are archived, so ending everything while a support challenge
+    // is stacked leaves two records rather than silently dropping the support.
+    const entries = [buildArchiveEntry(profId), buildSupportArchiveEntry(profId)].filter(Boolean);
+    if (entries.length) setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), ...entries] }));
     setProfiles(prev => ({
       ...prev,
       [profId]: {
         ...prev[profId],
         challengeStart: getTodayStr(),
         activeChallenge: { ...FORGE_DAILY_META },
-        tasks: FORGE_DAILY_TASKS.map((t, i) => ({ ...t, source: 'template', order: i })),
+        tasks: FORGE_DAILY_TASKS.map((t, i) => ({ ...t, source: 'template', order: i, challenges: [LANE.PRIMARY] })),
         bonusMissions: [],
+        // The support lane is chosen to complement one specific primary, so it
+        // never survives that primary ending. (Archived just above.)
+        supportChallenge: null,
+        supportChallengeStart: null,
+        pendingPrimaryChoice: null,
         xpOffset: 0,
         xpStartDay: 1,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
         comebackHistory: [],
         weeklySessions: [],
+        // Attempt-scoped logs. Archived with the attempt above, so a new slate
+        // here cannot leak one challenge's data into the next.
+        volumeSets: [],
+        exerciseLog: [],
+        cycleLogs: [],
       },
     }));
     setAllDays(prev => ({ ...prev, [profId]: {} }));
@@ -1556,7 +1708,7 @@ export function AppProvider({ children }) {
       [profId]: {
         ...prev[profId],
         challengeStart: entry.challengeStart,
-        activeChallenge: entry.challenge ? { ...entry.challenge } : { ...DEFAULT_CHALLENGE_META },
+        activeChallenge: entry.challenge ? { ...entry.challenge } : { ...DISCIPLINE_75_META },
         tasks: entry.tasks?.length ? entry.tasks : prev[profId].tasks,
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
         comebackHistory: entry.comebackHistory || [],
@@ -2340,7 +2492,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       activeProfile, profile, profiles, days, allDays, todayStr,
       setActiveProfile,
-      getChallengeMeta, getDayNumber, getRawDayNumber, isForgeDaily, getDayData, getTodayData,
+      getChallengeMeta, hasActiveChallenge, getDayNumber, getRawDayNumber, isForgeDaily, getDayData, getTodayData,
       completeChallenge, dismissCompletion, startForgeDaily,
       getDayCompletion, getStreak, getLongestStreak,
       updateDay, toggleTask,

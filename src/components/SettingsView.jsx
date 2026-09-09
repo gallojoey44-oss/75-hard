@@ -28,7 +28,7 @@ function exportData() {
 export default function SettingsView({ setView }) {
   const {
     activeProfile, profile, profiles, allDays,
-    updateProfile, startChallenge, setChallengeStart,
+    updateProfile, startForgeDaily, setChallengeStart,
     getChallengeMeta, getDayNumber, getDayCompletion,
     setActiveProfile,
     resetXP,
@@ -78,9 +78,14 @@ export default function SettingsView({ setView }) {
     setEditingName(false);
   }
 
+  // Start New Challenge = archive the current attempt and drop to the
+  // no-active-challenge state, then send the user to the Challenge Library to
+  // CHOOSE one. It never activates a challenge itself — selection, configuration
+  // and confirmation are the user's, and happen in the Challenges tab.
   function handleStartNew() {
-    startChallenge();
+    startForgeDaily();
     setShowStartNew(false);
+    setView('challenges');
   }
 
   function handleImport(e) {
@@ -422,8 +427,8 @@ export default function SettingsView({ setView }) {
         {/* Start challenge / Start new challenge */}
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {!profile?.challengeStart ? (
-            <button className="btn btn-primary btn-full" onClick={() => startChallenge()}>
-              Start Challenge Today
+            <button className="btn btn-primary btn-full" onClick={() => setView('challenges')}>
+              Choose a Challenge
             </button>
           ) : (
             <>
@@ -758,10 +763,17 @@ export default function SettingsView({ setView }) {
         <div className="modal-overlay" onClick={() => setShowStartNew(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h3>Start New Challenge?</h3>
-            <p>Your current challenge will be archived before starting fresh. Your historical data will still be used for lifetime trends and Insights.</p>
+            <p>
+              Your current challenge will be archived — days, XP, score, reflections and
+              metrics are all preserved. You&apos;ll then pick your next challenge from the
+              Challenge Library, and nothing starts until you confirm it.
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--text3)' }}>
+              Until then you&apos;re on Forge Daily, so you can keep logging while you decide.
+            </p>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setShowStartNew(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleStartNew}>Archive &amp; Start Fresh</button>
+              <button className="btn btn-primary" onClick={handleStartNew}>Archive &amp; Choose New</button>
             </div>
           </div>
         </div>

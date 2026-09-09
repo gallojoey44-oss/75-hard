@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, DISCIPLINE_75_META, discipline75Tasks } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
 import {
   METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK,
   applyColdExposureUpgrade, isColdExposureEnabled,
   getDefaultDuration, getDurationLabel, isRecommendedDuration,
-  getCompletionBonusForDuration, getProgramForDuration,
+  getCompletionBonusForDuration, getProgramForDuration, getTemplateById,
 } from '../data/challengeTemplates';
 import { formatDateLong, getTodayStr } from '../utils/dateUtils';
 import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
@@ -561,7 +561,16 @@ export default function ChallengesView({ setView }) {
       return;
     }
     if (ps.legacy75) {
-      startChallenge(undefined, { futureSelfLetter: letter, startDate });
+      // 75-Day Discipline is one library challenge like any other: it passes its
+      // own descriptor and its own task set explicitly. Nothing is implied by
+      // being "the default" — there is no default.
+      startChallenge(undefined, {
+        challenge: { ...DISCIPLINE_75_META },
+        tasks: discipline75Tasks(activeProfile),
+        bonusMissions: ps.template?.bonus_missions || [],
+        futureSelfLetter: letter,
+        startDate,
+      });
     } else {
       const variantDef = ps.template.variants[ps.variant];
       // Cold Exposure Upgrade applies only to Mental Training. The choice is
@@ -913,14 +922,14 @@ export default function ChallengesView({ setView }) {
         <div className="modal-overlay" onClick={() => setShowStartConfirm(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h3>Start 75-Day Discipline Challenge?</h3>
-            <p>Day 1 begins today. Your daily tasks and progress will be tracked automatically.</p>
+            <p>You&apos;ll write your Future Self Letter, then choose when Day 1 begins. Your daily tasks and progress are tracked from that date.</p>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setShowStartConfirm(false)}>Cancel</button>
               <button
                 className="btn btn-primary"
                 onClick={() => {
                   setShowStartConfirm(false);
-                  setPendingStart({ template: null, variant: null, durationDays: 75, step: 'letter', legacy75: true });
+                  setPendingStart({ template: getTemplateById(DISCIPLINE_75_META.templateId), variant: null, durationDays: 75, step: 'letter', legacy75: true });
                 }}
               >
                 Next: Your Why →

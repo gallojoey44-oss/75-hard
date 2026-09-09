@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, DISCIPLINE_75_META, discipline75Tasks } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
 import QuoteOfTheDay from './QuoteOfTheDay';
 import RankUpCeremony from './RankUpCeremony';
@@ -15,7 +15,7 @@ import {
 } from '../utils/gamification';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
-import { visibleNextGoals, getTemplateById, getCompletionBonusForDuration } from '../data/challengeTemplates';
+import { getTemplateById, getCompletionBonusForDuration } from '../data/challengeTemplates';
 import { WEEKLY_REQUIREMENT_DEFS } from '../utils/weeklyRequirements';
 import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { formatDateShort, dayNumberForDate } from '../utils/dateUtils';
@@ -266,31 +266,6 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
           <button className={`btn btn-full ${onRetry ? 'btn-ghost' : 'btn-primary'}`} onClick={onStartNew}>Start New Challenge</button>
           <button className="btn btn-ghost btn-full" onClick={onViewArchive}>Review Performance / Archive</button>
           <button className="btn btn-ghost btn-full" onClick={onContinue}>Return to Forge Daily</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── "What's your next goal?" chooser ─────────────────────────────────────────
-
-function NextGoalChooser({ profileId, onPick, onClose }) {
-  const goals = visibleNextGoals(profileId);
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card next-goal-modal" onClick={e => e.stopPropagation()}>
-        <h3>What&apos;s your next goal?</h3>
-        <p style={{ marginBottom: 12 }}>A new chapter — not starting from scratch. Pick what you want to build next.</p>
-        <div className="next-goal-grid">
-          {goals.map(g => (
-            <button key={g.id} className="next-goal-btn" onClick={() => onPick(g)}>
-              <span className="next-goal-emoji">{g.emoji}</span>
-              <span className="next-goal-label">{g.label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Not now</button>
         </div>
       </div>
     </div>
@@ -693,7 +668,6 @@ export default function Dashboard({ setView }) {
   const [showSwitch, setShowSwitch] = useState(false);
   const [showRankDetails, setShowRankDetails] = useState(false);
   const [showRankLadder, setShowRankLadder] = useState(false);
-  const [showNextGoal, setShowNextGoal] = useState(false);
   const [xpAnim, setXpAnim] = useState(null);
   const [rankCeremony, setRankCeremony] = useState(null);
   const prevXpRef = useRef(null);
@@ -764,14 +738,28 @@ export default function Dashboard({ setView }) {
         tasks: tpl.variants[s.variant].start_tasks,
         bonusMissions: tpl.bonus_missions || [],
       });
+    } else if (s?.templateId === DISCIPLINE_75_META.templateId) {
+      startChallenge(undefined, {
+        challenge: { ...DISCIPLINE_75_META },
+        tasks: discipline75Tasks(activeProfile),
+        bonusMissions: tpl?.bonus_missions || [],
+      });
     } else {
-      startChallenge(); // legacy / default challenge
+      // Anything else (a configured challenge, an unknown template) cannot be
+      // rebuilt from the summary alone, and Forge never substitutes a different
+      // challenge for the one the user asked to retry. Send them to the library
+      // to start it deliberately instead.
+      setView('challenges');
+      return;
     }
     setView('today');
   }
 
-  function pickNextGoal(goal) {
-    setShowNextGoal(false);
+  // "Start New Challenge" navigates to the Challenge Library and nothing else.
+  // Choosing a challenge, configuring it and confirming it are separate,
+  // deliberate steps that happen there — no challenge is ever activated here.
+  function goToLibrary() {
+    if (profile?.lastCompletion) dismissCompletion();
     setView('challenges');
   }
 
@@ -869,7 +857,7 @@ export default function Dashboard({ setView }) {
             <button className="btn btn-primary btn-full" onClick={() => promoteSupportToPrimary()}>
               Promote {primaryChoice.supportName} to Primary
             </button>
-            <button className="btn btn-secondary btn-full" onClick={() => { clearPrimaryChoice(); setShowNextGoal(true); }}>
+            <button className="btn btn-secondary btn-full" onClick={() => { clearPrimaryChoice(); goToLibrary(); }}>
               Choose a new Primary Challenge
             </button>
             <button className="btn btn-ghost btn-full" onClick={() => clearPrimaryChoice()}>
@@ -879,12 +867,11 @@ export default function Dashboard({ setView }) {
         )}
         <ChallengeComplete
           summary={completionSummary}
-          onStartNew={() => setShowNextGoal(true)}
+          onStartNew={() => goToLibrary()}
           onViewArchive={() => setView('settings')}
           onContinue={() => dismissCompletion()}
           onRetry={profile.lastCompletion?.templateId ? handleRetry : null}
         />
-        {showNextGoal && <NextGoalChooser profileId={activeProfile} onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
       </>
     );
   }
@@ -935,14 +922,13 @@ export default function Dashboard({ setView }) {
           <div className="start-challenge-emoji">🔥</div>
           <h2>No Active Challenge</h2>
           <p>Continue building yourself with Forge Daily — light daily habits that keep your streak alive.</p>
-          <button className="btn btn-primary btn-full" onClick={() => setShowNextGoal(true)}>
+          <button className="btn btn-primary btn-full" onClick={() => goToLibrary()}>
             Start New Challenge
           </button>
           <button className="btn btn-ghost btn-full" style={{ marginTop: 8 }} onClick={() => startForgeDaily()}>
             🔥 Start Forge Daily
           </button>
         </div>
-        {showNextGoal && <NextGoalChooser profileId={activeProfile} onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
       </div>
     );
   }
@@ -989,7 +975,7 @@ export default function Dashboard({ setView }) {
           <div className="ncb-text">
             <strong>No Active Challenge.</strong> Continue building yourself with Forge Daily.
           </div>
-          <button className="btn btn-primary" onClick={() => setShowNextGoal(true)}>Start New Challenge</button>
+          <button className="btn btn-primary" onClick={() => goToLibrary()}>Start New Challenge</button>
         </div>
       )}
 
@@ -1217,8 +1203,6 @@ export default function Dashboard({ setView }) {
       <button className="btn btn-primary btn-full" onClick={() => setView('today')}>
         ✅ Log Today →
       </button>
-
-      {showNextGoal && <NextGoalChooser profileId={activeProfile} onPick={pickNextGoal} onClose={() => setShowNextGoal(false)} />}
     </div>
   );
 }
