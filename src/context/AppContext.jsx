@@ -19,7 +19,7 @@ import {
   compareCycles, safetyFlags, persistentSymptomsAtCompletion,
 } from '../utils/cycleTracking';
 import { HORMONE_HEALTH_TEMPLATE_ID } from '../data/hormoneHealthConfig';
-import { ENERGY_RESET_TEMPLATE_ID, LAGGED_HABIT_KEYS } from '../data/energyResetConfig';
+import { ENERGY_RESET_TEMPLATE_ID, LAGGED_HABIT_KEYS, windowForDuration, insightDepth } from '../data/energyResetConfig';
 import { buildEnergySummary } from '../utils/energyTracking';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
@@ -1480,18 +1480,29 @@ export function AppProvider({ children }) {
     });
     const trend = computeWithinChallengeTrend(days, entry.endDayNum);
 
-    // 10-Day Energy Reset: the before/after energy result. Built only from the
-    // ratings the user actually logged — a day they skipped is absent, not zero,
-    // and when there is not enough data the screen says so rather than inventing
-    // a change. Associations are observational and worded as such.
+    // Energy Reset: the early-days vs final-days energy result. Built only from
+    // the ratings the user actually logged — a day they skipped is absent, not
+    // zero, and when there is not enough data the screen says so rather than
+    // inventing a change. Associations are observational and worded as such.
+    //
+    // The comparison window and how many patterns are surfaced both scale with
+    // the length the user chose: a 30-day run compares a week against a week and
+    // can show a trajectory, while a 7-day run compares three days against
+    // three. The evidence bar for a pattern is the same at every length.
     const energySummary = (() => {
       if (entry.challenge?.templateId !== ENERGY_RESET_TEMPLATE_ID) return null;
+      const durationDays = entry.challenge?.durationDays || entry.endDayNum;
+      const depth = insightDepth(durationDays);
       return buildEnergySummary({
         days,
         endDayNum: entry.endDayNum,
         tasks: entry.tasks || [],
         baseline: entry.challenge?.energyReset?.baseline || null,
         lagKeys: LAGGED_HABIT_KEYS,
+        windowSize: windowForDuration(durationDays),
+        maxAssociations: depth.maxAssociations,
+        trajectory: depth.trajectory,
+        depthNote: depth.note,
       });
     })();
 

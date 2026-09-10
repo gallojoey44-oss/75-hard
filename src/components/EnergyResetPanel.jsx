@@ -4,7 +4,7 @@ import * as ER from '../data/energyResetConfig';
 import { energyComparison, ratedDays, ENERGY_FIELDS } from '../utils/energyTracking';
 
 /**
- * ⚡ The 10-Day Energy Reset daily panel.
+ * ⚡ The Energy Reset daily panel.
  *
  * The energy ratings are the first thing on the screen and the only thing open
  * by default — three taps, no scrolling, no questionnaire. Everything else (the
@@ -25,6 +25,10 @@ export default function EnergyResetPanel() {
   const cfg = ER.erConfig(meta);
   if (!cfg) return null;                       // not an Energy Reset attempt
 
+  // The attempt's own length — never a module constant, so a running challenge
+  // keeps the duration it was started with.
+  const duration = meta.durationDays || cfg.durationDays || ER.DEFAULT_DURATION;
+
   const dayNum = getRawDayNumber();
   if (!dayNum) return null;                    // scheduled, not begun
 
@@ -32,7 +36,10 @@ export default function EnergyResetPanel() {
   const today = getDayData(capped) || {};
   const days = (allDays[activeProfile] || {});
   const rated = ratedDays(days, capped);
-  const trend = energyComparison({ days, endDayNum: capped, baseline: cfg.baseline });
+  const trend = energyComparison({
+    days, endDayNum: capped, baseline: cfg.baseline,
+    windowSize: ER.windowForDuration(duration),
+  });
 
   const setRating = (key, value) =>
     updateDay(capped, { [key]: today[key] === value ? 0 : value });
@@ -43,7 +50,7 @@ export default function EnergyResetPanel() {
     <div className="er-panel">
       <div className="er-panel-head">
         <span className="er-panel-title">{ER.IDENTITY.emoji} {ER.IDENTITY.shortName}</span>
-        <span className="er-panel-sub">Day {capped} of {ER.DURATION_DAYS}</span>
+        <span className="er-panel-sub">Day {capped} of {duration} · {ER.durationOption(duration).label}</span>
       </div>
 
       {/* ── The ratings — always open, three taps ── */}
@@ -110,7 +117,7 @@ export default function EnergyResetPanel() {
                   </span>
                 </div>
               ))}
-              <div className="er-note">Still in progress — the full result comes on Day {ER.DURATION_DAYS}.</div>
+              <div className="er-note">Still in progress — the full result comes on Day {duration}.</div>
             </>
           ) : (
             <div className="er-note">

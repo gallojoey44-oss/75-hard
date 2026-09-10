@@ -2,41 +2,166 @@ import { HABIT_KEYS } from './habitKeys';
 import { ENERGY_FIELDS, ENERGY_SCALE } from '../utils/energyTracking';
 
 /**
- * ⚡ 10-Day Energy Reset — the complete challenge definition.
+ * ⚡ Energy Reset — the complete challenge definition.
  *
- * Everything challenge-specific lives here: the identity, the daily habits and
- * their XP weighting, the weekly exercise requirement, the education copy and
- * the completion-insight wiring. The template entry, the setup screen, the daily
- * panel and the completion block are all generated from these constants, so the
- * challenge is edited here rather than across the codebase.
+ * Everything challenge-specific lives here: the identity, the four durations,
+ * the daily habits and their XP weighting, the weekly exercise requirement, the
+ * education copy and the completion-insight wiring. The template entry, the
+ * setup screen, the daily panel and the completion block are all generated from
+ * these constants, so the challenge is edited here rather than across the
+ * codebase.
  *
- * What makes it different from Forge's longer challenges is the length and the
- * measurement: ten days is short enough to start today, and long enough that a
- * before/after in the user's own energy ratings means something. The ratings are
- * the point — the habits are the intervention, the ratings are the read-out.
+ * What makes it different from Forge's longer challenges is the commitment and
+ * the measurement: even the longest version is a month, the shortest is a week,
+ * and all four produce a before/after in the user's own energy ratings. The
+ * ratings are the point — the habits are the intervention, the ratings are the
+ * read-out.
  *
  * To evolve it later, change data here, not logic elsewhere:
  *   • add/remove a daily habit  → DAILY_HABITS
  *   • change XP weighting       → XP (the priority ladder is documented there)
+ *   • add/change a duration     → DURATIONS / DURATION_OPTIONS / COMPLETION_BONUS_BY_DURATION
  *   • change the weekly target  → WEEKLY_DEFAULTS / weeklyRequirementDefs
  *   • change the education copy → WHY / MICRONUTRIENTS / CAFFEINE / WIND_DOWN
  */
 
 export const ENERGY_RESET_TEMPLATE_ID = 'energy_reset_10_day';
 
-export const IDENTITY = {
-  id: ENERGY_RESET_TEMPLATE_ID,
-  name: '10-Day Energy Reset',
-  shortName: 'Energy Reset',
-  subtitle: 'Wake Up Sharper. Crash Less. Feel It in 10 Days.',
-  emoji: '⚡',
-  goal: '10 days to wake up sharper, reduce energy crashes, and feel consistently energized throughout the day.',
-  pitch: 'Short enough to start today. Long enough to actually notice the difference.',
+// ── Durations ───────────────────────────────────────────────────────────────
+// Four legitimate programs, not one program with three consolation prizes. The
+// habits, targets, XP weighting and measurement are IDENTICAL across all four —
+// a longer version is not harder and not more complicated, it simply runs for
+// longer, which buys more completion reward and more observations to compare.
+//
+// These feed the shared per-template duration architecture (the same
+// duration_options_days / duration_labels / recommended_duration_days /
+// completion_bonus_by_duration fields Fat Loss uses), so the library card, the
+// duration helpers and the support picker all read them without any Energy
+// Reset-specific logic.
+export const DURATIONS = [7, 10, 14, 30];
+export const DEFAULT_DURATION = 10;
+
+/**
+ * `window` is how many rated days form each side of the before/after comparison
+ * at that length. It scales with duration so a longer challenge smooths over
+ * more days rather than comparing two single days — and it is always small
+ * enough that the two windows cannot overlap at that duration.
+ */
+export const DURATION_OPTIONS = [
+  {
+    days: 7, weeks: 1, label: 'Quick Reset',
+    headline: '7 Days — Quick Reset',
+    blurb: 'A short intervention focused on immediately improving daily habits and energy.',
+    detail: 'One week. Enough to get the habits in place and take a first honest read on your energy, with almost nothing to talk yourself out of.',
+    window: 3,
+  },
+  {
+    days: 10, weeks: 1.5, label: 'Standard Reset',
+    headline: '10 Days — Standard Reset',
+    blurb: 'The recommended default. Long enough to potentially notice a meaningful change while remaining very easy to commit to.',
+    detail: 'The balance point. Long enough that a change in how you feel is likely to be more than a good week, short enough that committing takes no deliberation.',
+    window: 3,
+  },
+  {
+    days: 14, weeks: 2, label: 'Full Reset',
+    headline: '14 Days — Full Reset',
+    blurb: 'Allows more time for sleep consistency, nutrition, exercise, circadian habits, and energy patterns to stabilize.',
+    detail: 'Two full weeks. Sleep timing and light exposure need repetition before they settle, and this is the first length where a week-by-week trajectory becomes readable.',
+    window: 4,
+  },
+  {
+    days: 30, weeks: 4, label: 'Energy Maxing',
+    headline: '30 Days — Energy Maxing',
+    blurb: 'The deepest version. Designed for users who want to optimize their energy habits, build consistency, and collect enough data for stronger personalized insights.',
+    detail: 'The most data and the strongest personalised insights. Four weeks of ratings makes the difference between a hunch and a pattern you can actually act on.',
+    window: 7,
+  },
+];
+
+export const DURATION_LABELS = Object.fromEntries(DURATION_OPTIONS.map(o => [o.days, o.label]));
+
+/**
+ * Completion reward by length. Longer runs earn more because they ask for more
+ * days of consistency — but every one of these is a real, completed Energy
+ * Reset, and the completion copy says so.
+ */
+export const COMPLETION_BONUS_BY_DURATION = { 7: 250, 10: 400, 14: 600, 30: 1400 };
+
+/** The option record for a duration, falling back to the recommended one. */
+export function durationOption(days) {
+  return DURATION_OPTIONS.find(o => o.days === days)
+    || DURATION_OPTIONS.find(o => o.days === DEFAULT_DURATION);
+}
+
+/** How many rated days form each side of the before/after comparison. */
+export function windowForDuration(days) {
+  return durationOption(days).window;
+}
+
+/** The goal sentence, phrased for the chosen length. */
+export function goalFor(days) {
+  return `${days} days to wake up sharper, reduce energy crashes, and feel consistently energized throughout the day.`;
+}
+
+/**
+ * How rich the end-of-challenge insights can be at each length. More days means
+ * more observations, so more patterns clear the evidence bar and a week-by-week
+ * trajectory becomes worth showing. The statistical bar itself never moves —
+ * only how much of what clears it is surfaced.
+ */
+export function insightDepth(days) {
+  if (days >= 30) return { maxAssociations: 6, trajectory: true, note: 'Four weeks of ratings — the richest read Forge can give you on your own energy.' };
+  if (days >= 14) return { maxAssociations: 5, trajectory: true, note: 'Two weeks of ratings is enough to see a trajectory, not just two endpoints.' };
+  if (days >= 10) return { maxAssociations: 4, trajectory: false, note: 'Ten days of ratings — enough for an honest before-and-after.' };
+  return { maxAssociations: 3, trajectory: false, note: 'A week of ratings gives you a first real read on your own energy.' };
+}
+
+/**
+ * What the completion screen says about the length the user actually chose.
+ *
+ * None of these frames a shorter run as a lesser one. A finished 7-day Quick
+ * Reset is a finished challenge; the honest difference is how much data it
+ * produced, and that is what these say.
+ */
+export const COMPLETION_MESSAGE = {
+  7: {
+    title: 'Quick Reset complete',
+    body: 'Seven straight days of the habits that move energy most. That is a finished Energy Reset — not a short version of one. You now know what these habits feel like and whether they moved anything for you.',
+    next: 'If the week gave you something, a 10- or 14-day run will tell you whether it holds.',
+  },
+  10: {
+    title: 'Standard Reset complete',
+    body: 'Ten days is long enough that a change in how you feel is more than a good week. You built the habits and you have the ratings to see what happened.',
+    next: 'Want a clearer signal? 14 days gives you a week-by-week trajectory; 30 gives you the strongest personalised insights.',
+  },
+  14: {
+    title: 'Full Reset complete',
+    body: 'Two full weeks — enough repetition for sleep timing and light exposure to actually settle, and enough ratings to see the shape of the change rather than just its endpoints.',
+    next: 'Energy Maxing (30 days) is the same habits with four weeks of data behind the insights.',
+  },
+  30: {
+    title: 'Energy Maxing complete',
+    body: 'Thirty days of the same fundamentals, held. This is the deepest version of the Energy Reset and it has produced the most data Forge can work with — the patterns below rest on four weeks of your own ratings.',
+    next: 'These habits are the foundation under every other challenge in Forge. Whatever you run next, they carry over.',
+  },
 };
 
-// Fixed length — the whole premise is that ten days is the commitment.
-export const DURATION_DAYS = 10;
-export const COMPLETION_BONUS_XP = 400;
+/** The completion message for a duration, falling back to the default one. */
+export function completionMessage(days) {
+  return COMPLETION_MESSAGE[days] || COMPLETION_MESSAGE[DEFAULT_DURATION];
+}
+
+export const IDENTITY = {
+  id: ENERGY_RESET_TEMPLATE_ID,
+  name: 'Energy Reset',
+  shortName: 'Energy Reset',
+  subtitle: 'Wake Up Sharper. Crash Less. Feel the Difference.',
+  emoji: '⚡',
+  // The library card shows the recommended length; the setup screen re-states
+  // the goal for whichever length the user actually picks.
+  goal: goalFor(DEFAULT_DURATION),
+  pitch: 'Short enough to start today. Long enough to actually notice the difference.',
+};
 
 // ── XP weighting ────────────────────────────────────────────────────────────
 // Forge's existing scale (keystones 40, supporting habits 10–30). The REQUIRED
@@ -310,6 +435,7 @@ export const DAILY_HABITS = [
 /** Setup defaults. Every one is pre-filled so the challenge starts in one tap. */
 export function defaultSetup() {
   return {
+    durationDays: DEFAULT_DURATION,
     sleepHours: SLEEP_OPPORTUNITY.suggested,
     lightMinutes: MORNING_LIGHT.minutes,
     stepTarget: STEP_TARGET.suggested,
@@ -366,12 +492,16 @@ export function buildChallengeMeta(setup = defaultSetup()) {
     emoji: IDENTITY.emoji,
     subtitle: IDENTITY.subtitle,
     variant: 'standard',
-    durationDays: DURATION_DAYS,
+    // Whichever of the four lengths the user chose. Every other field below is
+    // identical across durations — a longer run is the same challenge, longer.
+    durationDays: DURATIONS.includes(s.durationDays) ? s.durationDays : DEFAULT_DURATION,
     templateVersion: 1,
-    completionBonusXP: COMPLETION_BONUS_XP,
+    completionBonusXP: COMPLETION_BONUS_BY_DURATION[s.durationDays]
+      || COMPLETION_BONUS_BY_DURATION[DEFAULT_DURATION],
     // The attempt's own copy of its configuration, so later edits to this file
     // never rewrite a running challenge.
     energyReset: {
+      durationDays: DURATIONS.includes(s.durationDays) ? s.durationDays : DEFAULT_DURATION,
       sleepHours: s.sleepHours,
       lightMinutes: s.lightMinutes,
       stepTarget: s.stepTarget,

@@ -875,16 +875,22 @@ export const CHALLENGE_TEMPLATES = [
     subtitle: ER.IDENTITY.subtitle,
     purpose: ER.IDENTITY.goal,
     tagline: ER.IDENTITY.pitch,
-    // Fixed at ten days — the short commitment IS the proposition.
-    duration_options_days: [ER.DURATION_DAYS],
-    default_duration_days: ER.DURATION_DAYS,
+    // Four lengths from a week to a month. The habits, targets, XP weighting and
+    // measurement are identical across all four — only the duration, the
+    // completion reward and how much data the insights rest on differ.
+    duration_options_days: ER.DURATIONS,
+    default_duration_days: ER.DEFAULT_DURATION,
+    recommended_duration_days: ER.DEFAULT_DURATION,
+    duration_labels: ER.DURATION_LABELS,
+    completion_bonus_by_duration: ER.COMPLETION_BONUS_BY_DURATION,
+    duration_options: ER.DURATION_OPTIONS,
     metrics_targeted: ['morning_energy', 'afternoon_energy', 'overall_energy', 'sleep_quality', 'energy_rating'],
     insights_triggers: {
       pre_recommendation: 'user reports low energy, poor morning alertness or afternoon crashes',
       in_progress_monitoring: 'daily energy ratings, sleep adherence, morning light consistency',
     },
-    success_threshold: 'habit adherence >= 0.80 AND average energy rating trending up across the ten days',
-    rewards: { xp: ER.COMPLETION_BONUS_XP, badge_id: 'iron_will' },
+    success_threshold: 'habit adherence >= 0.80 AND average energy rating trending up from the early days to the final days',
+    rewards: { xp: ER.COMPLETION_BONUS_BY_DURATION[ER.DEFAULT_DURATION], badge_id: 'iron_will' },
     safety_flags: {
       contraindications: ['untreated sleep disorder', 'fatigue with an unexplained medical cause'],
       notes: ER.MICRONUTRIENT_CAUTION,

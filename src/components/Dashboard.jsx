@@ -8,6 +8,7 @@ import SupportProgress from './SupportProgress';
 import MuscleBuildingPanel from './MuscleBuildingPanel';
 import HormoneHealthPanel from './HormoneHealthPanel';
 import EnergyResetPanel from './EnergyResetPanel';
+import { completionMessage as energyCompletionMessage } from '../data/energyResetConfig';
 import {
   computeTotalXP, computeTodayXP,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
@@ -29,6 +30,11 @@ function capMode(v) {
 }
 
 function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onRetry }) {
+  // Energy Reset says something different for each of its four lengths — none of
+  // which frames a shorter run as a lesser one.
+  const energyCompletion = summary?.energySummary?.tracked
+    ? energyCompletionMessage(summary.durationDays || summary.energySummary.durationDays)
+    : null;
   const badgeDefs = (summary.badges || []).map(id => BADGE_DEFS.find(b => b.id === id)).filter(Boolean);
   if (summary.badgeId && !badgeDefs.find(b => b.id === summary.badgeId)) {
     const b = BADGE_DEFS.find(x => x.id === summary.badgeId);
@@ -104,7 +110,15 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
             Associations are patterns in the log, never causal claims. */}
         {summary.energySummary?.tracked && (
           <div className="cc-section cc-energy">
-            <div className="cc-section-title">⚡ Energy Reset Complete</div>
+            <div className="cc-section-title">
+              ⚡ {energyCompletion ? energyCompletion.title : 'Energy Reset Complete'}
+            </div>
+            {energyCompletion && (
+              <>
+                <div className="cc-energy-message">{energyCompletion.body}</div>
+                <div className="cc-energy-next">{energyCompletion.next}</div>
+              </>
+            )}
             {summary.energySummary.enoughData ? (
               <>
                 <div className="cc-energy-headline">
@@ -145,10 +159,27 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
                     ? `Compared against the baseline you set before Day 1, using your last ${summary.energySummary.afterDays.length} rated ${summary.energySummary.afterDays.length === 1 ? 'day' : 'days'}.`
                     : `Compared your first ${summary.energySummary.beforeDays.length} rated ${summary.energySummary.beforeDays.length === 1 ? 'day' : 'days'} against your last ${summary.energySummary.afterDays.length}.`}
                 </div>
+                {summary.energySummary.trajectory?.length > 1 && (
+                  <div className="cc-energy-traj">
+                    <div className="cc-energy-patterns-title">Week by week</div>
+                    {summary.energySummary.trajectory.map(w => (
+                      <div key={w.week} className="cc-energy-traj-row">
+                        <span className="cc-energy-traj-week">Week {w.week}</span>
+                        <span className="cc-energy-traj-bar">
+                          <span className="cc-energy-traj-fill" style={{ width: `${(w.average / 10) * 100}%` }} />
+                        </span>
+                        <span className="cc-energy-traj-val">{w.average}/10</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {summary.energySummary.depthNote && (
+                  <div className="cc-energy-depth">{summary.energySummary.depthNote}</div>
+                )}
                 {summary.energySummary.associations.length > 0 && (
                   <div className="cc-energy-patterns">
                     <div className="cc-energy-patterns-title">Patterns in what you logged</div>
-                    {summary.energySummary.associations.slice(0, 4).map(a => (
+                    {summary.energySummary.associations.map(a => (
                       <div key={a.taskId} className={`cc-energy-pattern${a.higher ? ' up' : ''}`}>{a.text}</div>
                     ))}
                     <div className="cc-energy-caveat">{summary.energySummary.caveat}</div>

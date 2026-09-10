@@ -1,5 +1,5 @@
 /**
- * ⚡ 10-Day Energy Reset end to end.
+ * ⚡ Energy Reset end to end — all four durations.
  *
  * Walks the real flows: starting the challenge from the library, completing
  * daily requirements, logging the weekly exercise sessions, entering energy
@@ -33,6 +33,21 @@ async function gotoTab(name) {
   }, name);
   await page.waitForTimeout(350);
 }
+/** Click a duration card inside the (scrollable) setup modal. */
+async function clickDuration(d) {
+  // The setup modal scrolls, so drive the click from the DOM rather than
+  // fighting the viewport — this is a real click handler either way.
+  const ok = await page.evaluate((days) => {
+    const btn = [...document.querySelectorAll('.er-duration')]
+      .find(b => new RegExp(`^\\s*${days} Days`).test(b.textContent || ''));
+    if (!btn) return false;
+    btn.scrollIntoView({ block: 'center' });
+    btn.click();
+    return true;
+  }, d);
+  await page.waitForTimeout(350);
+  return ok;
+}
 const prof = (id = 'me') => page.evaluate((i) => JSON.parse(localStorage.getItem('profiles'))[i], id);
 const arch = (id = 'me') => page.evaluate((i) => (JSON.parse(localStorage.getItem('archives') || '{}')[i] || []), id);
 const days = (id = 'me') => page.evaluate((i) => (JSON.parse(localStorage.getItem('allDays') || '{}')[i] || {}), id);
@@ -49,14 +64,17 @@ async function reset() {
 }
 
 /** Start Energy Reset through the real library flow. */
-async function startEnergyReset({ startTomorrow = false, openBaseline = null } = {}) {
+async function startEnergyReset({ startTomorrow = false, openBaseline = null, duration = null } = {}) {
   await gotoTab('Challenges');
   await page.waitForTimeout(400);
-  const card = page.locator('.challenge-card', { hasText: '10-Day Energy Reset' });
+  const card = page.locator('.challenge-card', { hasText: 'Energy Reset' }).first();
   await card.locator('.challenge-card-header').click();
   await page.waitForTimeout(400);
-  await card.locator('button', { hasText: 'Start 10-Day Energy Reset' }).first().click();
+  await card.locator('button', { hasText: 'Start Energy Reset' }).first().click();
   await page.waitForTimeout(500);
+  if (duration) {
+    await clickDuration(duration);
+  }
   if (openBaseline) {
     await page.locator('.er-disclosure', { hasText: 'Where are you starting from' }).click();
     await page.waitForTimeout(250);
@@ -85,25 +103,65 @@ await page.waitForSelector('.dashboard', { timeout: 10000 });
 await reset();
 await gotoTab('Challenges');
 await page.waitForTimeout(400);
-const card = page.locator('.challenge-card', { hasText: '10-Day Energy Reset' });
+const card = page.locator('.challenge-card', { hasText: 'Energy Reset' }).first();
 check('the challenge appears in the library', (await card.count()) === 1);
 await card.locator('.challenge-card-header').click();
 await page.waitForTimeout(400);
 const cardText = await card.textContent();
 check('it shows the lightning-bolt identity', /⚡/.test(cardText));
-check('it shows the exact goal sentence',
-  /10 days to wake up sharper, reduce energy crashes, and feel consistently energized/.test(cardText));
-check('it advertises the short commitment', /10 days/.test(cardText));
-check('it is startable', (await card.locator('button', { hasText: 'Start 10-Day Energy Reset' }).count()) === 1);
+check('it shows the goal sentence', /wake up sharper, reduce energy crashes, and feel consistently energized/.test(cardText));
+check('the library card advertises all four lengths',
+  /7, 10, 14, or 30 days/.test(cardText), cardText.slice(0, 120));
+check('it is startable', (await card.locator('button', { hasText: 'Start Energy Reset' }).count()) === 1);
 
 // ══ Setup screen ═══════════════════════════════════════════════════════════
-await card.locator('button', { hasText: 'Start 10-Day Energy Reset' }).first().click();
+await card.locator('button', { hasText: 'Start Energy Reset' }).first().click();
 await page.waitForTimeout(500);
 check('the configured setup screen opens', (await page.locator('.er-setup').count()) === 1);
 const setupText = await page.textContent('.er-setup');
+
+// ── The duration selector ──────────────────────────────────────────────────
+check('the setup offers four durations', (await page.locator('.er-duration').count()) === 4);
+const durText = await page.textContent('.er-durations');
+check('7 Days — Quick Reset is offered', /7 Days — Quick Reset/.test(durText));
+check('10 Days — Standard Reset is offered', /10 Days — Standard Reset/.test(durText));
+check('14 Days — Full Reset is offered', /14 Days — Full Reset/.test(durText));
+check('30 Days — Energy Maxing is offered', /30 Days — Energy Maxing/.test(durText));
+check('each duration explains what it is intended for',
+  /A short intervention focused on immediately improving daily habits and energy/.test(durText) &&
+  /The recommended default/.test(durText) &&
+  /Allows more time for sleep consistency/.test(durText) &&
+  /The deepest version/.test(durText));
+check('each duration shows its completion reward', (await page.locator('.er-duration-reward').count()) === 4);
+check('longer durations advertise greater rewards', await page.evaluate(() => {
+  const xs = [...document.querySelectorAll('.er-duration-reward')].map(e => parseInt(e.textContent, 10));
+  return xs.every((v, i) => i === 0 || v > xs[i - 1]);
+}));
+check('10 Days is badged Recommended', (await page.locator('.er-duration-rec').count()) === 1 &&
+  /10 Days/.test(await page.locator('.er-duration', { hasText: 'Recommended' }).first().textContent()));
+check('10 Days is pre-selected',
+  /10 Days/.test(await page.locator('.er-duration.active').first().textContent()));
+check('the setup states a longer version is not harder',
+  /not harder/i.test(setupText) && /same in all four/i.test(setupText));
+check('the setup explains early days are compared against final days',
+  /rated days\s*against your last/i.test(setupText.replace(/\s+/g, ' ')));
+check('no separate baseline waiting period is required',
+  /Nothing to wait for/i.test(setupText) && /start logging on Day 1/i.test(setupText));
+// Switching duration must not change the habits.
+const tasksAt10 = await page.locator('.er-setup .tpl-task-list').first().textContent();
+await clickDuration(30);
+const tasksAt30 = await page.locator('.er-setup .tpl-task-list').first().textContent();
+check('switching to 30 days changes NOT ONE daily habit', tasksAt10 === tasksAt30);
+const weeklyAt30 = await page.locator('.er-setup .tpl-task-list.weekly').textContent();
+await clickDuration(7);
+check('switching to 7 days changes NOT ONE weekly requirement',
+  (await page.locator('.er-setup .tpl-task-list.weekly').textContent()) === weeklyAt30);
+check('the goal sentence follows the chosen length',
+  /^7 days to wake up sharper/.test((await page.textContent('.er-goal')).trim()));
+await clickDuration(10);
 check('setup names all three tracked ratings',
   /Morning Energy/.test(setupText) && /Afternoon Energy/.test(setupText) && /Overall Energy/.test(setupText));
-check('setup shows the ten-day length', /\b10\b/.test(setupText) && /days/.test(setupText));
+
 check('setup lists the nine daily habits', (await page.locator('.er-setup .tpl-task-list').first().locator('li').count()) === 9);
 check('setup shows the weekly exercise requirement',
   /Resistance Training/.test(setupText) && /Aerobic \/ Zone 2/.test(setupText));
@@ -212,16 +270,18 @@ check('exercise is NOT a daily checkbox',
 // auto-complete it (the existing end-of-challenge path).
 // Day 11 is the first day PAST a 10-day challenge, which is what triggers the
 // existing auto-complete path — so the run is seeded to have just ended.
-async function seedFullRun({ ratings, taskDays = null, baseline = null, start = offset(-10) }) {
+async function seedFullRun({ ratings, taskDays = null, baseline = null, durationDays = 10, start = null }) {
+  start = start || offset(-(durationDays));
   await reset();
-  await page.evaluate(({ ratings, taskDays, baseline, start }) => {
+  await page.evaluate(({ ratings, taskDays, baseline, start, durationDays }) => {
     const p = JSON.parse(localStorage.getItem('profiles'));
     p.me.challengeStart = start;
     p.me.activeChallenge = {
-      templateId: 'energy_reset_10_day', name: '10-Day Energy Reset', emoji: '⚡',
-      variant: 'standard', durationDays: 10, templateVersion: 1, completionBonusXP: 400,
+      templateId: 'energy_reset_10_day', name: 'Energy Reset', emoji: '⚡',
+      variant: 'standard', durationDays, templateVersion: 1,
+      completionBonusXP: { 7: 250, 10: 400, 14: 600, 30: 1400 }[durationDays] || 400,
       passingScore: 80, keystoneRequirement: 70,
-      energyReset: { sleepHours: 8, lightMinutes: 10, stepTarget: 8000, stressMinutes: 5, caffeineCutoffHours: 10, resistancePerWeek: 2, aerobicPerWeek: 2, baseline },
+      energyReset: { durationDays, sleepHours: 8, lightMinutes: 10, stepTarget: 8000, stressMinutes: 5, caffeineCutoffHours: 10, resistancePerWeek: 2, aerobicPerWeek: 2, baseline },
       weeklyRequirementDefs: [
         { id: 'er_resistance', label: 'Resistance Training', icon: '🏋️', perWeek: 2, xp: 30, keystone: 2, logLabel: 'Log Resistance Session', unit: 'session' },
         { id: 'er_aerobic', label: 'Aerobic / Zone 2', icon: '❤️', perWeek: 2, xp: 25, keystone: 2, logLabel: 'Log Aerobic Session', unit: 'session' },
@@ -256,7 +316,7 @@ async function seedFullRun({ ratings, taskDays = null, baseline = null, start = 
       };
     });
     localStorage.setItem('allDays', JSON.stringify(all));
-  }, { ratings, taskDays, baseline, start });
+  }, { ratings, taskDays, baseline, start, durationDays });
   await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 }); await page.waitForTimeout(900);
 }
 
@@ -266,7 +326,7 @@ const IMPROVING = [
   [8, 8, 8], [8, 7, 8], [8, 8, 8],
 ];
 await seedFullRun({ ratings: IMPROVING });
-check('a 10-day attempt auto-completes at Day 10', (await arch()).length === 1);
+check('a 10-day attempt auto-completes after its final day', (await arch()).length === 1);
 const entry = (await arch())[0];
 check('the archive is the Energy Reset attempt', entry.challenge?.templateId === 'energy_reset_10_day');
 check('it archives all ten days', Object.keys(entry.days || {}).length === 10);
@@ -274,7 +334,8 @@ check('the app returns to the no-challenge baseline afterwards',
   (await prof()).activeChallenge?.templateId === 'forge_daily');
 
 const ccText = await page.textContent('.dashboard');
-check('the completion screen shows the Energy Reset result', /Energy Reset Complete/i.test(ccText));
+check('the completion screen shows the Energy Reset result',
+  /Standard Reset complete/i.test(ccText), ccText.slice(0, 80));
 check('it shows a Before value', /Before/.test(ccText));
 check('it shows an After value', /After/.test(ccText));
 const summary = await page.evaluate(() => JSON.parse(localStorage.getItem('profiles')).me.lastCompletion);
@@ -293,6 +354,71 @@ check('afternoon energy is reported separately',
 check('the completion screen renders the per-dimension breakdown',
   /Morning Energy/.test(ccText) && /Afternoon Energy/.test(ccText));
 check('it explains which days were compared', /Compared your first/.test(ccText) || /Compared against the baseline/.test(ccText));
+
+// ══ Every duration starts, runs and completes ═════════════════════════════
+for (const d of [7, 10, 14, 30]) {
+  await reset();
+  await startEnergyReset({ duration: d });
+  const p = await prof();
+  check(`starting a ${d}-day run stores ${d} days`, p.activeChallenge?.durationDays === d, String(p.activeChallenge?.durationDays));
+  check(`the ${d}-day attempt gets the right completion bonus`,
+    p.activeChallenge?.completionBonusXP === { 7: 250, 10: 400, 14: 600, 30: 1400 }[d],
+    String(p.activeChallenge?.completionBonusXP));
+  check(`the ${d}-day attempt has the SAME nine daily habits`, p.tasks.length === 9);
+  check(`the ${d}-day attempt has the SAME two weekly requirements`,
+    (p.activeChallenge?.weeklyRequirementDefs || []).length === 2);
+  check(`the ${d}-day attempt keeps the same XP weighting`,
+    p.tasks.find(t => t.id === 'er_sleep').xp === 40 && p.tasks.find(t => t.id === 'er_winddown').xp === 10);
+  await gotoTab('Today');
+  await page.waitForTimeout(400);
+  check(`the ${d}-day panel shows Day 1 of ${d}`,
+    new RegExp(`Day 1 of ${d}`).test(await page.textContent('.er-panel')));
+  check(`the ${d}-day panel names the program`,
+    new RegExp({ 7: 'Quick Reset', 10: 'Standard Reset', 14: 'Full Reset', 30: 'Energy Maxing' }[d])
+      .test(await page.textContent('.er-panel')));
+  check(`the ${d}-day run still collects all three energy ratings`,
+    (await page.locator('.er-ratings .er-scale').count()) === 3);
+}
+
+// ── Completion at each duration ───────────────────────────────────────────
+function rampe(n) {
+  return Array.from({ length: n }, (_, i) => {
+    const v = Math.min(10, 4 + Math.round((i / (n - 1)) * 4));
+    return [v, v, v];
+  });
+}
+for (const d of [7, 10, 14, 30]) {
+  await seedFullRun({ ratings: rampe(d), durationDays: d });
+  const a = await arch();
+  check(`a ${d}-day run archives on completion`, a.length === 1 && a[0].challenge?.durationDays === d);
+  const sum = await page.evaluate(() => JSON.parse(localStorage.getItem('profiles')).me.lastCompletion);
+  check(`the ${d}-day run produces an energy result`, sum?.energySummary?.enoughData === true);
+  check(`the ${d}-day run compares early days against final days`,
+    sum.energySummary.beforeDays.length >= 3 && sum.energySummary.afterDays.length >= 3 &&
+    sum.energySummary.beforeDays.every(x => !sum.energySummary.afterDays.includes(x)),
+    JSON.stringify([sum.energySummary.beforeDays, sum.energySummary.afterDays]));
+  check(`the ${d}-day run never compares Day 1 alone against the final day alone`,
+    sum.energySummary.beforeDays.length > 1 && sum.energySummary.afterDays.length > 1);
+  check(`the ${d}-day run shows improvement`, sum.energySummary.average.after > sum.energySummary.average.before);
+  const txt = await page.textContent('.dashboard');
+  const label = { 7: 'Quick Reset complete', 10: 'Standard Reset complete', 14: 'Full Reset complete', 30: 'Energy Maxing complete' }[d];
+  check(`the ${d}-day completion screen uses its own messaging`, txt.includes(label), label);
+  check(`the ${d}-day completion messaging never calls it inferior or failed`,
+    !/inferior|failed version|just a|only a short/i.test(txt));
+  if (d >= 14) {
+    check(`the ${d}-day run shows a week-by-week trajectory`,
+      (sum.energySummary.trajectory || []).length > 1, JSON.stringify(sum.energySummary.trajectory));
+    check(`the ${d}-day completion screen renders the trajectory`, /Week by week/i.test(txt));
+  } else {
+    check(`the ${d}-day run shows no trajectory — too few weeks`, !sum.energySummary.trajectory);
+  }
+}
+check('a 30-day run compares a full week against a full week', await page.evaluate(() => {
+  const s = JSON.parse(localStorage.getItem('profiles')).me.lastCompletion;
+  return s.energySummary.beforeDays.length === 7 && s.energySummary.afterDays.length === 7;
+}));
+check('a 30-day run surfaces the richest insight note',
+  /richest read/i.test(await page.textContent('.dashboard')));
 
 // ══ Associations — patterns, never causation ══════════════════════════════
 const TASKS_MIXED = {};
@@ -377,7 +503,7 @@ let stacked = false;
 if (await addSupport.count()) {
   await addSupport.click();
   await page.waitForTimeout(500);
-  const pick = page.locator('.sup-option', { hasText: '10-Day Energy Reset' }).first();
+  const pick = page.locator('.sup-option', { hasText: 'Energy Reset' }).first();
   check('Energy Reset is offered as a support challenge', (await pick.count()) === 1);
   if (await pick.count()) {
     const group = await page.evaluate(() => {

@@ -25,6 +25,7 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
 
   const tasks = ER.buildStartTasks(s);
   const weekly = ER.weeklyRequirementDefs(s);
+  const option = ER.durationOption(s.durationDays);
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -35,12 +36,38 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
           <p className="er-hero-sub">{ER.IDENTITY.subtitle}</p>
         </div>
 
-        <div className="er-goal">{ER.IDENTITY.goal}</div>
+        <div className="er-goal">{ER.goalFor(s.durationDays)}</div>
         <div className="er-pitch">{ER.IDENTITY.pitch}</div>
 
-        <div className="er-length">
-          <span className="er-length-num">{ER.DURATION_DAYS}</span>
-          <span className="er-length-label">days · starts whenever you say go</span>
+        {/* ── Duration ── */}
+        <div className="er-field">
+          <div className="er-label">How long?</div>
+          <div className="er-durations">
+            {ER.DURATION_OPTIONS.map(o => (
+              <button
+                key={o.days}
+                className={`er-duration${s.durationDays === o.days ? ' active' : ''}`}
+                onClick={() => set({ durationDays: o.days })}
+                aria-pressed={s.durationDays === o.days}
+              >
+                <span className="er-duration-head">
+                  {o.days} Days — {o.label}
+                  {o.days === ER.DEFAULT_DURATION && <span className="er-duration-rec">Recommended</span>}
+                </span>
+                <span className="er-duration-blurb">{o.blurb}</span>
+                <span className="er-duration-reward">
+                  {ER.COMPLETION_BONUS_BY_DURATION[o.days]} XP on completion
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="er-hint">{ER.durationOption(s.durationDays).detail}</div>
+          <div className="er-hint">
+            The habits, targets, XP weighting and energy tracking are the same in all four.
+            A longer version is not harder — it runs for longer, which earns more on completion
+            and gives the insights more days to work with.
+          </div>
+          <div className="er-hint">{ER.insightDepth(s.durationDays).note}</div>
         </div>
 
         {/* ── The measurement, explained before the habits ── */}
@@ -56,6 +83,11 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
             ))}
           </div>
           <div className="er-hint">{ER.ENERGY_PROMPT.blurb}</div>
+          <div className="er-hint">
+            At the end, Forge compares your first {ER.windowForDuration(s.durationDays)} rated days
+            against your last {ER.windowForDuration(s.durationDays)} — enough on each side to smooth
+            out a single unusually good or bad day. Nothing to wait for: you start logging on Day 1.
+          </div>
           <div className="er-hint">{ER.ENERGY_PROMPT.missingNote}</div>
         </div>
 
@@ -87,6 +119,10 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
                 </div>
               ))}
               <div className="er-hint">{ER.BASELINE_PROMPT.skipNote}</div>
+              <div className="er-hint">
+                Either way there is no waiting period before Day 1 — the comparison works from the
+                days you log inside the challenge.
+              </div>
             </div>
           )}
         </div>
@@ -208,7 +244,9 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
 
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => onSubmit(s)}>Continue</button>
+          <button className="btn btn-primary" onClick={() => onSubmit(s)}>
+            Continue · {option.days} days
+          </button>
         </div>
       </div>
     </div>

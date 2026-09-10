@@ -1,5 +1,5 @@
 /**
- * ⚡ 10-Day Energy Reset — challenge definition and energy math.
+ * ⚡ Energy Reset — challenge definition, the four durations, and energy math.
  *
  * Covers the XP importance ladder, the daily/weekly split, shared-habit identity
  * (so overlapping behaviours merge instead of paying twice), the before/after
@@ -11,11 +11,16 @@ import {
   ENERGY_FIELDS, ENERGY_KEYS, ratingOf, hasEnergyData, averageEnergy, ratedDays,
   pctChange, normalizeBaseline, energyComparison, energyAssociations,
   buildEnergySummary, WINDOW_SIZE, MIN_RATED_DAYS, ASSOCIATION_MIN,
+  effectiveWindow, weeklyEnergyTrajectory,
 } from '../src/utils/energyTracking.js';
 import { HABIT_KEYS, habitKeyOf, isSameHabit, stricterOf } from '../src/data/habitKeys.js';
 import { getTemplateById, CHALLENGE_TEMPLATES } from '../src/data/challengeTemplates.js';
 import { getCompatibility, canStack, COMPATIBILITY } from '../src/data/challengeCompatibility.js';
 import { hasWeeklyRequirements, getWeeklyRequirementDefs, challengeWeeks, targetForWeek } from '../src/utils/weeklyRequirements.js';
+import {
+  getDurationOptions, getDefaultDuration, getDurationLabel, isRecommendedDuration,
+  getCompletionBonusForDuration,
+} from '../src/data/challengeTemplates.js';
 import { mergeSupportTasks } from '../src/utils/challengeStack.js';
 
 const results = [];
@@ -29,21 +34,107 @@ const tasks = ER.buildStartTasks();
 const weekly = ER.weeklyRequirementDefs();
 
 // ══ Identity and template registration ═════════════════════════════════════
-check('the challenge is named 10-Day Energy Reset', ER.IDENTITY.name === '10-Day Energy Reset');
+check('the challenge is named Energy Reset', ER.IDENTITY.name === 'Energy Reset');
 check('its identity is the lightning bolt', ER.IDENTITY.emoji === '⚡');
-check('the goal is the exact promised sentence',
-  ER.IDENTITY.goal === '10 days to wake up sharper, reduce energy crashes, and feel consistently energized throughout the day.');
-check('duration is 10 days', ER.DURATION_DAYS === 10 && meta.durationDays === 10);
+check('the goal sentence is phrased for the chosen length',
+  ER.goalFor(10) === '10 days to wake up sharper, reduce energy crashes, and feel consistently energized throughout the day.' &&
+  ER.goalFor(30) === '30 days to wake up sharper, reduce energy crashes, and feel consistently energized throughout the day.');
+check('the library card shows the recommended length\'s goal',
+  ER.IDENTITY.goal === ER.goalFor(ER.DEFAULT_DURATION));
 const tpl = getTemplateById(ER.ENERGY_RESET_TEMPLATE_ID);
 check('it is registered in the challenge library', !!tpl && tpl.startable === true);
 check('it uses the existing configured start flow', tpl.start_flow === 'configured');
-check('the library offers only the 10-day length', JSON.stringify(tpl.duration_options_days) === '[10]');
-check('it is the only startable challenge with a single fixed length under two weeks',
-  CHALLENGE_TEMPLATES.filter(t => t.startable && (t.duration_options_days || []).length === 1 &&
-    t.duration_options_days[0] < 14).map(t => t.id).join(',') === tpl.id);
 check('it is among the shortest challenges in the library',
   Math.min(...CHALLENGE_TEMPLATES.filter(t => t.startable)
-    .map(t => Math.min(...(t.duration_options_days || [999])))) <= 10);
+    .map(t => Math.min(...(t.duration_options_days || [999])))) <= 7);
+
+// ══ The four durations ═════════════════════════════════════════════════════
+check('it is NOT exclusively a 10-day challenge', ER.DURATIONS.length === 4);
+check('the four lengths are 7, 10, 14 and 30 days',
+  JSON.stringify(ER.DURATIONS) === '[7,10,14,30]');
+check('7 days is labelled Quick Reset', ER.DURATION_LABELS[7] === 'Quick Reset');
+check('10 days is labelled Standard Reset', ER.DURATION_LABELS[10] === 'Standard Reset');
+check('14 days is labelled Full Reset', ER.DURATION_LABELS[14] === 'Full Reset');
+check('30 days is labelled Energy Maxing', ER.DURATION_LABELS[30] === 'Energy Maxing');
+check('10 days is the recommended default', ER.DEFAULT_DURATION === 10 && meta.durationDays === 10);
+const blurbOf = (d) => ER.durationOption(d).blurb;
+check('7-day blurb is the exact specified sentence',
+  blurbOf(7) === 'A short intervention focused on immediately improving daily habits and energy.');
+check('10-day blurb is the exact specified sentence',
+  blurbOf(10) === 'The recommended default. Long enough to potentially notice a meaningful change while remaining very easy to commit to.');
+check('14-day blurb is the exact specified sentence',
+  blurbOf(14) === 'Allows more time for sleep consistency, nutrition, exercise, circadian habits, and energy patterns to stabilize.');
+check('30-day blurb is the exact specified sentence',
+  blurbOf(30) === 'The deepest version. Designed for users who want to optimize their energy habits, build consistency, and collect enough data for stronger personalized insights.');
+check('every duration explains what it is for', ER.DURATION_OPTIONS.every(o => !!o.detail && o.detail.length > 30));
+check('an unknown duration falls back to the recommended one',
+  ER.durationOption(99).days === ER.DEFAULT_DURATION && ER.buildChallengeMeta({ durationDays: 99 }).durationDays === 10);
+
+// ── It uses Forge's EXISTING per-template duration architecture ────────────
+check('the template opts into the shared duration system',
+  JSON.stringify(getDurationOptions(tpl)) === JSON.stringify(ER.DURATIONS));
+check('the shared default helper resolves 10 days', getDefaultDuration(tpl) === 10);
+check('the shared label helper resolves each name',
+  getDurationLabel(tpl, 7) === 'Quick Reset' && getDurationLabel(tpl, 30) === 'Energy Maxing');
+check('the shared recommended helper marks 10 days, and only 10 days',
+  isRecommendedDuration(tpl, 10) && ER.DURATIONS.filter(d => isRecommendedDuration(tpl, d)).length === 1);
+check('the shared completion-bonus helper reads the per-duration table',
+  ER.DURATIONS.every(d => getCompletionBonusForDuration(tpl, d) === ER.COMPLETION_BONUS_BY_DURATION[d]));
+
+// ── XP grows with length, without demoting the shorter programs ───────────
+check('longer durations award a greater completion reward',
+  ER.DURATIONS.every((d, i) => i === 0 ||
+    ER.COMPLETION_BONUS_BY_DURATION[d] > ER.COMPLETION_BONUS_BY_DURATION[ER.DURATIONS[i - 1]]),
+  JSON.stringify(ER.COMPLETION_BONUS_BY_DURATION));
+check('every duration carries a real completion reward',
+  ER.DURATIONS.every(d => ER.COMPLETION_BONUS_BY_DURATION[d] > 0));
+check('the attempt stores the bonus for the length actually chosen',
+  ER.DURATIONS.every(d => ER.buildChallengeMeta({ durationDays: d }).completionBonusXP === ER.COMPLETION_BONUS_BY_DURATION[d]));
+check('no completion message calls a shorter run inferior, failed or partial',
+  ER.DURATIONS.every(d => !/inferior|failed|only a|just a|lesser|incomplete|partial/i.test(
+    Object.values(ER.completionMessage(d)).join(' '))));
+check('the 7-day message states plainly it is a finished challenge',
+  /finished Energy Reset — not a short version of one/i.test(ER.completionMessage(7).body));
+check('every duration has its own completion messaging',
+  new Set(ER.DURATIONS.map(d => ER.completionMessage(d).title)).size === 4);
+check('completion titles name the program the user chose',
+  ER.DURATIONS.every(d => ER.completionMessage(d).title.includes(ER.DURATION_LABELS[d])));
+
+// ── The habits are IDENTICAL across all four lengths ──────────────────────
+function stripDuration(m) {
+  const { durationDays, completionBonusXP, energyReset, ...rest } = m;
+  const { durationDays: _d, ...cfgRest } = energyReset || {};
+  return JSON.stringify({ ...rest, energyReset: cfgRest });
+}
+check('the daily task list is byte-identical across all four durations',
+  new Set(ER.DURATIONS.map(d => JSON.stringify(ER.buildStartTasks({ durationDays: d })))).size === 1);
+check('the weekly requirements are identical across all four durations',
+  new Set(ER.DURATIONS.map(d => JSON.stringify(ER.weeklyRequirementDefs({ durationDays: d })))).size === 1);
+check('ONLY duration and completion reward differ between the four attempts',
+  new Set(ER.DURATIONS.map(d => stripDuration(ER.buildChallengeMeta({ durationDays: d })))).size === 1);
+check('a longer version is not made harder — same targets everywhere',
+  ER.DURATIONS.every(d => {
+    const t = ER.buildStartTasks({ durationDays: d });
+    return t.find(x => x.id === 'er_steps').target.value === 8000 &&
+      t.find(x => x.id === 'er_sleep').xp === 40 && t.length === 9;
+  }));
+
+// ── Insight richness scales with available data ───────────────────────────
+check('longer durations surface more patterns',
+  ER.insightDepth(30).maxAssociations > ER.insightDepth(7).maxAssociations);
+check('the shortest run still surfaces patterns', ER.insightDepth(7).maxAssociations >= 3);
+check('a week-by-week trajectory appears only where there is more than one week',
+  !ER.insightDepth(7).trajectory && !ER.insightDepth(10).trajectory &&
+  ER.insightDepth(14).trajectory && ER.insightDepth(30).trajectory);
+check('every duration explains its own insight depth',
+  ER.DURATIONS.every(d => !!ER.insightDepth(d).note));
+check('the comparison window grows with duration',
+  ER.windowForDuration(7) === 3 && ER.windowForDuration(10) === 3 &&
+  ER.windowForDuration(14) === 4 && ER.windowForDuration(30) === 7);
+check('no duration compares only Day 1 against the final day',
+  ER.DURATIONS.every(d => ER.windowForDuration(d) >= 3));
+check('the window always leaves the two sides disjoint at that duration',
+  ER.DURATIONS.every(d => ER.windowForDuration(d) * 2 <= d));
 
 // ══ XP: the required importance ladder ═════════════════════════════════════
 const xpOf = (id) => tasks.find(t => t.id === id)?.xp;
@@ -267,8 +358,20 @@ check('a single rated day cannot produce a before/after', !one.enoughData);
 const three = energyComparison({ days: makeDays([[5, 5, 5], [6, 6, 6], [7, 7, 7]]), endDayNum: 10 });
 check('three rated days is still below the derived threshold', !three.enoughData && MIN_RATED_DAYS.derived === 4);
 const four = energyComparison({ days: makeDays([[5, 5, 5], [6, 6, 6], [7, 7, 7], [8, 8, 8]]), endDayNum: 10 });
-check('four rated days is enough, and the windows stay disjoint',
-  four.enoughData && JSON.stringify(four.beforeDays) === '[1,2,3]' && JSON.stringify(four.afterDays) === '[4]');
+check('four rated days is enough, and the two sides stay balanced and disjoint',
+  four.enoughData && JSON.stringify(four.beforeDays) === '[1,2]' && JSON.stringify(four.afterDays) === '[3,4]');
+check('the window degrades gracefully rather than swallowing a short run',
+  effectiveWindow(7, 5) === 2 && effectiveWindow(3, 10) === 3 && effectiveWindow(7, 30) === 7);
+check('the window never collapses below one day', effectiveWindow(7, 1) === 1 && effectiveWindow(3, 0) === 1);
+// A 30-day run with sparse ratings still produces a real comparison.
+const sparse30 = energyComparison({
+  days: makeDays([[4,4,4], null, [4,4,4], null, null, [5,5,5], null, null, [7,7,7], null, [8,8,8]]),
+  endDayNum: 30, windowSize: 7,
+});
+check('a long run with few ratings still compares early against late',
+  sparse30.enoughData && sparse30.beforeDays.length === 2 && sparse30.afterDays.length === 2);
+check('and its two sides never overlap',
+  sparse30.beforeDays.every(d => !sparse30.afterDays.includes(d)));
 const twoWithBase = energyComparison({ days: makeDays([[5, 5, 5], [7, 7, 7]]), endDayNum: 10, baseline: { overallEnergy: 4 } });
 check('with a baseline, two rated days is enough', twoWithBase.enoughData && MIN_RATED_DAYS.withBaseline === 2);
 const sparse = energyComparison({ days: makeDays([[5, 5, 5], null, null, [6, 6, 6], null, [7, 7, 7], null, [8, 8, 8]]), endDayNum: 10 });
@@ -367,9 +470,48 @@ check('a custom setup is reflected in the built tasks',
   ER.buildStartTasks({ stepTarget: 12000 }).find(t => t.id === 'er_steps').target.value === 12000);
 check('a custom weekly target is reflected in the attempt defs',
   ER.buildChallengeMeta({ resistancePerWeek: 4 }).weeklyRequirementDefs.find(d => d.id === 'er_resistance').perWeek === 4);
-check('the completion bonus is set', meta.completionBonusXP === ER.COMPLETION_BONUS_XP && meta.completionBonusXP > 0);
+check('the completion bonus matches the chosen duration',
+  meta.completionBonusXP === ER.COMPLETION_BONUS_BY_DURATION[ER.DEFAULT_DURATION] && meta.completionBonusXP > 0);
+check('the attempt stores its own duration copy',
+  ER.DURATIONS.every(d => ER.buildChallengeMeta({ durationDays: d }).energyReset.durationDays === d));
 check('every habit has a "why this helps" entry',
   tasks.every(t => !!ER.WHY[t.habitKey]));
+
+// ══ Week-by-week trajectory (longer durations) ═════════════════════════════
+const traj30 = {};
+for (let n = 1; n <= 28; n++) traj30[n] = { dayNumber: n, tasks: {}, overallEnergy: 4 + Math.floor((n - 1) / 7) };
+const weeks = weeklyEnergyTrajectory({ days: traj30, endDayNum: 28 });
+check('the trajectory splits a 28-day run into four challenge weeks', weeks.length === 4);
+check('each week reports its own average',
+  weeks.map(w => w.average).join(',') === '4,5,6,7');
+check('each week reports how many days it rests on', weeks.every(w => w.ratedDays === 7));
+check('a week with no ratings reports null rather than zero',
+  weeklyEnergyTrajectory({ days: { 1: { overallEnergy: 5 } }, endDayNum: 14 })[1].average === null);
+
+const summary30 = buildEnergySummary({
+  days: traj30, endDayNum: 28, tasks, lagKeys: ER.LAGGED_HABIT_KEYS,
+  windowSize: ER.windowForDuration(30), maxAssociations: ER.insightDepth(30).maxAssociations,
+  trajectory: true, depthNote: ER.insightDepth(30).note,
+});
+check('a 30-day summary includes the week-by-week trajectory', summary30.trajectory?.length === 4);
+check('it compares a week of days against a week of days',
+  summary30.beforeDays.length === 7 && summary30.afterDays.length === 7);
+check('a long run reports improvement across the month', summary30.average.after > summary30.average.before);
+check('it carries the depth note explaining what the length bought', !!summary30.depthNote);
+
+const summary7 = buildEnergySummary({
+  days: makeDays([[4,4,4],[4,4,4],[5,5,5],[6,6,6],[7,7,7],[7,7,7],[8,8,8]]), endDayNum: 7, tasks,
+  windowSize: ER.windowForDuration(7), maxAssociations: ER.insightDepth(7).maxAssociations,
+  trajectory: ER.insightDepth(7).trajectory,
+});
+check('a 7-day run still produces a real before/after', summary7.enoughData);
+check('it compares its first three rated days against its last three',
+  JSON.stringify(summary7.beforeDays) === '[1,2,3]' && JSON.stringify(summary7.afterDays) === '[5,6,7]');
+check('a 7-day run shows no trajectory — one week is not a trajectory', summary7.trajectory === null);
+check('the number of surfaced patterns is capped by the duration\'s depth',
+  buildEnergySummary({ days: assocDays, endDayNum: 10, tasks, maxAssociations: 1 }).associations.length <= 1);
+check('the evidence bar for a pattern does not move with duration',
+  ASSOCIATION_MIN.perGroup === 2 && ASSOCIATION_MIN.diff === 0.5);
 
 const failed = results.filter(x => !x.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);

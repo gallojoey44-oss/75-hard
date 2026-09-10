@@ -1,5 +1,5 @@
 /**
- * Energy tracking — the measurement half of the 10-Day Energy Reset.
+ * Energy tracking — the measurement half of the Energy Reset challenge.
  *
  * Three ratings per day (morning / afternoon / overall, each 1–10) live directly
  * on the existing day record as optional fields, exactly like the Muscle
@@ -9,8 +9,9 @@
  *
  * Everything here is pure and observational. It compares what the user logged
  * and reports differences and associations; it never asserts that a habit CAUSED
- * an energy change, because a 10-day single-arm self-report cannot establish
- * that. Phrasing is enforced by the callers using ASSOCIATION_PHRASING below.
+ * an energy change, because a short single-arm self-report cannot establish
+ * that — at any of the challenge's lengths. Phrasing is enforced by the callers
+ * using ASSOCIATION_PHRASING below.
  */
 
 /** The three tracked dimensions, in display order. */
@@ -26,12 +27,25 @@ export const ENERGY_KEYS = ENERGY_FIELDS.map(f => f.key);
 export const ENERGY_SCALE = { min: 1, max: 10 };
 
 /**
- * How many rated days form the "before" and "after" windows.
+ * Default window: how many rated days form the "before" and "after" sides.
  *
  * Three days each smooths out a single unusually good or bad day without
- * needing more data than a 10-day challenge can produce.
+ * needing more data than the shortest challenge can produce. Callers running a
+ * longer challenge pass a larger window, so a month-long attempt compares two
+ * weeks-worth of days rather than two three-day slivers.
  */
 export const WINDOW_SIZE = 3;
+
+/**
+ * The window actually used, given how many days were rated.
+ *
+ * The requested window is capped so the two sides can never overlap and are
+ * always balanced: with only five rated days a window of seven degrades to two
+ * per side rather than swallowing the whole run and reporting nothing.
+ */
+export function effectiveWindow(requested, ratedCount) {
+  return Math.max(1, Math.min(requested || WINDOW_SIZE, Math.floor((ratedCount || 0) / 2)));
+}
 
 /**
  * Minimum rated days before a before/after comparison is shown at all.
@@ -128,9 +142,11 @@ export function energyComparison({ days, endDayNum, baseline = null, windowSize 
     afterRecords = rated.slice(-windowSize);
   } else {
     source = 'derived';
-    beforeRecords = rated.slice(0, windowSize);
-    // Everything not already spent on the baseline window.
-    afterRecords = rated.slice(beforeRecords.length).slice(-windowSize);
+    // Early days vs final days, both sides sized to what the run actually
+    // produced so they stay balanced and never overlap.
+    const w = effectiveWindow(windowSize, rated.length);
+    beforeRecords = rated.slice(0, w);
+    afterRecords = rated.slice(w).slice(-w);
   }
 
   const need = base ? MIN_RATED_DAYS.withBaseline : MIN_RATED_DAYS.derived;
@@ -185,7 +201,7 @@ export const ASSOCIATION_PHRASING = {
     `Your ${dim} averaged ${diff} ${diff === 1 ? 'point' : 'points'} higher on days you completed ${label}.`,
   nextDay: (label, diff, dim) =>
     `Your ${dim} averaged ${diff} ${diff === 1 ? 'point' : 'points'} higher after nights you completed ${label}.`,
-  caveat: 'These are patterns in what you logged, not proof of cause. Ten days of your own ratings can show what went together — not what made what happen.',
+  caveat: 'These are patterns in what you logged, not proof of cause. Your own ratings over a few weeks can show what went together — not what made what happen.',
 };
 
 /** Minimum days on each side, and minimum gap, before a pattern is surfaced. */
@@ -248,17 +264,61 @@ export function energyAssociations({ days, endDayNum, tasks = [], lagKeys = [], 
 }
 
 /**
- * The complete energy result for a finished attempt — the object the Day 10
- * completion screen renders.
+ * Average energy per challenge week — the trajectory a longer run can show that
+ * two endpoints cannot.
+ *
+ * A challenge week is the same fixed 7-day block from the challenge start that
+ * the rest of Forge uses. Weeks with no ratings are reported with a null average
+ * rather than dropped, so a gap reads as a gap.
  */
-export function buildEnergySummary({ days, endDayNum, tasks = [], baseline = null, lagKeys = [] } = {}) {
-  const comparison = energyComparison({ days, endDayNum, baseline });
+export function weeklyEnergyTrajectory({ days, endDayNum, dimension = 'overallEnergy' } = {}) {
+  const weeks = [];
+  for (let start = 1; start <= (endDayNum || 0); start += 7) {
+    const end = Math.min(start + 6, endDayNum);
+    const values = [];
+    for (let n = start; n <= end; n++) {
+      const v = ratingOf(days?.[n], dimension);
+      if (v !== null) values.push(v);
+    }
+    weeks.push({
+      week: Math.ceil(start / 7),
+      startDay: start,
+      endDay: end,
+      ratedDays: values.length,
+      average: mean(values),
+    });
+  }
+  return weeks;
+}
+
+/**
+ * The complete energy result for a finished attempt — the object the completion
+ * screen renders.
+ *
+ * `windowSize` and `maxAssociations` scale with the chosen duration: a longer
+ * run smooths over more days and can surface more patterns, because it has more
+ * observations. The evidence bar for a pattern never moves — only how many of
+ * the patterns that clear it are shown.
+ */
+export function buildEnergySummary({
+  days, endDayNum, tasks = [], baseline = null, lagKeys = [],
+  windowSize = WINDOW_SIZE, maxAssociations = 4, trajectory = false, depthNote = null,
+} = {}) {
+  const comparison = energyComparison({ days, endDayNum, baseline, windowSize });
+  const associations = comparison.enoughData
+    ? energyAssociations({ days, endDayNum, tasks, lagKeys }).slice(0, maxAssociations)
+    : [];
   return {
     tracked: true,
     ...comparison,
-    associations: comparison.enoughData
-      ? energyAssociations({ days, endDayNum, tasks, lagKeys })
-      : [],
+    durationDays: endDayNum,
+    associations,
+    // Only offered where there is more than one week to compare — a trajectory
+    // of one point is not a trajectory.
+    trajectory: trajectory && endDayNum > 7
+      ? weeklyEnergyTrajectory({ days, endDayNum }).filter(w => w.ratedDays > 0)
+      : null,
+    depthNote,
     caveat: ASSOCIATION_PHRASING.caveat,
   };
 }

@@ -5298,3 +5298,40 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   .cc-energy-value { font-size: 20px; }
   .cc-energy-pct { font-size: 17px; }
 }
+
+/* Energy Reset — duration selector (four legitimate programs, one recommended) */
+.er-durations { display: flex; flex-direction: column; gap: 8px; }
+.er-duration {
+  display: flex; flex-direction: column; gap: 4px; width: 100%;
+  padding: 12px 14px; border-radius: var(--radius); cursor: pointer; text-align: left;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+}
+.er-duration.active {
+  background: linear-gradient(135deg, rgba(251,191,36,0.16), rgba(245,158,11,0.05));
+  border-color: var(--er-glow);
+}
+.er-duration-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 15px; font-weight: 700; }
+.er-duration-rec {
+  font-size: 10px; font-weight: 800; color: #10B981;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.er-duration-blurb { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.er-duration-reward { font-size: 11px; color: var(--er-glow); font-weight: 700; }
+
+/* Completion — per-duration messaging and the week-by-week trajectory */
+.cc-energy-message { font-size: 13px; line-height: 1.65; color: var(--text); margin-bottom: 8px; }
+.cc-energy-next {
+  font-size: 12px; line-height: 1.6; color: var(--text2);
+  background: var(--bg2); border-left: 3px solid var(--er-glow);
+  border-radius: var(--radius); padding: 9px 11px; margin-bottom: 12px;
+}
+.cc-energy-traj { margin-top: 14px; }
+.cc-energy-traj-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 12px; }
+.cc-energy-traj-week { min-width: 56px; color: var(--text2); }
+.cc-energy-traj-bar { flex: 1; height: 8px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
+.cc-energy-traj-fill {
+  display: block; height: 100%; border-radius: 4px;
+  background: linear-gradient(90deg, var(--er-glow-2), var(--er-glow));
+}
+.cc-energy-traj-val { min-width: 42px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cc-energy-depth { font-size: 11px; color: var(--text3); line-height: 1.55; margin-top: 10px; font-style: italic; }
