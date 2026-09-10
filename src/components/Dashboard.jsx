@@ -8,6 +8,9 @@ import SupportProgress from './SupportProgress';
 import MuscleBuildingPanel from './MuscleBuildingPanel';
 import HormoneHealthPanel from './HormoneHealthPanel';
 import EnergyResetPanel from './EnergyResetPanel';
+import FatLossHardPanel from './FatLossHardPanel';
+import TransformationPhotos from './TransformationPhotos';
+import * as FLH from '../data/fatLossHardConfig';
 import { completionMessage as energyCompletionMessage } from '../data/energyResetConfig';
 import {
   computeTotalXP, computeTodayXP,
@@ -617,7 +620,10 @@ function BadgeRow({ badges }) {
 
 // ── Transformation report (Fat Loss Challenge completion reward) ────────────
 
-function TransformationReport({ days, duration, totalDone, challengeXP, getDayCompletion }) {
+function TransformationReport({
+  days, duration, totalDone, challengeXP, getDayCompletion,
+  meta = null, profileId = null, tasks = [], sessions = [],
+}) {
   const nums = Object.keys(days).map(Number).sort((a, b) => a - b);
   const withWeight = nums.filter(n => (days[n]?.weight || 0) > 0);
   const withWaist  = nums.filter(n => (days[n]?.waist  || 0) > 0);
@@ -634,12 +640,27 @@ function TransformationReport({ days, duration, totalDone, challengeXP, getDayCo
   const waistDelta  = firstWaist != null && lastWaist != null ? Math.round((lastWaist - firstWaist) * 10) / 10 : null;
   const fmtDelta = (d, unit) => `${d > 0 ? '+' : ''}${d} ${unit}`;
 
+  const hard = FLH.isFatLossHard(meta);
+  // Per-habit adherence, counted from what was actually logged.
+  const daysWith = (taskId) => nums.filter(n => days[n]?.tasks?.[taskId]).length;
+  const sessionCount = (type) => (sessions || []).filter(x => x.type === type).length;
+  const bonus = meta?.completionBonusXP ?? 500;
+  const badgeLabel = 'Body Fat Slayer';
+
   return (
     <div className="transform-report">
-      <div className="transform-report-title">🏆 Your Transformation Report</div>
+      <div className="transform-report-title">
+        🏆 {hard ? 'Hard Mode Complete' : 'Your Transformation Report'}
+      </div>
       <p className="transform-report-sub">
-        30 days done. Put your Day 1 and Day {duration} photos side by side — that&apos;s your before and after.
+        {duration} days done.{' '}
+        {hard
+          ? 'Here is what you actually did — and your own before and after.'
+          : `Put your Day 1 and Day ${duration} photos side by side — that's your before and after.`}
       </p>
+
+      {hard && profileId && <TransformationPhotos profileId={profileId} duration={duration} />}
+
       <div className="transform-grid">
         <div className="transform-cell">
           <div className="transform-cell-label">Weight change</div>
@@ -651,7 +672,11 @@ function TransformationReport({ days, duration, totalDone, challengeXP, getDayCo
         <div className="transform-cell">
           <div className="transform-cell-label">Est. body fat change</div>
           <div className="transform-cell-value">{weightDelta != null ? `~${fmtDelta(weightDelta, 'lb')}` : '—'}</div>
-          <div className="transform-cell-detail">estimate — protein + lifting keep it mostly fat</div>
+          <div className="transform-cell-detail">
+            {weightDelta != null
+              ? 'rough estimate from scale weight — protein + lifting keep more of it fat'
+              : 'no scale needed — your waist and photos are the measurement'}
+          </div>
         </div>
         <div className="transform-cell">
           <div className="transform-cell-label">Waist change</div>
@@ -664,6 +689,42 @@ function TransformationReport({ days, duration, totalDone, challengeXP, getDayCo
           <div className="transform-cell-label">Progress photos</div>
           <div className="transform-cell-value">{photoDays}/{duration}</div>
         </div>
+        {hard && (
+          <>
+            <div className="transform-cell">
+              <div className="transform-cell-label">Protein target hit</div>
+              <div className="transform-cell-value">{daysWith('fl_protein')}/{duration}</div>
+              <div className="transform-cell-detail">days · the keystone habit</div>
+            </div>
+            <div className="transform-cell">
+              <div className="transform-cell-label">10k steps hit</div>
+              <div className="transform-cell-value">{daysWith('fl_steps')}/{duration}</div>
+              <div className="transform-cell-detail">days at {FLH.STEP_TARGET.toLocaleString()}+</div>
+            </div>
+            <div className="transform-cell">
+              <div className="transform-cell-label">90% fullness held</div>
+              <div className="transform-cell-value">{daysWith('fl_fullness')}/{duration}</div>
+              <div className="transform-cell-detail">days · no calories counted</div>
+            </div>
+            <div className="transform-cell">
+              <div className="transform-cell-label">Sleep target hit</div>
+              <div className="transform-cell-value">{daysWith('fl_sleep')}/{duration}</div>
+              <div className="transform-cell-detail">days at {FLH.SLEEP_TARGET.min}–{FLH.SLEEP_TARGET.max}h</div>
+            </div>
+            <div className="transform-cell">
+              <div className="transform-cell-label">Lifting sessions</div>
+              <div className="transform-cell-value">{sessionCount('lifting')}</div>
+              <div className="transform-cell-detail">target {3 * Math.ceil(duration / 7)}</div>
+            </div>
+            <div className="transform-cell">
+              <div className="transform-cell-label">Cardio sessions</div>
+              <div className="transform-cell-value">{sessionCount('zone2') + sessionCount('intervals')}</div>
+              <div className="transform-cell-detail">
+                {sessionCount('zone2')} Zone 2–3 · {sessionCount('intervals')} interval
+              </div>
+            </div>
+          </>
+        )}
         <div className="transform-cell">
           <div className="transform-cell-label">Days logged</div>
           <div className="transform-cell-value">{daysLogged}/{duration}</div>
@@ -672,12 +733,20 @@ function TransformationReport({ days, duration, totalDone, challengeXP, getDayCo
         <div className="transform-cell">
           <div className="transform-cell-label">XP earned</div>
           <div className="transform-cell-value">{challengeXP.toLocaleString()}</div>
-          <div className="transform-cell-detail">incl. +500 completion reward</div>
+          <div className="transform-cell-detail">incl. +{bonus.toLocaleString()} completion reward</div>
         </div>
       </div>
-      <div className="transform-badge-row">🗡️ Badge earned: <strong>Body Fat Slayer</strong></div>
+      <div className="transform-badge-row">🗡️ Badge earned: <strong>{badgeLabel}</strong></div>
+      {hard && (
+        <div className="transform-notice">
+          Forge has no validated body-composition measurement, so it will not tell you your body-fat
+          percentage changed by a number. What is above is what you logged, plus your own photos and
+          waist measurement — which is the honest version.
+        </div>
+      )}
       <p className="transform-report-note">
-        Numbers are estimates from your logs. Results vary depending on starting body fat, adherence, calorie intake, and individual response.
+        {hard ? FLH.WHAT_YOU_MAY_NOTICE.disclaimer
+          : 'Numbers are estimates from your logs. Results vary depending on starting body fat, adherence, calorie intake, and individual response.'}
       </p>
     </div>
   );
@@ -1119,6 +1188,7 @@ export default function Dashboard({ setView }) {
       <MuscleBuildingPanel />
       <HormoneHealthPanel />
       <EnergyResetPanel />
+      <FatLossHardPanel />
       <ChallengePerformance setView={setView} />
       <SupportProgress />
 
@@ -1140,6 +1210,10 @@ export default function Dashboard({ setView }) {
           totalDone={totalDone}
           challengeXP={xpData.total}
           getDayCompletion={getDayCompletion}
+          meta={meta}
+          profileId={activeProfile}
+          tasks={profile?.tasks || []}
+          sessions={profile?.weeklySessions || []}
         />
       )}
 

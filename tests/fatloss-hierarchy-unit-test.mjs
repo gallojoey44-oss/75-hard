@@ -123,7 +123,18 @@ for (const [name, v] of Object.entries(fl.variants)) {
   const ids = v.start_tasks.map(t => t.id);
   check(`23: ${name} variant has no duplicate task ids`, new Set(ids).size === ids.length, ids.join());
 }
-check('Hard variant keeps exactly two Keystone habits (deficit is ⭐⭐)', keystoneHabitsOf(fl.variants.hard.start_tasks).length === 2 && getTaskKeystone(task('fl_deficit', fl.variants.hard.start_tasks)) === 2);
+// Hard Mode replaced the old "stay in a 300–600 calorie deficit" task with the
+// 90% fullness habit, which sits in the same ⭐⭐ Important tier — so the
+// invariant is unchanged: Fat Loss has exactly TWO Keystone habits at every
+// difficulty, and Hard's extra portion-control task is not one of them.
+check('Hard variant keeps exactly two Keystone habits (fullness is ⭐⭐)',
+  keystoneHabitsOf(fl.variants.hard.start_tasks).length === 2 &&
+  getTaskKeystone(task('fl_fullness', fl.variants.hard.start_tasks)) === 2);
+check('the Keystone habits are still protein and whole foods at every difficulty',
+  Object.values(fl.variants).every(v =>
+    keystoneHabitsOf(v.start_tasks).map(t => t.id).sort().join(',') === 'fl_protein,fl_whole'));
+check('the old calorie-deficit task is gone from every variant',
+  Object.values(fl.variants).every(v => !v.start_tasks.some(t => t.id === 'fl_deficit')));
 check('Beginner variant uses the same hierarchy', keystoneHabitsOf(fl.variants.beginner.start_tasks).length === 2 &&
   getTaskXP(task('fl_protein', fl.variants.beginner.start_tasks)) === 40);
 

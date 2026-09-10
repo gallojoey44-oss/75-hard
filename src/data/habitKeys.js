@@ -48,6 +48,11 @@ export const HABIT_KEYS = {
   MORNING_LIGHT: 'morning_light',
   CAFFEINE_DISCIPLINE: 'caffeine_discipline',
   EVENING_WINDDOWN: 'evening_winddown',
+  // Fat Loss — Hard Mode
+  FULLNESS_CONTROL: 'fullness_control',
+  INTERVAL_TRAINING: 'interval_training',
+  WAIST_MEASUREMENT: 'waist_measurement',
+  WEEKLY_REVIEW: 'weekly_review',
 };
 
 /** Human labels for habit keys — used in merge explanations. */
@@ -78,6 +83,10 @@ export const HABIT_LABELS = {
   [HABIT_KEYS.MORNING_LIGHT]: 'Morning light',
   [HABIT_KEYS.CAFFEINE_DISCIPLINE]: 'Caffeine discipline',
   [HABIT_KEYS.EVENING_WINDDOWN]: 'Evening wind-down',
+  [HABIT_KEYS.FULLNESS_CONTROL]: 'Portion control (90% fullness)',
+  [HABIT_KEYS.INTERVAL_TRAINING]: 'Interval training',
+  [HABIT_KEYS.WAIST_MEASUREMENT]: 'Waist measurement',
+  [HABIT_KEYS.WEEKLY_REVIEW]: 'Weekly review',
 };
 
 /**

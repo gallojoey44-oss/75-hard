@@ -9,6 +9,7 @@ import SupportProgress from './SupportProgress';
 import MuscleBuildingPanel from './MuscleBuildingPanel';
 import HormoneHealthPanel from './HormoneHealthPanel';
 import EnergyResetPanel from './EnergyResetPanel';
+import FatLossHardPanel from './FatLossHardPanel';
 import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
@@ -826,6 +827,7 @@ export default function DailyView({ editDayNum, setView }) {
       <MuscleBuildingPanel />
       <HormoneHealthPanel />
       <EnergyResetPanel />
+      <FatLossHardPanel />
       <ChallengePerformance />
       <SupportProgress />
 

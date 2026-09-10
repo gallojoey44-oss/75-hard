@@ -2,6 +2,7 @@ import { HABIT_KEYS } from './habitKeys';
 import * as MB from './muscleBuildingConfig';
 import * as HH from './hormoneHealthConfig';
 import * as ER from './energyResetConfig';
+import * as FLH from './fatLossHardConfig';
 
 // Official Forge challenge template library.
 // Display metadata (emoji, startable) lives alongside the template data;
@@ -549,41 +550,42 @@ export const CHALLENGE_TEMPLATES = [
           { ...DAILY_LOG_TASK, xp: 10, keystone: 1 },
         ],
       },
+      // ── HARD MODE ────────────────────────────────────────────────────────
+      // A focused 30-day cutting phase, and a real progression from Standard
+      // rather than the same challenge with bigger numbers. Its daily tasks,
+      // weekly requirements, four-week arc and safety screen all come from
+      // fatLossHardConfig — including the fullness habit that REPLACED the old
+      // "stay in a 300–600 calorie deficit" task, because a numeric deficit
+      // requires exactly the calorie tracking this mode is built to avoid.
       hard: {
         difficulty: 'hard',
-        expected_results: 'Already active: 3–5 lb body fat loss · Beginners: 4–6 lb body fat loss',
+        recommended_duration_days: FLH.HARD_DURATION_DAYS,
+        expected_results: 'Typical target: approximately 3–5 lb of body fat over 30 days for an appropriate candidate following the program consistently. Results vary.',
         required_daily_tasks: [
-          '⭐⭐⭐ Hit protein goal (0.8–1.0 g per lb of goal body weight) (40 XP).',
-          '⭐⭐⭐ Eat mostly whole foods (~90% of intake) (40 XP).',
-          '⭐⭐ Walk 10,000+ steps (25 XP).',
-          '⭐⭐ Stay in a moderate calorie deficit (~300–600 calories) (25 XP).',
-          '⭐⭐ Sleep 7.5–9 hours (25 XP).',
-          '⭐ Hit water goal (15 XP).',
-          '⭐ Take a progress photo (10 XP).',
-          '⭐ Complete Daily Log (10 XP).',
+          `⭐⭐⭐ Hit protein goal (${FLH.PROTEIN.perLbLow}–${FLH.PROTEIN.perLbHigh} g per lb of target body weight) (${FLH.XP.protein} XP).`,
+          `⭐⭐⭐ Eat mostly whole foods (~${FLH.WHOLE_FOOD_PCT}% of intake) (${FLH.XP.wholeFood} XP).`,
+          `⭐⭐ Walk ${FLH.STEP_TARGET.toLocaleString()}+ steps (${FLH.XP.steps} XP).`,
+          `⭐⭐ ${FLH.FULLNESS.short} (${FLH.XP.fullness} XP).`,
+          `⭐⭐ Sleep ${FLH.SLEEP_TARGET.min}–${FLH.SLEEP_TARGET.max} hours (${FLH.XP.sleep} XP).`,
+          `⭐ Hit water goal (${FLH.XP.water} XP).`,
+          `⭐ Daily progress photo — taken in the app, required (${FLH.XP.photo} XP).`,
+          `⭐ Complete Daily Log (${FLH.XP.dailyLog} XP).`,
         ],
         weekly_requirements: [
-          'Lift 3x per week',
-          '3 × 30-minute Zone 2–3 cardio sessions',
-          'Measure waist',
-          'Review weekly progress',
+          '🏋️ Resistance training ×3 — your existing programme counts',
+          '❤️ Zone 2–3 cardio ×2 — 30 minutes each',
+          '🔥 Interval session ×1 — roughly 15–25 minutes total, not 30 minutes flat out',
+          '📏 Waist measurement ×1',
+          '🔍 Weekly review ×1',
         ],
         optional_tasks: [
-          'Daily weigh-in.',
+          'Weigh-in (optional — the challenge works fully without a scale).',
           'Plan meals for tomorrow.',
         ],
-        // Same hierarchy; Hard adds the calorie-deficit task as ⭐⭐ Important
-        // (Fat Loss keeps exactly TWO Keystone habits: protein + whole foods).
-        start_tasks: [
-          { id: 'fl_photo',   name: 'Take progress photo',                 icon: '📸', color: '#74B9FF', xp: 10, keystone: 1, habitKey: HABIT_KEYS.PROGRESS_PHOTO },
-          { id: 'fl_protein', name: 'Hit protein goal (0.8–1 g/lb goal weight)', icon: '🥩', color: '#FF6B6B', xp: 40, keystone: 3, keystoneHabit: true, habitKey: HABIT_KEYS.PROTEIN_TARGET },
-          { id: 'fl_steps',   name: 'Walk 10,000+ steps',                  icon: '🚶', color: '#FFB347', xp: 25, keystone: 2, habitKey: HABIT_KEYS.DAILY_STEPS, target: { value: 10000, unit: 'steps', direction: 'atLeast' } },
-          { id: 'fl_deficit', name: 'Stay in calorie deficit (~300–600 cal)', icon: '🔻', color: '#F97316', xp: 25, keystone: 2 },
-          { id: 'fl_whole',   name: 'Eat mostly whole foods (~90%)',       icon: '🥗', color: '#6BCB77', xp: 40, keystone: 3, keystoneHabit: true, habitKey: HABIT_KEYS.WHOLE_FOODS },
-          { id: 'fl_water',   name: 'Hit water goal',                      icon: '💧', color: '#45B7D1', xp: 15, keystone: 1, habitKey: HABIT_KEYS.HYDRATION },
-          { id: 'fl_sleep',   name: 'Sleep 7.5–9 hours',                   icon: '😴', color: '#A78BFA', xp: 25, keystone: 2, habitKey: HABIT_KEYS.SLEEP_TARGET, target: { value: 7.5, unit: 'hours', direction: 'atLeast' } },
-          { ...DAILY_LOG_TASK, xp: 10, keystone: 1 },
-        ],
+        // No calorie target anywhere. The daily list is built by
+        // FLH.buildStartTasks so the protein target reflects the user's setup;
+        // this array is the library preview of it.
+        start_tasks: FLH.buildStartTasks(),
       },
     },
   },

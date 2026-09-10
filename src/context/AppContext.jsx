@@ -21,6 +21,7 @@ import {
 import { HORMONE_HEALTH_TEMPLATE_ID } from '../data/hormoneHealthConfig';
 import { ENERGY_RESET_TEMPLATE_ID, LAGGED_HABIT_KEYS, windowForDuration, insightDepth } from '../data/energyResetConfig';
 import { buildEnergySummary } from '../utils/energyTracking';
+import { clearProfilePhotos } from '../utils/photoStore';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS, computeLifetimeXP } from '../utils/gamification';
@@ -1848,6 +1849,10 @@ export function AppProvider({ children }) {
     setQuoteData(prev => ({ ...prev, [profId]: {} }));
     setExperiments(prev => ({ ...prev, [profId]: [] }));
     setDismissedHints(prev => ({ ...prev, [profId]: {} }));
+    // Progress photos live in IndexedDB rather than localStorage, so deleting a
+    // profile's data has to clear them explicitly or the images would outlive
+    // everything else the user asked to erase.
+    clearProfilePhotos(profId);
   }, [activeProfile, setProfiles, setAllDays, setArchives, setQuoteData, setExperiments, setDismissedHints]);
 
   // Update start date without wiping saved day data — used for backfilling

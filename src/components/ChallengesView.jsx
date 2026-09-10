@@ -16,6 +16,8 @@ import SupportChallengePicker from './SupportChallengePicker';
 import MuscleBuildingSetup from './MuscleBuildingSetup';
 import HormoneHealthSetup from './HormoneHealthSetup';
 import EnergyResetSetup from './EnergyResetSetup';
+import FatLossHardSetup from './FatLossHardSetup';
+import * as FLH from '../data/fatLossHardConfig';
 import * as MB from '../data/muscleBuildingConfig';
 import * as HH from '../data/hormoneHealthConfig';
 import * as ER from '../data/energyResetConfig';
@@ -584,6 +586,12 @@ export default function ChallengesView({ setView }) {
       // locked onto THIS attempt's challenge rules, and the required Cold Shower
       // task is generated into the daily task list only when enabled.
       const coldEnabled = ps.template.id === MENTAL_TRAINING_TEMPLATE_ID && ps.coldExposureUpgradeEnabled === true;
+      // Fat Loss HARD MODE builds its own daily tasks, weekly requirements and
+      // config from fatLossHardConfig. Beginner and Standard fall through to the
+      // template's own start_tasks and the legacy weekly requirements exactly as
+      // before — nothing about them changes.
+      const hardFatLoss = ps.template.id === FLH.FAT_LOSS_TEMPLATE_ID && ps.variant === FLH.HARD_VARIANT;
+      const hardSetup = hardFatLoss ? (ps.hardSetup || FLH.defaultSetup()) : null;
       startChallenge(undefined, {
         challenge: {
           templateId: ps.template.id,
@@ -602,8 +610,17 @@ export default function ChallengesView({ setView }) {
           badgeId: ps.template.rewards?.badge_id || null,
           // Locked challenge-attempt rule — default false, MT only.
           coldExposureUpgradeEnabled: coldEnabled,
+          ...(hardFatLoss ? {
+            fatLossHard: FLH.buildConfig(hardSetup),
+            // Per-attempt weekly defs win over the legacy Fat Loss constant, so
+            // Hard gets 3 lifts + 2 Zone 2-3 + 1 interval + waist + review while
+            // every existing Beginner/Standard attempt keeps 3 lifts + 2 Zone 2.
+            weeklyRequirementDefs: FLH.weeklyRequirementDefs(),
+          } : {}),
         },
-        tasks: applyColdExposureUpgrade(variantDef.start_tasks, coldEnabled),
+        tasks: hardFatLoss
+          ? FLH.buildStartTasks(hardSetup)
+          : applyColdExposureUpgrade(variantDef.start_tasks, coldEnabled),
         bonusMissions: ps.template.bonus_missions || [],
         futureSelfLetter: letter,
         startDate,
@@ -848,12 +865,29 @@ export default function ChallengesView({ setView }) {
             ))}
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setPendingStart(null)}>{HARD_CONFIRM.backLabel}</button>
-              <button className="btn btn-primary" onClick={() => setPendingStart(p => ({ ...p, step: 'letter' }))}>
+              <button
+                className="btn btn-primary"
+                onClick={() => setPendingStart(p => ({
+                  ...p,
+                  // Fat Loss Hard Mode gets one extra setup step (protein target
+                  // + safety screen) between the warning and the letter. Every
+                  // other Hard variant goes straight to the letter as before.
+                  step: (p.template?.id === FLH.FAT_LOSS_TEMPLATE_ID) ? 'hardFatLossSetup' : 'letter',
+                }))}
+              >
                 {HARD_CONFIRM.continueLabel}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Fat Loss HARD MODE setup — protein target and the safety screen. */}
+      {pendingStart?.step === 'hardFatLossSetup' && (
+        <FatLossHardSetup
+          onCancel={() => setPendingStart(null)}
+          onSubmit={(hardSetup) => setPendingStart(p => ({ ...p, hardSetup, step: 'letter' }))}
+        />
       )}
 
       {/* A configured challenge's own setup screen, resolved from the registry
