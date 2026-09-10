@@ -44,6 +44,10 @@ export const HABIT_KEYS = {
   OMEGA3_FOODS: 'omega3_foods',
   IRON_RICH_FOODS: 'iron_rich_foods',
   SYMPTOM_CHECKIN: 'symptom_checkin',
+  // 10-Day Energy Reset
+  MORNING_LIGHT: 'morning_light',
+  CAFFEINE_DISCIPLINE: 'caffeine_discipline',
+  EVENING_WINDDOWN: 'evening_winddown',
 };
 
 /** Human labels for habit keys — used in merge explanations. */
@@ -71,6 +75,9 @@ export const HABIT_LABELS = {
   [HABIT_KEYS.OMEGA3_FOODS]: 'Omega-3 foods',
   [HABIT_KEYS.IRON_RICH_FOODS]: 'Iron-rich foods',
   [HABIT_KEYS.SYMPTOM_CHECKIN]: 'Symptom check-in',
+  [HABIT_KEYS.MORNING_LIGHT]: 'Morning light',
+  [HABIT_KEYS.CAFFEINE_DISCIPLINE]: 'Caffeine discipline',
+  [HABIT_KEYS.EVENING_WINDDOWN]: 'Evening wind-down',
 };
 
 /**

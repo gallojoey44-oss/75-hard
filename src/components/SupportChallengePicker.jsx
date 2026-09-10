@@ -5,6 +5,7 @@ import {
   getCompletionBonusForDuration, applyColdExposureUpgrade, MENTAL_TRAINING_TEMPLATE_ID,
 } from '../data/challengeTemplates';
 import { COMPATIBILITY, groupByCompatibility } from '../data/challengeCompatibility';
+import { buildersFor, isConfigured, isStartableTemplate } from '../data/configuredChallenges';
 import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
 import { HABIT_LABELS } from '../data/habitKeys';
 import { dateOffsetFromToday } from '../utils/challengeSchedule';
@@ -35,8 +36,11 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
 
   // Only challenges that can actually be started are offered, and never the one
   // already running as primary.
+  // A configured challenge (one that builds its own attempt) is just as
+  // stackable as a variant-based one — isStartableTemplate covers both, so
+  // adding a challenge to the configured registry makes it available here too.
   const candidates = visibleChallenges(activeProfile)
-    .filter(t => t.startable && t.variants && t.id !== primaryId);
+    .filter(t => isStartableTemplate(t) && t.id !== primaryId);
   const groups = groupByCompatibility(primaryId, candidates);
 
   function choose(item) {
@@ -49,7 +53,12 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
     else setStep('confirm');
   }
 
+  const configured = pick ? buildersFor(pick.template) : null;
+
   function tasksFor() {
+    // A configured challenge builds its own task list from its config module,
+    // using that challenge's own defaults — the support lane never invents one.
+    if (configured) return configured.buildTasks();
     const def = pick?.template?.variants?.[variant];
     return def?.start_tasks || [];
   }
@@ -58,8 +67,18 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
 
   function confirm() {
     const tpl = pick.template;
-    const ok = addSupportChallenge({
-      challenge: {
+    // A configured challenge supplies its whole descriptor — including its
+    // per-attempt config block and weekly requirement defs — so nothing about it
+    // is reassembled here.
+    const challenge = configured
+      ? {
+        ...configured.buildMeta(),
+        passingScore: tpl.passing_score ?? DEFAULT_PASSING_SCORE,
+        keystoneRequirement: tpl.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
+        rewardXP: tpl.rewards?.xp || 0,
+        badgeId: tpl.rewards?.badge_id || null,
+      }
+      : {
         templateId: tpl.id,
         name: tpl.challenge_name,
         emoji: tpl.emoji,
@@ -72,7 +91,9 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
         keystoneRequirement: tpl.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
         badgeId: tpl.rewards?.badge_id || null,
         coldExposureUpgradeEnabled: false,
-      },
+      };
+    const ok = addSupportChallenge({
+      challenge,
       tasks: applyColdExposureUpgrade(tasksFor(), false),
       startDate,
     });
@@ -179,7 +200,8 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
   }
 
   // ── Step: configure + confirm ─────────────────────────────────────────────
-  const durations = getDurationOptions(pick.template);
+  // A configured challenge fixes its own length in its descriptor.
+  const durations = configured ? [] : getDurationOptions(pick.template);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card sup-confirm" onClick={e => e.stopPropagation()}>
@@ -188,6 +210,9 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
           Adding as your <strong>Support Challenge</strong>. {primaryMeta?.name} stays primary.
         </div>
 
+        {/* A configured challenge has no difficulty modes — it is defined by its
+            own config, so the chooser is simply not shown for one. */}
+        {!configured && pick.template.variants && (
         <div className="sup-field">
           <label className="sup-label">Difficulty</label>
           <div className="sup-chips">
@@ -202,8 +227,9 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
             ))}
           </div>
         </div>
+        )}
 
-        {durations.length > 1 && (
+        {!configured && durations.length > 1 && (
           <div className="sup-field">
             <label className="sup-label">Duration</label>
             <div className="sup-chips">

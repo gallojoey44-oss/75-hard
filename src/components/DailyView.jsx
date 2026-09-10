@@ -8,6 +8,7 @@ import ChallengePerformance from './ChallengePerformance';
 import SupportProgress from './SupportProgress';
 import MuscleBuildingPanel from './MuscleBuildingPanel';
 import HormoneHealthPanel from './HormoneHealthPanel';
+import EnergyResetPanel from './EnergyResetPanel';
 import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
 import RatingSlider from './RatingSlider';
@@ -824,6 +825,7 @@ export default function DailyView({ editDayNum, setView }) {
           (Bonus Missions never affect the required challenge score.) */}
       <MuscleBuildingPanel />
       <HormoneHealthPanel />
+      <EnergyResetPanel />
       <ChallengePerformance />
       <SupportProgress />
 

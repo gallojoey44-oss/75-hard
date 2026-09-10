@@ -1,6 +1,7 @@
 import { HABIT_KEYS } from './habitKeys';
 import * as MB from './muscleBuildingConfig';
 import * as HH from './hormoneHealthConfig';
+import * as ER from './energyResetConfig';
 
 // Official Forge challenge template library.
 // Display metadata (emoji, startable) lives alongside the template data;
@@ -859,6 +860,40 @@ export const CHALLENGE_TEMPLATES = [
     inspiration_sources: ['Stacy Sims', 'Lauren Colenso-Semple', 'Kelly Casperson'],
     exercise_guidance: HH.EXERCISE_GUIDANCE,
     why: HH.WHY,
+  },
+  {
+    // 10-Day Energy Reset — every field below is derived from energyResetConfig,
+    // so the challenge is edited there rather than here.
+    id: ER.ENERGY_RESET_TEMPLATE_ID,
+    overall_difficulty: 'Medium',
+    emoji: ER.IDENTITY.emoji,
+    startable: true,
+    start_flow: 'configured',
+    template_version: 1,
+    task_id_prefix: 'er_',
+    challenge_name: ER.IDENTITY.name,
+    subtitle: ER.IDENTITY.subtitle,
+    purpose: ER.IDENTITY.goal,
+    tagline: ER.IDENTITY.pitch,
+    // Fixed at ten days — the short commitment IS the proposition.
+    duration_options_days: [ER.DURATION_DAYS],
+    default_duration_days: ER.DURATION_DAYS,
+    metrics_targeted: ['morning_energy', 'afternoon_energy', 'overall_energy', 'sleep_quality', 'energy_rating'],
+    insights_triggers: {
+      pre_recommendation: 'user reports low energy, poor morning alertness or afternoon crashes',
+      in_progress_monitoring: 'daily energy ratings, sleep adherence, morning light consistency',
+    },
+    success_threshold: 'habit adherence >= 0.80 AND average energy rating trending up across the ten days',
+    rewards: { xp: ER.COMPLETION_BONUS_XP, badge_id: 'iron_will' },
+    safety_flags: {
+      contraindications: ['untreated sleep disorder', 'fatigue with an unexplained medical cause'],
+      notes: ER.MICRONUTRIENT_CAUTION,
+    },
+    evidence_level: 'moderate',
+    risk_level: 'low',
+    inspiration_sources: ['Andrew Huberman', 'Matthew Walker', 'Peter Attia', 'Layne Norton'],
+    exercise_guidance: ER.EXERCISE_GUIDE,
+    why: ER.WHY,
   },
   {
     id: 'recovery_phase',

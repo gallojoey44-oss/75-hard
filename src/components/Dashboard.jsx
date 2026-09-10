@@ -7,6 +7,7 @@ import ChallengePerformance from './ChallengePerformance';
 import SupportProgress from './SupportProgress';
 import MuscleBuildingPanel from './MuscleBuildingPanel';
 import HormoneHealthPanel from './HormoneHealthPanel';
+import EnergyResetPanel from './EnergyResetPanel';
 import {
   computeTotalXP, computeTodayXP,
   computeBadges, detectSetback, BADGE_DEFS, RANKS,
@@ -93,6 +94,73 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
             </div>
             {summary.weeklyRequirements.missedUnits > 0 && (
               <div className="cc-changes-sub">{summary.weeklyRequirements.missedUnits} missed session{summary.weeklyRequirements.missedUnits === 1 ? '' : 's'} across finalized weeks.</div>
+            )}
+          </div>
+        )}
+
+        {/* 10-Day Energy Reset — the before/after energy result. Everything here
+            comes from ratings the user actually logged; a dimension they rated at
+            only one end is reported as uncomparable rather than shown as change.
+            Associations are patterns in the log, never causal claims. */}
+        {summary.energySummary?.tracked && (
+          <div className="cc-section cc-energy">
+            <div className="cc-section-title">⚡ Energy Reset Complete</div>
+            {summary.energySummary.enoughData ? (
+              <>
+                <div className="cc-energy-headline">
+                  <div className="cc-energy-col">
+                    <span className="cc-energy-label">Before</span>
+                    <span className="cc-energy-value">{summary.energySummary.average.before}/10</span>
+                  </div>
+                  <div className="cc-energy-arrow">→</div>
+                  <div className="cc-energy-col">
+                    <span className="cc-energy-label">After</span>
+                    <span className="cc-energy-value">{summary.energySummary.average.after}/10</span>
+                  </div>
+                  {summary.energySummary.average.pct != null && (
+                    <div className={`cc-energy-pct ${summary.energySummary.average.pct >= 0 ? 'up' : 'down'}`}>
+                      {summary.energySummary.average.pct >= 0 ? '↑' : '↓'} {Math.abs(summary.energySummary.average.pct)}%
+                    </div>
+                  )}
+                </div>
+                <div className="cc-energy-dims">
+                  {summary.energySummary.dimensions.map(d => (
+                    <div key={d.key} className="cc-energy-dim">
+                      <span className="cc-energy-dim-label">{d.icon} {d.label}</span>
+                      {d.pct != null ? (
+                        <>
+                          <span className="cc-energy-dim-values">{d.before} → {d.after}</span>
+                          <span className={`cc-energy-dim-pct ${d.pct >= 0 ? 'up' : 'down'}`}>
+                            {d.pct >= 0 ? '+' : ''}{d.pct}%
+                          </span>
+                        </>
+                      ) : (
+                        <span className="cc-energy-dim-values muted">not rated at both ends</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="cc-energy-source">
+                  {summary.energySummary.source === 'baseline'
+                    ? `Compared against the baseline you set before Day 1, using your last ${summary.energySummary.afterDays.length} rated ${summary.energySummary.afterDays.length === 1 ? 'day' : 'days'}.`
+                    : `Compared your first ${summary.energySummary.beforeDays.length} rated ${summary.energySummary.beforeDays.length === 1 ? 'day' : 'days'} against your last ${summary.energySummary.afterDays.length}.`}
+                </div>
+                {summary.energySummary.associations.length > 0 && (
+                  <div className="cc-energy-patterns">
+                    <div className="cc-energy-patterns-title">Patterns in what you logged</div>
+                    {summary.energySummary.associations.slice(0, 4).map(a => (
+                      <div key={a.taskId} className={`cc-energy-pattern${a.higher ? ' up' : ''}`}>{a.text}</div>
+                    ))}
+                    <div className="cc-energy-caveat">{summary.energySummary.caveat}</div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="cc-energy-nodata">
+                You rated {summary.energySummary.ratedDayCount} {summary.energySummary.ratedDayCount === 1 ? 'day' : 'days'},
+                which is not enough for an honest before-and-after. Forge will not estimate a change it cannot see —
+                the habits you built still count, and your XP and score are unaffected.
+              </div>
             )}
           </div>
         )}
@@ -1019,6 +1087,7 @@ export default function Dashboard({ setView }) {
       {/* Challenge Performance — percentage score, passing line, status */}
       <MuscleBuildingPanel />
       <HormoneHealthPanel />
+      <EnergyResetPanel />
       <ChallengePerformance setView={setView} />
       <SupportProgress />
 

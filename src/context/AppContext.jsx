@@ -19,6 +19,8 @@ import {
   compareCycles, safetyFlags, persistentSymptomsAtCompletion,
 } from '../utils/cycleTracking';
 import { HORMONE_HEALTH_TEMPLATE_ID } from '../data/hormoneHealthConfig';
+import { ENERGY_RESET_TEMPLATE_ID, LAGGED_HABIT_KEYS } from '../data/energyResetConfig';
+import { buildEnergySummary } from '../utils/energyTracking';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS, computeLifetimeXP } from '../utils/gamification';
@@ -173,6 +175,12 @@ function emptyDay(date, dayNumber) {
     chest: 0,
     arms: 0,
     thighs: 0,
+    // Optional energy ratings 1-10 (10-Day Energy Reset). Additive in the same
+    // way: 0 means "not rated", never "rated zero", so a day the user skipped is
+    // excluded from the comparison rather than dragging it down.
+    morningEnergy: 0,
+    afternoonEnergy: 0,
+    overallEnergy: 0,
     validated: false,
     isMWD: false,
     mwdTasks: {},
@@ -1472,6 +1480,21 @@ export function AppProvider({ children }) {
     });
     const trend = computeWithinChallengeTrend(days, entry.endDayNum);
 
+    // 10-Day Energy Reset: the before/after energy result. Built only from the
+    // ratings the user actually logged — a day they skipped is absent, not zero,
+    // and when there is not enough data the screen says so rather than inventing
+    // a change. Associations are observational and worded as such.
+    const energySummary = (() => {
+      if (entry.challenge?.templateId !== ENERGY_RESET_TEMPLATE_ID) return null;
+      return buildEnergySummary({
+        days,
+        endDayNum: entry.endDayNum,
+        tasks: entry.tasks || [],
+        baseline: entry.challenge?.energyReset?.baseline || null,
+        lagKeys: LAGGED_HABIT_KEYS,
+      });
+    })();
+
     // Women's Hormone Health: the cycle-to-cycle comparison. Built from the
     // archived check-ins only — nothing is estimated, and a metric without real
     // values at both ends simply does not appear.
@@ -1499,6 +1522,7 @@ export function AppProvider({ children }) {
 
     return {
       cycleSummary,
+      energySummary,
       name: entry.challenge?.name,
       emoji: entry.challenge?.emoji,
       variant: entry.challenge?.variant,

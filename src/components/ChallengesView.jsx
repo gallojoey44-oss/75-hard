@@ -15,8 +15,11 @@ import ScheduledStartCard from './ScheduledStart';
 import SupportChallengePicker from './SupportChallengePicker';
 import MuscleBuildingSetup from './MuscleBuildingSetup';
 import HormoneHealthSetup from './HormoneHealthSetup';
+import EnergyResetSetup from './EnergyResetSetup';
 import * as MB from '../data/muscleBuildingConfig';
 import * as HH from '../data/hormoneHealthConfig';
+import * as ER from '../data/energyResetConfig';
+import { CONFIGURED_BUILDERS } from '../data/configuredChallenges';
 
 import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
 
@@ -25,14 +28,18 @@ import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/ga
  * their own meta/task builders. Adding another one is an entry here — nothing
  * in the start flow below branches on a template id.
  */
-const CONFIGURED_SETUPS = {
-  [MB.MUSCLE_BUILDING_TEMPLATE_ID]: {
-    Setup: MuscleBuildingSetup, buildMeta: MB.buildChallengeMeta, buildTasks: MB.buildStartTasks,
-  },
-  [HH.HORMONE_HEALTH_TEMPLATE_ID]: {
-    Setup: HormoneHealthSetup, buildMeta: HH.buildChallengeMeta, buildTasks: HH.buildStartTasks,
-  },
+// The setup COMPONENT for each configured challenge. Its builders come from the
+// shared registry, so the primary flow here and the support-challenge picker
+// always construct an attempt the same way.
+const CONFIGURED_SETUP_COMPONENTS = {
+  [MB.MUSCLE_BUILDING_TEMPLATE_ID]: MuscleBuildingSetup,
+  [HH.HORMONE_HEALTH_TEMPLATE_ID]: HormoneHealthSetup,
+  [ER.ENERGY_RESET_TEMPLATE_ID]: EnergyResetSetup,
 };
+
+const CONFIGURED_SETUPS = Object.fromEntries(
+  Object.entries(CONFIGURED_BUILDERS).map(([id, b]) => [id, { ...b, Setup: CONFIGURED_SETUP_COMPONENTS[id] }]),
+);
 
 // Overall challenge difficulty — fixed per challenge, independent of the
 // Beginner/Standard/Hard mode chosen inside it.

@@ -65,6 +65,7 @@ export const CHALLENGE_IDS = {
   // Reserved — no template exists yet.
   MUSCLE_BUILDING: 'muscle_building_phase',
   HORMONE_HEALTH: 'womens_hormone_health',
+  ENERGY_RESET: 'energy_reset_10_day',
 };
 
 const C = CHALLENGE_IDS;
@@ -113,6 +114,35 @@ export const COMPATIBILITY_PAIRS = [
     reason: 'Recovery work is exactly what a hypertrophy block needs alongside it — it protects the training quality that drives growth.',
   },
 
+  // The 10-Day Energy Reset is deliberately the most stackable challenge in the
+  // library: it is short, its habits are sleep/light/food/movement fundamentals
+  // that every other goal also depends on, and its exercise requirement is
+  // weekly rather than daily so it never dictates anyone's training week.
+  {
+    a: C.ENERGY_RESET, b: C.MENTAL_TRAINING, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Both are low-load habit challenges, and the stress downshift is a habit they already share — you log it once and it counts for both.',
+  },
+  {
+    a: C.ENERGY_RESET, b: C.SLEEP_RESET, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Sleep opportunity is the Energy Reset keystone, so a sleep challenge reinforces exactly the same habit rather than competing with it.',
+  },
+  {
+    a: C.ENERGY_RESET, b: C.MUSCLE_BUILDING, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Sleep, food quality and steps are what a growth block runs on. The weekly training requirement folds into the training you are already doing.',
+  },
+  {
+    a: C.ENERGY_RESET, b: C.RECOVERY, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Same direction entirely — both are about restoring capacity rather than spending more of it.',
+  },
+  {
+    a: C.ENERGY_RESET, b: C.HORMONE_HEALTH, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Sleep, whole foods, steps and down-regulation are already shared between the two, so this adds light and caffeine timing rather than a second workload.',
+  },
+  {
+    a: C.ENERGY_RESET, b: C.STRENGTH, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Better sleep and steadier energy show up directly in training quality, and the weekly exercise requirement is satisfied by the strength work itself.',
+  },
+
   // ── Conditional ──────────────────────────────────────────────────────────
   {
     a: C.FAT_LOSS, b: C.HORMONE_HEALTH, rating: COMPATIBILITY.CONDITIONAL,
@@ -130,6 +160,10 @@ export const COMPATIBILITY_PAIRS = [
     a: C.STRENGTH, b: C.FAT_LOSS, rating: COMPATIBILITY.CONDITIONAL,
     reason: 'Strength gains are slower in a deficit. Expect maintenance rather than progress on the bar.',
   },
+  {
+    a: C.ENERGY_RESET, b: C.FAT_LOSS, rating: COMPATIBILITY.CONDITIONAL,
+    reason: 'An energy deficit is itself a common cause of low energy. Workable alongside a modest deficit, but a hard cut will fight the thing you are trying to measure.',
+  },
 
   // ── Conflicting ──────────────────────────────────────────────────────────
   {
@@ -140,7 +174,7 @@ export const COMPATIBILITY_PAIRS = [
   // training, nutrition, reading, hydration and daily photos. Anything stacked on
   // top competes with it for the same hours rather than complementing it, so it
   // is deliberately a solo challenge.
-  ...[C.FAT_LOSS, C.MENTAL_TRAINING, C.SLEEP_RESET, C.STRENGTH, C.RECOVERY, C.MUSCLE_BUILDING, C.HORMONE_HEALTH]
+  ...[C.FAT_LOSS, C.MENTAL_TRAINING, C.SLEEP_RESET, C.STRENGTH, C.RECOVERY, C.MUSCLE_BUILDING, C.HORMONE_HEALTH, C.ENERGY_RESET]
     .map(other => ({
       a: C.DISCIPLINE_75, b: other, rating: COMPATIBILITY.CONFLICTING,
       reason: 'The 75-Day Discipline Challenge already covers training, nutrition, reading and hydration every single day. Stacking a second challenge on top competes for the same hours instead of supporting it — run it on its own.',
