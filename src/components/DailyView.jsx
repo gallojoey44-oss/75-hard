@@ -22,7 +22,10 @@ import {
 import { KEYSTONE_EXPLAINER, WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { getTemplateById } from '../data/challengeTemplates';
 import ScheduledStartCard from './ScheduledStart';
-import { supportsLabel } from '../utils/challengeStack';
+import {
+  alsoSupportsLabel, groupTasksForDisplay, hasSupportChallenge,
+  challengeOf, LANE,
+} from '../utils/challengeStack';
 import * as MB from '../data/muscleBuildingConfig';
 
 const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
@@ -303,6 +306,67 @@ function MWDBanner({ comebackMode, dayNum }) {
     );
   }
   return null;
+}
+
+/**
+ * The daily task list, split into its two challenge lanes when a support
+ * challenge is running.
+ *
+ * With no support challenge this renders exactly the flat list it always has —
+ * same rows, same order, same components — so single-challenge Today is
+ * untouched. The lane split is purely presentational: it partitions the ONE
+ * stored list, and a shared habit appears once, under Primary, carrying a badge
+ * naming the other challenge it also satisfies.
+ */
+function TaskList({ tasks, profile, renderTask, hasKeystones, keystoneExplainer }) {
+  const stacked = hasSupportChallenge(profile);
+  const groups = groupTasksForDisplay(tasks, sortTasksByKeystone);
+
+  const explainer = hasKeystones
+    ? <div className="keystone-explainer">⭐ {keystoneExplainer}</div>
+    : null;
+
+  if (!stacked) {
+    return (
+      <>
+        {explainer}
+        {groups.primary.map(t => renderTask(t, null))}
+      </>
+    );
+  }
+
+  const primaryName = challengeOf(profile, LANE.PRIMARY)?.name || 'Primary Challenge';
+  const supportName = challengeOf(profile, LANE.SUPPORT)?.name || 'Support Challenge';
+  const primaryEmoji = challengeOf(profile, LANE.PRIMARY)?.emoji || '';
+  const supportEmoji = challengeOf(profile, LANE.SUPPORT)?.emoji || '';
+
+  return (
+    <div className="lane-list">
+      <div className="lane-section primary">
+        <div className="lane-header">
+          <span className="lane-kicker">⚔️ Primary Challenge</span>
+          <span className="lane-name">{primaryEmoji} {primaryName}</span>
+        </div>
+        {explainer}
+        {groups.primary.map(t => renderTask(t, alsoSupportsLabel(t, profile)))}
+      </div>
+
+      <div className="lane-section support">
+        <div className="lane-header">
+          <span className="lane-kicker">🛡️ Support Challenge</span>
+          <span className="lane-name">{supportEmoji} {supportName}</span>
+        </div>
+        {groups.support.length > 0 ? (
+          groups.support.map(t => renderTask(t, null))
+        ) : (
+          <div className="lane-empty">
+            Every {supportName} habit is already covered by a {primaryName} task above —
+            nothing extra to check.
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function DailyView({ editDayNum, setView }) {
@@ -667,11 +731,12 @@ export default function DailyView({ editDayNum, setView }) {
               </div>
             </>
           ) : (
-            <>
-              {hasKeystones && (
-                <div className="keystone-explainer">⭐ {KEYSTONE_EXPLAINER}</div>
-              )}
-              {displayTasks.map(task => (
+            <TaskList
+              tasks={tasks}
+              profile={profile}
+              hasKeystones={hasKeystones}
+              keystoneExplainer={KEYSTONE_EXPLAINER}
+              renderTask={(task, supports) => (
                 <CheckItem
                   key={task.id}
                   task={task}
@@ -679,10 +744,10 @@ export default function DailyView({ editDayNum, setView }) {
                   onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
                   keystone={getTaskKeystone(task)}
                   xp={getTaskXP(task)}
-                  supports={supportsLabel(task, profile)}
+                  supports={supports}
                 />
-              ))}
-            </>
+              )}
+            />
           )}
         </div>
       )}
@@ -745,16 +810,21 @@ export default function DailyView({ editDayNum, setView }) {
           )}
 
           <div className="gf-tasks">
-            {displayTasks.map((task, i) => (
-              <GfTaskCard
-                key={task.id}
-                task={task}
-                index={i}
-                checked={!!dayData?.tasks?.[task.id]}
-                onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
-                supports={supportsLabel(task, profile)}
-              />
-            ))}
+            <TaskList
+              tasks={tasks}
+              profile={profile}
+              hasKeystones={false}
+              renderTask={(task, supports) => (
+                <GfTaskCard
+                  key={task.id}
+                  task={task}
+                  index={displayTasks.findIndex(t => t.id === task.id)}
+                  checked={!!dayData?.tasks?.[task.id]}
+                  onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
+                  supports={supports}
+                />
+              )}
+            />
           </div>
 
           {showBodyMetrics && (

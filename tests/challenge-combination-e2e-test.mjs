@@ -133,8 +133,17 @@ const dailyIds = await page.evaluate(() => [...document.querySelectorAll('.check
 check('4: the daily list shows each habit exactly once',
   dailyIds.filter(t => /Complete Daily Log/.test(t)).length === 1, dailyIds.join(' | '));
 check('4: the shared row is visually marked as shared', (await page.locator('.check-item.shared-habit').count()) >= 1);
-check('4: it names both challenges it supports',
-  /Supports: Fat Loss Challenge \+ Mental Training Phase/.test(await page.textContent('.check-supports')));
+// Both challenges are still named on screen, now split between the two places
+// that carry the information: the lane header names the challenge the row sits
+// under, and the badge names the OTHER one it also satisfies.
+check('4: the shared row names the other challenge it supports',
+  /Also supports Mental Training Phase/.test(await page.textContent('.check-supports')));
+check('4: and the section it sits in names the challenge it belongs to',
+  await page.evaluate(() => {
+    const row = document.querySelector('.check-item.shared-habit');
+    const section = row?.closest('.lane-section');
+    return /Fat Loss Challenge/.test(section?.querySelector('.lane-header')?.textContent || '');
+  }));
 
 // ══ 5: one completed behaviour = one XP award ═══════════════════════════════
 // Sleep is the canonical shared habit: both challenges require it, so it is one

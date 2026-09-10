@@ -5509,3 +5509,65 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   .tf-pair { gap: 6px; }
   .tf-frame img { max-height: 260px; }
 }
+
+/* ─── Primary + Support lane sections (Today) ────────────────────────────── */
+/* Shown only when a support challenge is running. Uses the existing accent
+   (purple on Male, pink on Female) for Primary so the hierarchy reads in
+   Forge's own visual language; Support is the same structure at lower
+   emphasis — quieter, never dimmed to the point of looking optional. */
+.lane-list { display: flex; flex-direction: column; gap: 6px; }
+.lane-section { position: relative; }
+.lane-section.support { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+.lane-header {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 8px 11px; margin-bottom: 8px; border-radius: var(--radius);
+  background: var(--bg2); border-left: 3px solid var(--border);
+}
+.lane-section.primary .lane-header {
+  background: linear-gradient(90deg, var(--accent-glow), transparent 70%);
+  border-left-color: var(--accent);
+}
+.lane-section.support .lane-header {
+  background: var(--bg2);
+  border-left-color: var(--text3);
+}
+.lane-kicker {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--text3); flex-shrink: 0;
+}
+.lane-section.primary .lane-kicker { color: var(--accent2); }
+.lane-name { font-size: 14px; font-weight: 800; }
+.lane-section.primary .lane-name { font-size: 15px; }
+.lane-section.support .lane-name { color: var(--text2); }
+
+/* Support rows: one step back, still fully legible and interactive. */
+.lane-section.support .check-item { background: var(--bg2); }
+.lane-section.support .gf-task-card { opacity: 0.94; }
+.lane-empty { font-size: 12px; color: var(--text3); line-height: 1.6; padding: 8px 11px; }
+
+/* The shared-habit badge already exists as .check-supports; give the row a
+   clearer tie to the lane it also serves. */
+.lane-section.primary .check-item.shared-habit { border-left: 2px solid var(--text3); }
+
+/* Manage Tasks ownership chips */
+.tm-lane-legend {
+  font-size: 11px; color: var(--text3); line-height: 1.9;
+  padding: 9px 11px; margin-bottom: 10px;
+  background: var(--bg2); border-radius: var(--radius);
+}
+.task-lane-chip {
+  display: inline-block; font-size: 9px; font-weight: 800; letter-spacing: 0.5px;
+  text-transform: uppercase; padding: 2px 6px; border-radius: 4px; margin-left: 6px;
+  background: var(--bg1); color: var(--text3); border: 1px solid var(--border);
+  vertical-align: middle;
+}
+.task-lane-chip.primary { color: var(--accent2); border-color: var(--accent); }
+.task-lane-chip.support { color: var(--text2); }
+.task-lane-chip.shared { color: #10B981; border-color: rgba(16,185,129,0.5); }
+
+@media (max-width: 380px) {
+  .lane-header { padding: 7px 9px; }
+  .lane-name { font-size: 13px; }
+  .lane-section.primary .lane-name { font-size: 14px; }
+}

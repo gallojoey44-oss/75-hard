@@ -130,6 +130,64 @@ export function supportsLabel(task, profile) {
   return `Supports: ${p} + ${s}`;
 }
 
+/**
+ * "Also supports Fat Loss" for a shared row, else null.
+ *
+ * The short form used inside the Today list, where the enclosing section header
+ * already names the primary challenge — so only the OTHER challenge needs
+ * naming. Derived from the descriptors; nothing extra is stored.
+ */
+export function alsoSupportsLabel(task, profile) {
+  if (!isSharedTask(task)) return null;
+  const support = challengeOf(profile, LANE.SUPPORT)?.name;
+  return support ? `Also supports ${support}` : null;
+}
+
+/** How Manage Tasks labels a row's ownership. */
+export const OWNERSHIP = { PRIMARY: 'primary', SUPPORT: 'support', SHARED: 'shared' };
+export const OWNERSHIP_LABEL = {
+  [OWNERSHIP.PRIMARY]: 'Primary',
+  [OWNERSHIP.SUPPORT]: 'Support',
+  [OWNERSHIP.SHARED]: 'Shared',
+};
+
+/**
+ * A task's ownership, derived from its lane provenance — never from its name.
+ * A row in both lanes is SHARED; otherwise it belongs to the single lane it
+ * declares, defaulting to primary for every pre-feature and user-added task.
+ */
+export function ownershipOf(task) {
+  if (isSharedTask(task)) return OWNERSHIP.SHARED;
+  return taskInLane(task, LANE.SUPPORT) ? OWNERSHIP.SUPPORT : OWNERSHIP.PRIMARY;
+}
+
+/**
+ * The daily list grouped into its two lanes for DISPLAY.
+ *
+ * Purely a view over the one stored list — it reorders and partitions, and never
+ * adds, removes or rewrites a row. A shared habit appears in the PRIMARY group
+ * and nowhere else, so it renders exactly once and can never be checked or paid
+ * for twice; `shared` is returned separately only so callers can label it.
+ *
+ * Order matches the product spec: primary-only by importance, then the shared
+ * rows, then support-only by importance. `sort` is the caller's existing
+ * importance sort, applied WITHIN each group so the established ordering rules
+ * are preserved rather than replaced.
+ */
+export function groupTasksForDisplay(tasks, sort = (x) => x) {
+  const list = tasks || [];
+  const primaryOnly = sort(list.filter(t => taskInLane(t, LANE.PRIMARY) && !isSharedTask(t)));
+  const shared = sort(list.filter(isSharedTask));
+  const supportOnly = sort(list.filter(t => taskInLane(t, LANE.SUPPORT) && !isSharedTask(t)));
+  return {
+    primary: [...primaryOnly, ...shared],
+    support: supportOnly,
+    shared,
+    primaryOnly,
+    supportOnly,
+  };
+}
+
 // ── Merging a support challenge into the daily list ─────────────────────────
 
 /**

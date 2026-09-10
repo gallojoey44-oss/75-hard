@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { isColdExposureEnabled } from '../data/challengeTemplates';
+import { ownershipOf, OWNERSHIP, OWNERSHIP_LABEL, hasSupportChallenge, challengeOf, LANE } from '../utils/challengeStack';
 
 const PRESET_COLORS = [
   '#FF6B6B','#FF8FAB','#FFB347','#F9E04B',
@@ -123,9 +124,29 @@ export default function TaskManager() {
     reorderTasks(arr);
   }
 
+  // Ownership chips only appear when a support challenge is actually running —
+  // with one challenge every task is primary and the label carries no
+  // information. Ownership is read from lane provenance, never from the name.
+  const stacked = hasSupportChallenge(profile);
+  const laneName = {
+    [OWNERSHIP.PRIMARY]: challengeOf(profile, LANE.PRIMARY)?.name || 'Primary',
+    [OWNERSHIP.SUPPORT]: challengeOf(profile, LANE.SUPPORT)?.name || 'Support',
+    [OWNERSHIP.SHARED]: 'Counts for both challenges',
+  };
+
   return (
     <div>
       <div className="section-title">📋 Daily Tasks ({tasks.length})</div>
+
+      {stacked && (
+        <div className="tm-lane-legend">
+          <span className="task-lane-chip primary">Primary</span> {challengeOf(profile, LANE.PRIMARY)?.name}
+          {' · '}
+          <span className="task-lane-chip support">Support</span> {challengeOf(profile, LANE.SUPPORT)?.name}
+          {' · '}
+          <span className="task-lane-chip shared">Shared</span> counts for both, paid once
+        </div>
+      )}
 
       {tasks.map((task, i) => (
         <div key={task.id}>
@@ -157,6 +178,14 @@ export default function TaskManager() {
 
             <span className="task-name-edit">
               {task.name}
+              {stacked && (
+                <span
+                  className={`task-lane-chip ${ownershipOf(task)}`}
+                  title={laneName[ownershipOf(task)]}
+                >
+                  {OWNERSHIP_LABEL[ownershipOf(task)]}
+                </span>
+              )}
               {hasTemplateTasks && (
                 <span className={`task-source-chip${getTaskSource(task) === 'template' ? ' template' : ''}`}>
                   {getTaskSource(task) === 'template' ? 'Template Task' : 'Custom Task'}
