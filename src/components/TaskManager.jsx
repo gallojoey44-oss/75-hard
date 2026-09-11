@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { isColdExposureEnabled } from '../data/challengeTemplates';
 import { ownershipOf, OWNERSHIP, OWNERSHIP_LABEL, hasSupportChallenge, challengeOf, LANE } from '../utils/challengeStack';
+import { EndSupportModal } from './ChallengesView';
 
 const PRESET_COLORS = [
   '#FF6B6B','#FF8FAB','#FFB347','#F9E04B',
@@ -61,7 +62,9 @@ function IconPicker({ value, onChange }) {
 }
 
 export default function TaskManager() {
-  const { activeProfile, profile, addTask, updateTask, deleteTask, reorderTasks, getTaskSource } = useApp();
+  const { activeProfile, profile, addTask, updateTask, deleteTask, reorderTasks, getTaskSource,
+    endSupportChallenge, isSupportScheduled } = useApp();
+  const [showEndSupport, setShowEndSupport] = useState(false);
   const isGf = activeProfile === 'girlfriend';
   // Only label task sources when the active challenge actually syncs with a
   // template — otherwise every task is user-managed and labels are noise.
@@ -145,7 +148,20 @@ export default function TaskManager() {
           <span className="task-lane-chip support">Support</span> {challengeOf(profile, LANE.SUPPORT)?.name}
           {' · '}
           <span className="task-lane-chip shared">Shared</span> counts for both, paid once
+          <button className="tm-end-support" onClick={() => setShowEndSupport(true)}>
+            {isSupportScheduled() ? 'Cancel' : 'End'} {challengeOf(profile, LANE.SUPPORT)?.name}
+          </button>
         </div>
+      )}
+
+      {showEndSupport && (
+        <EndSupportModal
+          supportName={challengeOf(profile, LANE.SUPPORT)?.name}
+          primaryName={challengeOf(profile, LANE.PRIMARY)?.name}
+          scheduled={isSupportScheduled()}
+          onCancel={() => setShowEndSupport(false)}
+          onConfirm={() => { endSupportChallenge(); setShowEndSupport(false); }}
+        />
       )}
 
       {tasks.map((task, i) => (

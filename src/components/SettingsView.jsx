@@ -462,12 +462,32 @@ export default function SettingsView({ setView }) {
                     <span className="archive-row-emoji">{arch.challenge?.emoji || '🔥'}</span>
                     <div className="archive-row-info">
                       <div className="archive-row-title">
-                        {arch.challenge?.name || '75-Day Discipline Challenge'} · {formatDateShort(arch.challengeStart)} – {formatDateShort(arch.endDate || arch.archivedAt)}
+                        {arch.challenge?.name || '75-Day Discipline Challenge'}
+                        {arch.lane === 'support' && <span className="archive-lane-chip">Support</span>}
+                        {' · '}{formatDateShort(arch.challengeStart)} – {formatDateShort(arch.endDate || arch.archivedAt)}
                       </div>
-                      <div className="archive-row-meta">
-                        Day {arch.endDayNum} of {arch.challenge?.durationDays || 75} · {daysLogged} days logged · {(arch.xpEarned || 0).toLocaleString()} XP
-                      </div>
-                      {arch.finalScore != null && arch.scoreAvailable !== false ? (
+                      {arch.endedEarly ? (
+                        /* An attempt the user chose to stop. Reported as what it
+                           was — the days it actually ran, never the planned
+                           duration, and with no pass/fail verdict the data does
+                           not support. */
+                        <div className="archive-row-meta">
+                          Ended Early on {formatDateShort(arch.endedOn || arch.archivedAt)}
+                          {' · '}{arch.daysActive ?? arch.endDayNum} {(arch.daysActive ?? arch.endDayNum) === 1 ? 'day' : 'days'} active
+                          {' · '}{daysLogged} days logged · {(arch.xpEarned || 0).toLocaleString()} XP
+                        </div>
+                      ) : (
+                        <div className="archive-row-meta">
+                          Day {arch.endDayNum} of {arch.challenge?.durationDays || 75} · {daysLogged} days logged · {(arch.xpEarned || 0).toLocaleString()} XP
+                        </div>
+                      )}
+                      {arch.endedEarly ? (
+                        <div className="archive-row-perf muted">
+                          Stopped before the end, so there is no pass or fail result — just what you did.
+                          {arch.finalScore != null && arch.scoreAvailable !== false
+                            ? ` Adherence while it ran: ${arch.finalScore}%.` : ''}
+                        </div>
+                      ) : arch.finalScore != null && arch.scoreAvailable !== false ? (
                         <div className="archive-row-perf">
                           <span className="archive-perf-score">Final Score: {arch.finalScore}%</span>
                           <span className={`archive-perf-result ${arch.passed ? 'pass' : 'fail'}`}>{arch.passed ? 'Passed' : 'Did Not Pass'}</span>

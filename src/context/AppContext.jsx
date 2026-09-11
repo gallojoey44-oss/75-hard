@@ -1132,7 +1132,22 @@ export function AppProvider({ children }) {
    * as a self-contained challenge with its own Day 1, independent of whatever
    * primary it happened to run beside.
    */
-  const buildSupportArchiveEntry = useCallback((profId) => {
+  /**
+   * Archive entry for the SUPPORT lane.
+   *
+   * `reason` says how the attempt ended and is recorded honestly:
+   *   'completed'   — it ran past its final day (completeSupportChallenge)
+   *   'ended_early' — the user stopped it (endSupportChallenge)
+   *
+   * An early end is never dressed up as completed, passed or failed: a run the
+   * user chose to stop has no meaningful pass/fail result, so those fields are
+   * null rather than a verdict the data does not support.
+   *
+   * Returns null for an attempt that never reached Day 1 — cancelling a
+   * scheduled support challenge must not fabricate a history entry for days that
+   * never happened.
+   */
+  const buildSupportArchiveEntry = useCallback((profId, reason = 'completed') => {
     const prof = profiles[profId];
     const meta = challengeOf(prof, LANE.SUPPORT);
     const start = startOf(prof, LANE.SUPPORT);
@@ -1157,8 +1172,10 @@ export function AppProvider({ children }) {
 
     const scoreObj = computeChallengeScore(allDays, profiles, profId, rawDay, LANE.SUPPORT);
     const cfg = getPassingConfig(meta);
-    const passed = scoreObj ? isChallengePassed(scoreObj, meta) : null;
-    const completed = meta.durationDays != null && rawDay >= meta.durationDays;
+    const endedEarly = reason === 'ended_early';
+    // An attempt the user stopped is not completed, and has no pass/fail verdict.
+    const completed = !endedEarly && meta.durationDays != null && rawDay >= meta.durationDays;
+    const passed = endedEarly ? null : (scoreObj ? isChallengePassed(scoreObj, meta) : null);
 
     return {
       id: `arch_sup_${Date.now()}`,
@@ -1168,14 +1185,25 @@ export function AppProvider({ children }) {
       challengeStart: start,
       endDayNum: dayNum,
       endDate: getDateForDayNumber(start, dayNum),
+      // How it ended, and the honest length. `daysActive` is what actually
+      // happened — never the planned duration.
+      endReason: reason,
+      endedEarly,
+      endedOn: getTodayStr(),
+      daysActive: dayNum,
+      plannedDurationDays: meta.durationDays ?? null,
       completed,
       completionDate: completed ? getTodayStr() : null,
       tasks,
       days,
       quoteData: {},
       weeklyReflections: {},
+      // The weekly-requirement engine evaluates the PRIMARY lane only, so a
+      // support challenge never had its own sessions to preserve — and
+      // profile.weeklySessions belongs to the primary attempt and is deliberately
+      // left untouched when a support challenge ends.
       weeklySessions: [],
-      weeklyRequirements: { tracked: false },
+      weeklyRequirements: { tracked: false, reason: 'weekly requirements are tracked for the primary challenge only' },
       // Default 0. endSupportChallenge overwrites this with the XP that actually
       // LEAVES the current challenge when the support rows are removed — a
       // transfer, never a gain. Shared habits stay in the list, so their XP never
@@ -1223,7 +1251,7 @@ export function AppProvider({ children }) {
     // Archive BOTH lanes before anything is replaced, so a stacked pair leaves
     // two independent records rather than losing the support challenge.
     const entry = buildArchiveEntry(profId);
-    const supportEntry = buildSupportArchiveEntry(profId);
+    const supportEntry = buildSupportArchiveEntry(profId, 'ended_early');
     const newEntries = [entry, supportEntry].filter(Boolean);
     if (newEntries.length) {
       setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), ...newEntries] }));
@@ -1352,7 +1380,7 @@ export function AppProvider({ children }) {
    * is completely unaffected — same descriptor, same start date, same day
    * records, same XP, same score.
    */
-  const endSupportChallenge = useCallback((profId = activeProfile) => {
+  const endSupportChallenge = useCallback((profId = activeProfile, reason = 'ended_early') => {
     const prof = profiles[profId];
     if (!hasSupportChallenge(prof)) return false;
     const nextTasks = stripSupportTasks(prof.tasks || []);
@@ -1383,7 +1411,10 @@ export function AppProvider({ children }) {
       carriedXP = Math.max(0, before.rawTotal - after.rawTotal);
     }
 
-    const entry = buildSupportArchiveEntry(profId);
+    // Null for a scheduled attempt that never reached Day 1 — cancelling one
+    // must not write a misleading "ended early" record for days that never
+    // happened. The slot is still cleared below.
+    const entry = buildSupportArchiveEntry(profId, reason);
     if (entry) {
       setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), { ...entry, xpEarned: carriedXP, taskXP: carriedXP }] }));
     }
@@ -1392,6 +1423,10 @@ export function AppProvider({ children }) {
       ...prev,
       [profId]: {
         ...prev[profId],
+        // ONLY these three fields change. The primary's descriptor, start date,
+        // day records, XP, streak, weeklySessions, Future Self letter, upgrades
+        // and reflections are all deliberately absent from this update, so the
+        // primary attempt cannot be restarted, re-anchored or re-graded here.
         supportChallenge: null,
         supportChallengeStart: null,
         tasks: nextTasks,
@@ -1400,6 +1435,17 @@ export function AppProvider({ children }) {
     }));
     return true;
   }, [activeProfile, profiles, allDays, getDayCompletion, getDayNumber, setProfiles, setArchives, buildSupportArchiveEntry]);
+
+  /**
+   * True when the support challenge is prepared but has not reached Day 1.
+   *
+   * The UI says "Cancel Support Challenge" for one of these rather than "End",
+   * because nothing has happened yet to end — and no archive entry is written.
+   */
+  const isSupportScheduled = useCallback((profId = activeProfile) => {
+    const start = profiles[profId]?.supportChallengeStart;
+    return !!profiles[profId]?.supportChallenge && !!start && isScheduled({ challengeStart: start });
+  }, [activeProfile, profiles]);
 
   /**
    * Promote the running SUPPORT challenge into the PRIMARY slot.
@@ -1665,7 +1711,7 @@ export function AppProvider({ children }) {
     const prof = profiles[profId];
     if (!hasSupportChallenge(prof)) return false;
     if (!laneIsComplete(prof, LANE.SUPPORT)) return false;
-    return endSupportChallenge(profId);
+    return endSupportChallenge(profId, 'completed');
   }, [activeProfile, profiles, endSupportChallenge]);
 
   /** Dismiss the Challenge Complete screen (stay on Forge Daily). */
@@ -1690,7 +1736,7 @@ export function AppProvider({ children }) {
   const startForgeDaily = useCallback((profId = activeProfile) => {
     // Both lanes are archived, so ending everything while a support challenge
     // is stacked leaves two records rather than silently dropping the support.
-    const entries = [buildArchiveEntry(profId), buildSupportArchiveEntry(profId)].filter(Boolean);
+    const entries = [buildArchiveEntry(profId), buildSupportArchiveEntry(profId, 'ended_early')].filter(Boolean);
     if (entries.length) setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), ...entries] }));
     setProfiles(prev => ({
       ...prev,
@@ -2532,7 +2578,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       activeProfile, profile, profiles, days, allDays, todayStr,
       setActiveProfile,
-      getChallengeMeta, hasActiveChallenge, getDayNumber, getRawDayNumber, isForgeDaily, getDayData, getTodayData,
+      getChallengeMeta, hasActiveChallenge, getDayNumber, getRawDayNumber, isForgeDaily, isSupportScheduled, getDayData, getTodayData,
       completeChallenge, dismissCompletion, startForgeDaily,
       getDayCompletion, getStreak, getLongestStreak,
       updateDay, toggleTask,

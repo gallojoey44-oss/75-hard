@@ -498,6 +498,47 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
   );
 }
 
+/**
+ * "End Support Challenge?" — the one confirmation used everywhere the action is
+ * offered, so the promise made to the user is identical in each place.
+ *
+ * A SCHEDULED support challenge has not reached Day 1, so there is no progress
+ * to archive and nothing to end: it says "Cancel" and does not promise an
+ * archive that will not be written.
+ */
+export function EndSupportModal({ supportName, primaryName, scheduled, onCancel, onConfirm }) {
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-card end-support-modal" onClick={e => e.stopPropagation()}>
+        <h3>{scheduled ? 'Cancel' : 'End'} {supportName}?</h3>
+        {scheduled ? (
+          <p>
+            This will cancel <strong>{supportName}</strong> before it begins and remove its
+            Support-only tasks from your daily plan.
+            {' '}It has not started, so there is no progress to archive.
+          </p>
+        ) : (
+          <p>
+            This will stop <strong>{supportName}</strong> and remove its Support-only tasks
+            from your daily plan.
+          </p>
+        )}
+        <p className="end-support-safe">
+          Your Primary Challenge{primaryName ? <> — <strong>{primaryName}</strong></> : null} will
+          continue unchanged.
+        </p>
+        {!scheduled && <p>Your Support Challenge progress will be archived.</p>}
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-secondary" onClick={onConfirm}>
+            {scheduled ? 'Cancel Support Challenge' : 'End Support Challenge'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChallengesView({ setView }) {
   const {
     activeProfile,
@@ -507,6 +548,7 @@ export default function ChallengesView({ setView }) {
     isChallengeTemplateOutdated, syncActiveChallengeWithTemplate, isForgeDaily,
     isChallengeScheduled,
     getSupportMeta, getSupportDayNumber, getSupportStart, endSupportChallenge,
+    isSupportScheduled,
   } = useApp();
 
   // Challenge library filtered by the active profile (e.g. Women's Hormone
@@ -692,7 +734,7 @@ export default function ChallengesView({ setView }) {
                   </span>
                 </div>
                 <button className="acc-support-end" onClick={() => setShowEndSupport(true)}>
-                  End Support Challenge
+                  {isSupportScheduled() ? 'Cancel Support Challenge' : 'End Support Challenge'}
                 </button>
               </div>
             ) : (
@@ -835,24 +877,15 @@ export default function ChallengesView({ setView }) {
         />
       )}
 
-      {/* End the support challenge — the primary is untouched */}
+      {/* End (or cancel) the support challenge — the primary is untouched */}
       {showEndSupport && supportMeta && (
-        <div className="modal-overlay" onClick={() => setShowEndSupport(false)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h3>End {supportMeta.name}?</h3>
-            <p>
-              Its tasks come off your daily list and its progress is archived.
-              {' '}<strong>{meta.name}</strong> keeps running exactly as it is — same day count,
-              same score, same XP.
-            </p>
-            <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setShowEndSupport(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => { endSupportChallenge(); setShowEndSupport(false); }}>
-                End Support Challenge
-              </button>
-            </div>
-          </div>
-        </div>
+        <EndSupportModal
+          supportName={supportMeta.name}
+          primaryName={meta.name}
+          scheduled={isSupportScheduled()}
+          onCancel={() => setShowEndSupport(false)}
+          onConfirm={() => { endSupportChallenge(); setShowEndSupport(false); }}
+        />
       )}
 
       {/* Hard-mode confirmation */}
