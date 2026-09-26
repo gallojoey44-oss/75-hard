@@ -1,4 +1,5 @@
 import { RIR_GUIDANCE } from '../data/muscleBuildingConfig';
+import { dayNumberForDate } from './dateUtils';
 
 /**
  * Exercise logging and progressive-overload trends.
@@ -139,3 +140,122 @@ export function overallPerformance(entries) {
 
 /** Educational RIR guidance — never a checkbox, never scored. */
 export const RIR = RIR_GUIDANCE;
+
+// ── Progressive overload, properly defined ──────────────────────────────────
+/**
+ * Progression is NOT "add weight every workout".
+ *
+ * Forge recognises every route that actually represents a better performance:
+ *
+ *   reps      — more reps at the same load
+ *   load      — more load at comparable reps
+ *   volume    — additional productive sets, where appropriate
+ *   execution — better ROM/control at comparable load, or the same work at a
+ *               lower RIR (more in reserve for the same result)
+ *
+ * Double progression falls out of this naturally: 60×8 → 60×9 → 60×10 → 60×12
+ * → 65×8 is five consecutive successful sessions, and the last one is a
+ * progression even though reps dropped, because load rose.
+ */
+export const PROGRESSION_ROUTES = [
+  { id: 'reps', label: 'More reps at the same load' },
+  { id: 'load', label: 'More load at comparable reps' },
+  { id: 'sets', label: 'Additional productive sets, when appropriate' },
+  { id: 'execution', label: 'Better range of motion or control at the same load' },
+  { id: 'rir', label: 'The same performance with more left in reserve' },
+];
+
+export const DOUBLE_PROGRESSION = {
+  title: 'Double progression',
+  body: 'Pick a rep range — say 8–12. Work up within it at the same load, and once you reach the top of the range, add load and start again near the bottom.',
+  example: ['60 lb × 8', '60 lb × 9', '60 lb × 10', '60 lb × 12', '65 lb × 8'],
+  note: 'Every one of those is a successful session. You are not failing a week because the bar did not move.',
+};
+
+/** Rep-range tolerance for treating two sessions' reps as "comparable". */
+const COMPARABLE_REPS = 1;
+
+/**
+ * How far reps may fall on a load increase and still count as progression.
+ *
+ * Double progression works UP a rep range and then resets near the bottom with
+ * more load — 60×12 → 65×8 is the intended move, not a regression, even though
+ * both reps and volume load drop. 8 is 67% of 12, so a floor of 0.6 accepts a
+ * normal range reset while still rejecting a collapse like 12 → 3.
+ */
+const LOAD_JUMP_REP_FLOOR = 0.6;
+
+/**
+ * Classify one session against the one before it: which progression route, if
+ * any, it represents. Returns null when there is nothing to compare against.
+ */
+export function classifyProgression(prev, curr) {
+  if (!prev || !curr) return null;
+  const pLoad = Number(prev.load) || 0, cLoad = Number(curr.load) || 0;
+  const pReps = Number(prev.reps) || 0, cReps = Number(curr.reps) || 0;
+  const pSets = Number(prev.sets) || 1, cSets = Number(curr.sets) || 1;
+  const repsComparable = Math.abs(cReps - pReps) <= COMPARABLE_REPS;
+
+  if (cLoad > pLoad && (repsComparable || cReps >= pReps)) return 'load';
+  // The double-progression reset: more load, reps back toward the bottom of the
+  // range. Progression, even though reps and total volume load both dip.
+  if (cLoad > pLoad && pReps > 0 && cReps >= Math.ceil(pReps * LOAD_JUMP_REP_FLOOR)) return 'load';
+  if (cLoad === pLoad && cReps > pReps) return 'reps';
+  if (cLoad === pLoad && cReps === pReps && cSets > pSets) return 'sets';
+  // Same work, more left in the tank.
+  if (cLoad === pLoad && cReps === pReps && cSets === pSets &&
+      prev.rir != null && curr.rir != null && curr.rir > prev.rir) return 'rir';
+  return null;
+}
+
+/** Every progression step within one exercise's history, oldest first. */
+export function progressionSteps(group) {
+  const list = (group?.entries || []).filter(e => volumeLoad(e) > 0);
+  const out = [];
+  for (let i = 1; i < list.length; i++) {
+    const route = classifyProgression(list[i - 1], list[i]);
+    if (route) out.push({ from: list[i - 1], to: list[i], route, date: list[i].date });
+  }
+  return out;
+}
+
+/** Weeks since this exercise last progressed by any route, or null. */
+export function weeksSinceProgress(group, challengeStart, todayDate) {
+  const steps = progressionSteps(group);
+  if (!challengeStart || !todayDate) return null;
+  const last = steps.length ? steps[steps.length - 1].date : (group?.entries?.[0]?.date || null);
+  if (!last) return null;
+  const lastDay = dayNumberForDate(challengeStart, last);
+  const today = dayNumberForDate(challengeStart, todayDate);
+  if (lastDay == null || today == null) return null;
+  return Math.max(0, Math.floor((today - lastDay) / 7));
+}
+
+/** Consecutive weeks of no progression before the stall insight fires. */
+export const STALL_WEEKS = 3;
+
+/**
+ * The stall signal: MOST tracked exercises showing no meaningful progression
+ * for roughly 3–4 weeks.
+ *
+ * Deliberately conservative — it needs several tracked exercises and a real
+ * stretch of time, because a training block with one flat exercise is normal
+ * and telling someone they have stalled when they have not is worse than
+ * staying quiet.
+ */
+export function stallInsight({ entries, challengeStart, todayDate, minExercises = 2 }) {
+  const groups = groupByExercise(entries).filter(g => (g.entries || []).length >= MIN_SESSIONS);
+  if (groups.length < minExercises) return null;
+  const stalled = groups.filter(g => {
+    const w = weeksSinceProgress(g, challengeStart, todayDate);
+    return w != null && w >= STALL_WEEKS;
+  });
+  if (stalled.length < Math.ceil(groups.length / 2)) return null;
+  return {
+    stalled: stalled.length,
+    tracked: groups.length,
+    weeks: STALL_WEEKS,
+    text: 'Performance has stalled. Review training volume, nutrition, sleep, and recovery.',
+    exercises: stalled.map(g => g.name),
+  };
+}

@@ -97,7 +97,7 @@ check('4: setup asks how many resistance-training days per week',
 check('4: it offers 3 / 4 / 5 / 6',
   ['3 days', '4 days', '5 days', '6 days'].every(x => setupText.includes(x)));
 check('16: protein can be suggested or custom', /Protein target/.test(setupText) && /Set a custom target/.test(setupText));
-check('3A: the muscle-building protein range is shown', /0\.7–1 g per lb|0\.7–1\.0 g per lb/.test(setupText.replace(/\s+/g, ' ')));
+check('3A: the muscle-building protein range is shown', /0\.8–1 g per lb|0\.8–1\.0 g per lb/.test(setupText.replace(/\s+/g, ' ')));
 check('16: nutrition target offers lean bulk / recomp / maximum',
   ['Lean Bulk', 'Recomp', 'Maximum Gain'].every(x => setupText.includes(x)));
 check('16: a calorie target is optional and customisable', /Daily calorie target \(optional\)/.test(setupText));
@@ -144,8 +144,10 @@ check('5: weekly set targets are stored on the attempt',
 
 // ══ 3: the daily list ═══════════════════════════════════════════════════════
 const taskNames = p.tasks.map(t => t.name);
-check('3: the daily list is short — 4 fundamentals + 2 optimizations + daily log',
-  p.tasks.length === 7, `${p.tasks.length}: ${taskNames.join(' | ')}`);
+// Carbohydrate joined the fundamentals in the V1 update.
+check('3: the daily list is short — 5 fundamentals + 2 optimizations + daily log',
+  p.tasks.length === 8, `${p.tasks.length}: ${taskNames.join(' | ')}`);
+check('3B: a carb target is present', taskNames.some(n => /carb target/i.test(n)));
 check('3A: protein target is present', taskNames.some(n => /protein target/i.test(n)));
 check('3B: "Hit Nutrition Target" is present', taskNames.includes('Hit Nutrition Target'));
 check('3C: a sleep target is present', taskNames.some(n => /Sleep 8\+ hours/.test(n)));
@@ -173,7 +175,7 @@ check('9: creatine is labelled optional with 3–5 g and no loading phase',
 await gotoTab('Today');
 const dailyText = await page.textContent('.daily-view');
 check('3: the daily list renders each requirement once',
-  (await page.locator('.check-item').count()) === 7);
+  (await page.locator('.check-item').count()) === p.tasks.length, String(p.tasks.length));
 check('18: the recovery task explains what counts',
   /meditation|breathing|nsdr|prayer/i.test(dailyText));
 

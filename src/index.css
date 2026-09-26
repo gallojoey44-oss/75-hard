@@ -5589,3 +5589,36 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   background: var(--bg2); color: var(--text3); border: 1px solid var(--border);
   vertical-align: middle;
 }
+
+/* ─── Muscle Building: specialization dashboard ──────────────────────────── */
+.mb-priority-block { border-left: 3px solid var(--accent); }
+.mb-priority-row {
+  background: var(--bg2); border-radius: var(--radius);
+  padding: 11px; margin-top: 8px;
+}
+.mb-priority-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.mb-priority-name { font-size: 14px; font-weight: 800; }
+.mb-priority-pct { font-size: 13px; font-weight: 800; color: var(--text3); }
+.mb-priority-pct.met { color: #10B981; }
+.mb-priority-stat {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px; color: var(--text2); padding: 3px 0;
+}
+.mb-priority-stat strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.mb-priority-stat strong.warn { color: #F59E0B; }
+.mb-vol-add.wide { width: 100%; margin-top: 8px; }
+.mb-stall { border-left: 3px solid #F59E0B; }
+
+/* Setup: carb resolution and specialization ramp */
+.mb-resolved { font-size: 13px; color: var(--text2); margin-top: 8px; }
+.mb-resolved strong { color: var(--accent2); }
+.mb-adjusted { color: #F59E0B; font-size: 12px; }
+.mb-warn {
+  font-size: 12px; line-height: 1.6; color: var(--text2);
+  background: rgba(245, 158, 11, 0.09); border-left: 3px solid #F59E0B;
+  border-radius: var(--radius); padding: 9px 11px; margin-top: 8px;
+}
+.mb-ramp {
+  font-size: 11px; color: var(--text3); margin: 2px 0 8px;
+  font-variant-numeric: tabular-nums;
+}

@@ -39,6 +39,8 @@ export const HABIT_KEYS = {
   STRESS_RECOVERY: 'stress_recovery',
   PROTEIN_DISTRIBUTION: 'protein_distribution',
   CREATINE: 'creatine',
+  CARBOHYDRATE_TARGET: 'carbohydrate_target',
+  MICRONUTRIENT_COVERAGE: 'micronutrient_coverage',
   // Women's Hormone Health
   EXERCISE_SESSION: 'exercise_session',
   OMEGA3_FOODS: 'omega3_foods',
@@ -76,6 +78,8 @@ export const HABIT_LABELS = {
   [HABIT_KEYS.STRESS_RECOVERY]: 'Recovery practice',
   [HABIT_KEYS.PROTEIN_DISTRIBUTION]: 'Protein distribution',
   [HABIT_KEYS.CREATINE]: 'Creatine',
+  [HABIT_KEYS.CARBOHYDRATE_TARGET]: 'Carbohydrate target',
+  [HABIT_KEYS.MICRONUTRIENT_COVERAGE]: 'Micronutrient coverage',
   [HABIT_KEYS.EXERCISE_SESSION]: 'Exercise session',
   [HABIT_KEYS.OMEGA3_FOODS]: 'Omega-3 foods',
   [HABIT_KEYS.IRON_RICH_FOODS]: 'Iron-rich foods',

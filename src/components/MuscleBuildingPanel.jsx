@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import * as MB from '../data/muscleBuildingConfig';
 import { volumeAdherence } from '../utils/muscleVolume';
-import { trendSummaries, makeExerciseEntry } from '../utils/exerciseLog';
+import { trendSummaries, makeExerciseEntry, overallPerformance, stallInsight, DOUBLE_PROGRESSION, PROGRESSION_ROUTES } from '../utils/exerciseLog';
 import { bodyweightTrend, measurementCheckIns, growthInsights } from '../utils/growthTrend';
-import { getTodayStr } from '../utils/dateUtils';
+import { getTodayStr, getDateForDayNumber } from '../utils/dateUtils';
 import { HABIT_KEYS } from '../data/habitKeys';
 
 /**
@@ -42,6 +42,13 @@ export default function MuscleBuildingPanel() {
   const training = wr?.current?.requirements?.find(r => r.id === 'hypertrophy_training') || null;
   const weight = bodyweightTrend({ days, meta, challengeStart, rawDay });
   const trends = trendSummaries(profile?.exerciseLog, 3);
+  const perf = overallPerformance(profile?.exerciseLog);
+  // Fires only after several weeks of no movement across most tracked lifts.
+  const stall = stallInsight({
+    entries: profile?.exerciseLog,
+    challengeStart,
+    todayDate: getDateForDayNumber(challengeStart, rawDay),
+  });
   const checkIns = measurementCheckIns({ days, meta, rawDay });
 
   const volAdh = volumeAdherence({ entries: profile?.volumeSets, meta, challengeStart, rawDay });
@@ -89,18 +96,60 @@ export default function MuscleBuildingPanel() {
         </div>
       )}
 
+      {/* ── PRIORITY MUSCLES — the specialization dashboard ──
+          Shown prominently and above general volume, because during a block
+          these are the muscles the user is actually making decisions about. */}
+      {vol.supported && vol.specializing && (
+        <div className="mb-block mb-priority-block">
+          <div className="mb-block-title">⭐ Priority muscles</div>
+          {vol.priorityRows.map(r => {
+            const trend = perf?.pct == null ? null : (perf.pct >= 50 ? 'up' : perf.flat ? 'flat' : 'mixed');
+            return (
+              <div key={r.id} className="mb-priority-row">
+                <div className="mb-priority-head">
+                  <span className="mb-priority-name">{r.icon} {r.label} ⭐</span>
+                  <span className={`mb-priority-pct${r.met ? ' met' : ''}`}>{r.pct}%</span>
+                </div>
+                <div className="mb-priority-stat">
+                  <span>Weekly Volume</span><strong>{r.done} / {r.target} sets</strong>
+                </div>
+                <div className="mb-vol-bar"><div className="mb-vol-fill" style={{ width: `${r.pct}%` }} /></div>
+                <div className="mb-priority-stat">
+                  <span>Training Exposures</span>
+                  <strong className={r.exposuresMet ? '' : 'warn'}>{r.exposures} / {r.exposureTarget}</strong>
+                </div>
+                <div className="mb-priority-stat">
+                  <span>Performance Trend</span>
+                  <strong>{trend === 'up' ? '↑' : trend === 'flat' ? '→' : trend === 'mixed' ? '↗' : '—'}</strong>
+                </div>
+                {r.microSets > 0 && (
+                  <div className="mb-note">{r.microSets} of these came from micro-workouts — same budget, spread out.</div>
+                )}
+                <button className="mb-vol-add wide" onClick={() => logVolumeSets(r.id, 1)}>+1 set</button>
+              </div>
+            );
+          })}
+          <div className="mb-why">{MB.WHY.specialization}</div>
+          <div className="mb-note">{MB.SPECIALIZATION.lowestEffectiveNote}</div>
+        </div>
+      )}
+
       {/* ── Weekly hard-set volume ── */}
       {vol.supported && (
         <div className="mb-block">
           <button className="mb-block-toggle" onClick={() => setOpenVolume(v => !v)}>
-            <span className="mb-block-title">📊 Weekly volume</span>
-            <span className="mb-block-meta">{vol.metCount}/{vol.rows.length} targets met · {vol.totalDone}/{vol.totalTarget} sets</span>
+            <span className="mb-block-title">📊 {vol.specializing ? 'Other muscles' : 'Weekly volume'}</span>
+            <span className="mb-block-meta">
+              {vol.specializing
+                ? `${vol.otherRows.filter(r => r.met).length}/${vol.otherRows.length} at maintenance`
+                : `${vol.metCount}/${vol.rows.length} targets met · ${vol.totalDone}/${vol.totalTarget} sets`}
+            </span>
             <span className="mb-caret">{openVolume ? '▾' : '▸'}</span>
           </button>
           {openVolume && (
             <>
               <div className="mb-volume-list">
-                {vol.rows.map(r => (
+                {(vol.specializing ? vol.otherRows : vol.rows).map(r => (
                   <div key={r.id} className={`mb-vol-row${r.met ? ' met' : ''}`}>
                     <span className="mb-vol-name">{r.icon} {r.label}</span>
                     <span className="mb-vol-count">{r.done} / {r.target} sets</span>
@@ -109,12 +158,24 @@ export default function MuscleBuildingPanel() {
                   </div>
                 ))}
               </div>
-              <div className="mb-why">{MB.WHY.volume}</div>
+              <div className="mb-why">{vol.specializing ? MB.SPECIALIZATION.explanation : MB.WHY.volume}</div>
               <div className="mb-note">
                 Logging sets tracks your training dose — it awards no XP, so there is nothing to farm.
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* ── Performance stall — only after several flat weeks ── */}
+      {stall && (
+        <div className="mb-block mb-stall">
+          <div className="mb-block-title">⚠️ {stall.text}</div>
+          <div className="mb-note">
+            {stall.stalled} of {stall.tracked} tracked exercises have not progressed by any route
+            for about {stall.weeks} weeks. That is a signal to look at volume, food, sleep and
+            recovery — not a reason to add more sets by default.
+          </div>
         </div>
       )}
 

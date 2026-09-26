@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import * as MB from '../data/muscleBuildingConfig';
+import { HABIT_KEYS } from '../data/habitKeys';
 
 /**
  * Muscle Building setup — the minimum useful customization, on one screen.
@@ -17,6 +18,13 @@ export default function MuscleBuildingSetup({ onCancel, onSubmit }) {
 
   const set = (patch) => setS(prev => ({ ...prev, ...patch }));
   const suggested = MB.suggestedProteinGrams(s.bodyweightLb, s.proteinPerLb);
+  const setSpec = (patch) => set({ specialization: { ...(s.specialization || {}), ...patch } });
+  const togglePriority = (id) => {
+    const cur = s.specialization?.priority || [];
+    if (cur.includes(id)) return setSpec({ priority: cur.filter(x => x !== id) });
+    if (cur.length >= MB.SPECIALIZATION.maxPriority) return undefined;
+    return setSpec({ priority: [...cur, id] });
+  };
   const mode = MB.nutritionMode(s.nutritionMode);
 
   function setMode(id) {
@@ -145,6 +153,167 @@ export default function MuscleBuildingSetup({ onCancel, onSubmit }) {
             Leave blank to keep the task as “Hit Nutrition Target” and track against whatever
             target you already use. Expected gain: {s.gainRateMin}–{s.gainRateMax}% bodyweight per week.
           </div>
+        </div>
+
+        {/* ── Carbohydrate ── */}
+        {/* Placed after energy and protein on purpose: carbohydrate takes what
+            remains of the calorie target, it does not get added on top of it. */}
+        <div className="mb-field">
+          <label className="mb-label">Carbohydrate target</label>
+          <div className="mb-chips">
+            {MB.CARB_DEMAND_LEVELS.map(l => (
+              <button
+                key={l.id}
+                className={`mb-chip${s.carbDemand === l.id ? ' active' : ''}`}
+                onClick={() => set({ carbDemand: l.id, carbPerLb: l.perLb.suggested })}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <div className="mb-hint">{MB.carbDemandLevel(s.carbDemand).blurb}</div>
+          <label className="mb-inline">
+            <span>g per lb of bodyweight</span>
+            <input
+              type="number" step="0.1" inputMode="decimal" className="inline-input"
+              min={MB.CARB_DEMAND_LEVELS[0].perLb.min} max={MB.CARB_DEMAND_LEVELS[2].perLb.max}
+              value={s.carbPerLb}
+              onChange={e => set({ carbPerLb: parseFloat(e.target.value) || MB.DEFAULT_CARB_PER_LB })}
+            />
+          </label>
+          {(() => {
+            const n = MB.resolveNutrition(s);
+            if (!n.suggestedCarbGrams) {
+              return <div className="mb-hint">Enter your bodyweight above for a suggested carb target.</div>;
+            }
+            return (
+              <>
+                <div className="mb-resolved">
+                  Daily carb target: <strong>{n.carbGrams} g</strong>
+                  {n.macros.adjusted && <span className="mb-adjusted"> (trimmed from {n.suggestedCarbGrams} g)</span>}
+                </div>
+                {n.macros.adjusted && <div className="mb-warn">{n.macros.note}</div>}
+                {!s.calorieTarget && (
+                  <div className="mb-hint">
+                    With no calorie target set, this is a straight reference figure. Set one above and
+                    Forge will fit protein, fat and carbs inside it.
+                  </div>
+                )}
+              </>
+            );
+          })()}
+          <div className="mb-hint">{MB.WHY[HABIT_KEYS.CARBOHYDRATE_TARGET]}</div>
+        </div>
+
+        {/* ── Specialization ── */}
+        <div className="mb-field">
+          <label className="mb-label">{MB.SPECIALIZATION.question}</label>
+          <div className="mb-chips">
+            {MB.SPECIALIZATION.options.map(o => (
+              <button
+                key={o.id}
+                className={`mb-chip${(s.specialization?.enabled ? 'specialize' : 'balanced') === o.id ? ' active' : ''}`}
+                onClick={() => setSpec({ enabled: o.id === 'specialize', priority: o.id === 'specialize' ? (s.specialization?.priority || []) : [] })}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <div className="mb-hint">
+            {(s.specialization?.enabled ? MB.SPECIALIZATION.options[1] : MB.SPECIALIZATION.options[0]).blurb}
+          </div>
+
+          {s.specialization?.enabled && (
+            <>
+              <div className="mb-hint">{MB.SPECIALIZATION.explanation}</div>
+              <div className="mb-warn">{MB.SPECIALIZATION.honesty}</div>
+
+              <div className="mb-label" style={{ marginTop: 10 }}>
+                Priority muscles (up to {MB.SPECIALIZATION.maxPriority})
+              </div>
+              <div className="mb-chips">
+                {MB.specializationChoices().map(m => {
+                  const on = (s.specialization?.priority || []).includes(m.id);
+                  const full = (s.specialization?.priority || []).length >= MB.SPECIALIZATION.maxPriority;
+                  return (
+                    <button
+                      key={m.id}
+                      className={`mb-chip${on ? ' active' : ''}`}
+                      disabled={!on && full}
+                      onClick={() => togglePriority(m.id)}
+                    >
+                      {m.icon} {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {(s.specialization?.priority || []).length > 0 && (
+                <>
+                  <label className="mb-inline">
+                    <span>Weekly sets for priority muscles</span>
+                    <input
+                      type="number" inputMode="numeric" className="inline-input"
+                      min={MB.SPECIALIZATION.prioritySets.min} max={MB.SPECIALIZATION.prioritySets.max + 6}
+                      value={s.specialization.prioritySets}
+                      onChange={e => setSpec({ prioritySets: parseInt(e.target.value, 10) || MB.SPECIALIZATION.prioritySets.suggested })}
+                    />
+                  </label>
+                  <div className="mb-hint">
+                    {MB.SPECIALIZATION.prioritySets.min}–{MB.SPECIALIZATION.prioritySets.max} is a
+                    starting range, not a target to max out. {MB.SPECIALIZATION.lowestEffectiveNote}
+                  </div>
+
+                  <div className="mb-label" style={{ marginTop: 10 }}>Where are you starting from?</div>
+                  <div className="mb-hint">
+                    Your current weekly sets for each priority muscle. Forge ramps up from here
+                    rather than dropping you straight onto the full target.
+                  </div>
+                  {(s.specialization.priority || []).map(id => {
+                    const m = MB.MUSCLE_GROUPS.find(x => x.id === id);
+                    const cur = s.specialization.currentSets?.[id];
+                    const ramp = MB.volumeRamp({
+                      current: Number.isFinite(Number(cur)) ? Number(cur) : s.specialization.prioritySets,
+                      target: s.specialization.prioritySets,
+                      weeks: s.specialization.weeks,
+                    });
+                    return (
+                      <div key={id}>
+                        <label className="mb-inline">
+                          <span>{m?.icon} {m?.label} — sets per week now</span>
+                          <input
+                            type="number" inputMode="numeric" className="inline-input" min="0" max="40"
+                            value={cur ?? ''}
+                            placeholder="—"
+                            onChange={e => setSpec({
+                              currentSets: { ...(s.specialization.currentSets || {}), [id]: e.target.value === '' ? undefined : (parseInt(e.target.value, 10) || 0) },
+                            })}
+                          />
+                        </label>
+                        {Number.isFinite(Number(cur)) && (
+                          <div className="mb-ramp">
+                            Ramp: {ramp.map(r => r.sets).join(' → ')} sets
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <label className="mb-inline">
+                    <span>Weekly sessions per priority muscle</span>
+                    <input
+                      type="number" inputMode="numeric" className="inline-input"
+                      min={MB.SPECIALIZATION.exposures.min} max={MB.SPECIALIZATION.exposures.max + 2}
+                      value={s.specialization.exposures}
+                      onChange={e => setSpec({ exposures: parseInt(e.target.value, 10) || MB.SPECIALIZATION.exposures.suggested })}
+                    />
+                  </label>
+                  <div className="mb-hint">{MB.SPECIALIZATION.exposureNote}</div>
+                  <div className="mb-hint">{MB.SPECIALIZATION.durationNote}</div>
+                </>
+              )}
+            </>
+          )}
         </div>
 
         {/* ── Sleep ── */}

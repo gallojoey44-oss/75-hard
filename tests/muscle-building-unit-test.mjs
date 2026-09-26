@@ -48,7 +48,9 @@ const setup = MB.defaultSetup();
 const tasks = MB.buildStartTasks(setup);
 const byKey = k => tasks.find(t => habitKeyOf(t) === k);
 
-check('3: the daily list stays short — 4 fundamentals + the daily log', tasks.length === 5, `${tasks.length}`);
+// Carbohydrate joined the fundamentals in the V1 update, so the default list is
+// five fundamentals plus the daily log.
+check('3: the daily list stays short — 5 fundamentals + the daily log', tasks.length === 6, `${tasks.length}`);
 check('3A: protein is present with the canonical habitKey', !!byKey(HABIT_KEYS.PROTEIN_TARGET));
 check('3A: protein is THE Keystone Habit', keystoneHabitsOf(tasks).map(t => t.id).join() === 'mb_protein');
 check('3A: protein carries the joint-highest daily XP',
@@ -66,13 +68,19 @@ check('3D: it targets 5–10 minutes', MB.RECOVERY_PRACTICE.minMinutes === 5 && 
 check('3D: it allows meditation, breathing, NSDR, walking and prayer',
   ['Meditation', 'Diaphragmatic breathing', 'NSDR', 'walk', 'Prayer']
     .every(x => MB.RECOVERY_PRACTICE.options.join(' ').includes(x)));
+// The V1 update requires naming cortisol in order to say it is NOT bad, so the
+// ban moved from the word to the claim.
 check('3D: its copy never claims a testosterone or growth guarantee',
-  !/testosterone|guarantee|cortisol/i.test(MB.WHY[HABIT_KEYS.STRESS_RECOVERY] + byKey(HABIT_KEYS.STRESS_RECOVERY).desc));
+  !/testosterone|guarantee/i.test(MB.WHY[HABIT_KEYS.STRESS_RECOVERY] + byKey(HABIT_KEYS.STRESS_RECOVERY).desc));
+check('3D: it never frames the goal as lowering cortisol',
+  !/lower cortisol|reduce cortisol|cortisol is bad/i.test(MB.WHY[HABIT_KEYS.STRESS_RECOVERY]));
+check('3D: it says a normal cortisol response is appropriate',
+  /normal, appropriate part of adapting/i.test(MB.WHY[HABIT_KEYS.STRESS_RECOVERY]));
 
 // Protein target follows the user, not a universal constant.
-check('3A: protein is 0.7–1.0 g/lb, suggested in between',
-  MB.PROTEIN_PER_LB.min === 0.7 && MB.PROTEIN_PER_LB.max === 1.0 &&
-  MB.PROTEIN_PER_LB.suggested > 0.7 && MB.PROTEIN_PER_LB.suggested < 1.0);
+check('3A: protein is 0.8–1.0 g/lb, suggested in between',
+  MB.PROTEIN_PER_LB.min === 0.8 && MB.PROTEIN_PER_LB.max === 1.0 &&
+  MB.PROTEIN_PER_LB.suggested > 0.8 && MB.PROTEIN_PER_LB.suggested < 1.0);
 check('3A: a bodyweight produces a rounded suggestion', MB.suggestedProteinGrams(180) === 155, `${MB.suggestedProteinGrams(180)}`);
 check('3A: no bodyweight → no invented number', MB.suggestedProteinGrams(null) === null);
 const custom = MB.buildStartTasks({ ...setup, bodyweightLb: 180 });
@@ -215,8 +223,12 @@ const pd = MB.OPTIMIZATION_HABITS.find(h => h.key === 'proteinDistribution');
 check('8: protein distribution uses the protein_distribution habitKey', pd.habitKey === HABIT_KEYS.PROTEIN_DISTRIBUTION);
 check('8: it is off unless enabled at setup', !tasks.some(t => t.id === pd.id));
 check('8: it is worth less than total daily protein', pd.xp < MB.XP.protein);
-check('8: it never asks for leucine grams', !/leucine/i.test(pd.desc) && !/\bg of leucine\b/i.test(MB.WHY[pd.habitKey]));
-check('8: it describes 3–4 feedings, not a threshold', /3–4/.test(pd.desc) && !/threshold/i.test(MB.WHY[pd.habitKey]));
+// The V1 update names a typical leucine figure for context. What must never
+// appear is a requirement to track it, or a binary threshold.
+check('8: leucine is context, never a tracked number',
+  !/leucine/i.test(pd.desc) && /you do not need to track that/i.test(MB.WHY[pd.habitKey]));
+check('8: it describes 3–4 feedings, and denies any on/off threshold',
+  /3–4/.test(pd.desc) && /not an on\/off threshold/i.test(MB.WHY[pd.habitKey]));
 
 // ══ 9: creatine — optional ══════════════════════════════════════════════════
 const cr = MB.OPTIMIZATION_HABITS.find(h => h.key === 'creatine');
@@ -348,8 +360,8 @@ check('17: the goal is hypertrophy, not generic strength', /muscle growth/i.test
 const whyKeys = [HABIT_KEYS.PROTEIN_TARGET, HABIT_KEYS.HYPERTROPHY_TRAINING, HABIT_KEYS.CALORIE_TARGET,
   HABIT_KEYS.SLEEP_TARGET, HABIT_KEYS.STRESS_RECOVERY, HABIT_KEYS.CREATINE, HABIT_KEYS.PROTEIN_DISTRIBUTION];
 check('18: every major requirement has a "why this helps" explanation', whyKeys.every(k => (MB.WHY[k] || '').length > 30));
-check('18: the protein explanation matches the requested copy',
-  MB.WHY[HABIT_KEYS.PROTEIN_TARGET] === 'Provides the amino acids needed to repair and build muscle.');
+check('18: the protein explanation leads with the requested copy',
+  MB.WHY[HABIT_KEYS.PROTEIN_TARGET].startsWith('Provides the amino acids needed to repair and build muscle.'));
 check('18: no exaggerated medical claims anywhere in the copy',
   !/cure|guarantee|maximis?e testosterone|boost testosterone|anabolic window/i.test(Object.values(MB.WHY).join(' ')));
 
