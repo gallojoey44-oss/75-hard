@@ -1,4 +1,7 @@
-export default function CheckItem({ task, checked, onToggle, disabled, keystone = 0, xp, supports = null }) {
+export default function CheckItem({
+  task, checked, onToggle, disabled, keystone = 0, xp, supports = null,
+  onOpenGuide = null,
+}) {
   const desc = task.desc;
   return (
     <div
@@ -19,6 +22,19 @@ export default function CheckItem({ task, checked, onToggle, disabled, keystone 
         {supports && <span className="check-supports">🔗 {supports}</span>}
       </span>
       {typeof xp === 'number' && <span className="check-xp">{xp} XP</span>}
+      {/* Habits that carry a strategy guide get a way into it from the row. It
+          stops propagation so opening the guide never toggles the task — the
+          row's own tap target is unchanged for every other habit. */}
+      {onOpenGuide && (
+        <button
+          className="check-guide"
+          onClick={(e) => { e.stopPropagation(); onOpenGuide(); }}
+          aria-label={`Open the ${task.name} strategy guide`}
+          title="Strategy guide"
+        >
+          Guide
+        </button>
+      )}
     </div>
   );
 }

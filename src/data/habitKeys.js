@@ -55,6 +55,20 @@ export const HABIT_KEYS = {
   INTERVAL_TRAINING: 'interval_training',
   WAIST_MEASUREMENT: 'waist_measurement',
   WEEKLY_REVIEW: 'weekly_review',
+  // LOCK IN
+  //
+  // These are deliberately NOT reused from the keys above, even where they look
+  // similar. Each one is a UNION of behaviours — reading OR meditation; movement
+  // AND food AND fluid — so merging it with another challenge's single-behaviour
+  // habit would let one check satisfy a requirement it does not actually cover.
+  // LOCK IN's sleep habit does reuse SLEEP_TARGET, and its shutdown ritual
+  // reuses STRESS_RECOVERY, because those are genuine matches.
+  DAILY_MISSION: 'daily_mission',
+  FLOW_SESSION: 'flow_session',
+  PRIORITY_EXECUTION: 'priority_execution',
+  ATTENTION_TRAINING: 'attention_training',
+  PHYSICAL_ENERGY: 'physical_energy',
+  MENTAL_RECOVERY: 'mental_recovery',
 };
 
 /** Human labels for habit keys — used in merge explanations. */
@@ -91,6 +105,12 @@ export const HABIT_LABELS = {
   [HABIT_KEYS.INTERVAL_TRAINING]: 'Interval training',
   [HABIT_KEYS.WAIST_MEASUREMENT]: 'Waist measurement',
   [HABIT_KEYS.WEEKLY_REVIEW]: 'Weekly review',
+  [HABIT_KEYS.DAILY_MISSION]: 'Daily mission',
+  [HABIT_KEYS.FLOW_SESSION]: 'Flow training',
+  [HABIT_KEYS.PRIORITY_EXECUTION]: 'Priority execution',
+  [HABIT_KEYS.ATTENTION_TRAINING]: 'Attention training',
+  [HABIT_KEYS.PHYSICAL_ENERGY]: 'Physical energy',
+  [HABIT_KEYS.MENTAL_RECOVERY]: 'Mental recovery',
 };
 
 /**

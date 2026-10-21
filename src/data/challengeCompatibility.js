@@ -66,6 +66,7 @@ export const CHALLENGE_IDS = {
   MUSCLE_BUILDING: 'muscle_building_phase',
   HORMONE_HEALTH: 'womens_hormone_health',
   ENERGY_RESET: 'energy_reset_10_day',
+  LOCK_IN: 'lock_in_14_day',
 };
 
 const C = CHALLENGE_IDS;
@@ -143,7 +144,45 @@ export const COMPATIBILITY_PAIRS = [
     reason: 'Better sleep and steadier energy show up directly in training quality, and the weekly exercise requirement is satisfied by the strength work itself.',
   },
 
+  // LOCK IN is a cognitive-load challenge with no training requirement of its
+  // own, so it stacks well with physical goals. Its own habits — sleep,
+  // recovery, daily movement — point the same way as most of the library. What
+  // it does compete for is HOURS, so anything that also wants a lot of the day
+  // is rated conditional below.
+  {
+    a: C.LOCK_IN, b: C.SLEEP_RESET, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Sleep is already LOCK IN\'s highest-value habit, so a sleep challenge reinforces exactly the thing the focus work depends on. You log the sleep habit once and it counts for both.',
+  },
+  {
+    a: C.LOCK_IN, b: C.ENERGY_RESET, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Both are built on sleep, light, food and movement, and several habits are shared outright. The Energy Reset adds the circadian side; LOCK IN adds what to do with the energy.',
+  },
+  {
+    a: C.LOCK_IN, b: C.RECOVERY, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'LOCK IN already treats recovery as a required habit rather than a reward, so a recovery phase reinforces it instead of competing.',
+  },
+  {
+    a: C.LOCK_IN, b: C.STRENGTH, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'LOCK IN asks for daily movement but prescribes no programme, so your strength work satisfies it. Better sleep and steadier attention show up in training quality too.',
+  },
+  {
+    a: C.LOCK_IN, b: C.MUSCLE_BUILDING, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'No conflict in either direction: LOCK IN adds no training load, and the sleep and nutrition habits a growth block needs are already on its list.',
+  },
+  {
+    a: C.LOCK_IN, b: C.HORMONE_HEALTH, rating: COMPATIBILITY.HIGHLY_COMPATIBLE,
+    reason: 'Sleep and down-regulation are shared between the two, and LOCK IN never dictates training intensity — so adapting sessions on symptomatic days stays entirely possible.',
+  },
+
   // ── Conditional ──────────────────────────────────────────────────────────
+  {
+    a: C.LOCK_IN, b: C.MENTAL_TRAINING, rating: COMPATIBILITY.CONDITIONAL,
+    reason: 'Heavy overlap — both are attention and stress challenges, and you would be doing two versions of similar work. Fine if you want the reinforcement, but expect duplication rather than a second dimension.',
+  },
+  {
+    a: C.LOCK_IN, b: C.FAT_LOSS, rating: COMPATIBILITY.CONDITIONAL,
+    reason: 'An energy deficit tends to make demanding cognitive work harder, and LOCK IN is two weeks of exactly that. Workable with a modest deficit; a hard cut will cost you the focus sessions.',
+  },
   {
     a: C.FAT_LOSS, b: C.HORMONE_HEALTH, rating: COMPATIBILITY.CONDITIONAL,
     reason: 'An aggressive energy deficit can work against hormone health. Workable with a modest deficit and enough food, but not alongside a hard cut.',
@@ -174,7 +213,7 @@ export const COMPATIBILITY_PAIRS = [
   // training, nutrition, reading, hydration and daily photos. Anything stacked on
   // top competes with it for the same hours rather than complementing it, so it
   // is deliberately a solo challenge.
-  ...[C.FAT_LOSS, C.MENTAL_TRAINING, C.SLEEP_RESET, C.STRENGTH, C.RECOVERY, C.MUSCLE_BUILDING, C.HORMONE_HEALTH, C.ENERGY_RESET]
+  ...[C.FAT_LOSS, C.MENTAL_TRAINING, C.SLEEP_RESET, C.STRENGTH, C.RECOVERY, C.MUSCLE_BUILDING, C.HORMONE_HEALTH, C.ENERGY_RESET, C.LOCK_IN]
     .map(other => ({
       a: C.DISCIPLINE_75, b: other, rating: COMPATIBILITY.CONFLICTING,
       reason: 'The 75-Day Discipline Challenge already covers training, nutrition, reading and hydration every single day. Stacking a second challenge on top competes for the same hours instead of supporting it — run it on its own.',

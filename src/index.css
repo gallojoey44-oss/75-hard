@@ -5661,3 +5661,255 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   font-weight: 700;
   color: #F59E0B;
 }
+
+/* ─── v3.50.0: LOCK IN + habit strategy guides ───────────────── */
+
+/* LOCK IN keeps Forge's purple identity but leans on a focused blue so the
+   panel reads as its own challenge without introducing a new palette. */
+.li-panel, .li-setup {
+  --li-glow: #60A5FA;
+  --li-glow-2: #3B82F6;
+  --li-tint: rgba(96, 165, 250, 0.12);
+}
+
+/* ── Daily panel ── */
+.li-panel {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--li-glow);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.li-panel-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.li-panel-title { font-size: 14px; font-weight: 800; }
+.li-panel-sub { font-size: 11px; color: var(--text3); margin-left: auto; font-variant-numeric: tabular-nums; }
+
+.li-target {
+  background: var(--li-tint);
+  border-radius: var(--radius-sm);
+  padding: 11px;
+}
+.li-target.lighter { background: rgba(245, 158, 11, 0.12); }
+.li-target-head { display: flex; align-items: center; gap: 8px; }
+.li-target-label { font-size: 12px; font-weight: 700; }
+.li-target-stage {
+  margin-left: auto; font-size: 10px; font-weight: 800; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--li-glow);
+}
+.li-target.lighter .li-target-stage { color: var(--warn); }
+.li-target-value {
+  font-size: 1.5rem; font-weight: 800; margin: 4px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.li-target-note { font-size: 11px; color: var(--text2); line-height: 1.5; }
+.li-lighter {
+  margin-top: 8px; font-size: 11px; line-height: 1.5; color: var(--warn);
+  border-top: 1px solid rgba(245, 158, 11, 0.3); padding-top: 8px;
+}
+
+.li-block { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+.li-block-toggle {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  background: none; border: none; padding: 0; cursor: pointer; color: var(--text); text-align: left;
+}
+.li-block-title { font-size: 13px; font-weight: 700; }
+.li-block-meta { margin-left: auto; font-size: 11px; color: var(--text3); font-weight: 500; }
+.li-caret { font-size: 11px; color: var(--text3); }
+.li-blurb { font-size: 12px; color: var(--text2); line-height: 1.6; margin-top: 8px; }
+.li-list { margin: 6px 0 0 16px; padding: 0; }
+.li-list li { font-size: 12px; color: var(--text2); line-height: 1.6; margin-bottom: 3px; }
+.li-note { font-size: 11px; color: var(--text3); line-height: 1.5; margin-top: 8px; }
+.li-rule {
+  margin-top: 8px; font-size: 11px; line-height: 1.55; font-weight: 600;
+  color: var(--accent2); background: var(--accent-glow);
+  border-radius: var(--radius-sm); padding: 9px 10px;
+}
+
+/* The flow ramp, as a progress-bearing list. */
+.li-stage {
+  display: flex; align-items: center; gap: 10px; padding: 7px 9px; margin-top: 6px;
+  border-radius: var(--radius-sm); background: var(--bg2); border: 1px solid transparent;
+}
+.li-stage.active { border-color: var(--li-glow); background: var(--li-tint); }
+.li-stage.done { opacity: 0.55; }
+.li-stage-days { font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; min-width: 74px; }
+.li-stage-min { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.li-stage-label { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--text2); }
+
+/* Guide index rows. */
+.li-guide-row {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 9px 10px; margin-top: 6px; cursor: pointer; color: var(--text);
+}
+.li-guide-row:active { opacity: 0.7; }
+.li-guide-num {
+  width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--li-tint); color: var(--li-glow); font-size: 10px; font-weight: 800;
+}
+.li-guide-icon { font-size: 1.1rem; flex-shrink: 0; }
+.li-guide-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.li-guide-title { font-size: 13px; font-weight: 700; }
+.li-guide-tagline { font-size: 11px; color: var(--text3); line-height: 1.4; }
+.li-guide-caret { color: var(--text3); font-size: 13px; flex-shrink: 0; }
+
+/* ── Setup screen ── */
+.li-setup { max-width: 440px; max-height: 88vh; overflow-y: auto; }
+.li-hero { text-align: center; margin-bottom: 12px; }
+.li-hero-emoji { font-size: 2.6rem; }
+.li-hero-sub { font-size: 13px; color: var(--li-glow); font-weight: 700; margin: 0 0 8px; }
+.li-goal {
+  font-size: 13px; line-height: 1.6; color: var(--text); padding: 10px 11px;
+  background: var(--li-tint); border-left: 3px solid var(--li-glow);
+  border-radius: var(--radius-sm); margin-bottom: 8px;
+}
+.li-pitch { font-size: 12px; color: var(--text2); line-height: 1.55; margin-bottom: 12px; }
+.li-facts { display: flex; gap: 8px; margin-bottom: 14px; }
+.li-fact {
+  flex: 1; background: var(--bg2); border-radius: var(--radius-sm);
+  padding: 9px 6px; text-align: center;
+}
+.li-fact-value { display: block; font-size: 1.1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.li-fact-label { display: block; font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 1px; }
+.li-field { margin-bottom: 14px; }
+.li-label { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+.li-help { font-size: 11px; color: var(--text3); line-height: 1.5; margin-top: 6px; }
+.li-ramp { display: flex; gap: 6px; }
+.li-ramp-step {
+  flex: 1; background: var(--bg2); border-radius: var(--radius-sm);
+  padding: 8px 4px; text-align: center;
+}
+.li-ramp-min { display: block; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.li-ramp-days { display: block; font-size: 9px; color: var(--text3); margin-top: 1px; }
+.li-disclosure {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--li-glow); font-size: 12px; font-weight: 700; text-align: left;
+}
+.li-habits { margin-top: 8px; }
+.li-habit {
+  display: flex; align-items: flex-start; gap: 9px; padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.li-habit:last-of-type { border-bottom: none; }
+.li-habit-icon { font-size: 1.05rem; flex-shrink: 0; }
+.li-habit-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.li-habit-name { font-size: 12px; font-weight: 700; }
+.li-habit-desc { font-size: 11px; color: var(--text3); line-height: 1.45; }
+.li-habit-xp { font-size: 11px; font-weight: 700; color: var(--text3); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.li-targets { margin-top: 8px; }
+.li-stepper { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.li-stepper:last-child { border-bottom: none; }
+.li-stepper-row { display: flex; align-items: center; gap: 8px; }
+.li-stepper-label { font-size: 12px; font-weight: 700; flex: 1; }
+.li-stepper-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.li-stepper-value { font-size: 12px; font-weight: 700; min-width: 76px; text-align: center; font-variant-numeric: tabular-nums; }
+.li-step-btn {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  background: var(--card2); border: 1px solid var(--border); color: var(--text);
+  font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.li-step-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* ── The "Guide" affordance on a task row ── */
+.check-guide {
+  flex-shrink: 0; margin-left: 10px; padding: 5px 9px;
+  background: var(--card2); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text2); font-size: 10px; font-weight: 800;
+  letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+}
+.check-guide:active { opacity: 0.6; }
+.check-item.keystone .check-guide { color: var(--accent2); border-color: var(--accent-glow); }
+.gf-task-guide {
+  display: block; margin-top: 4px; padding: 0; background: none; border: none;
+  color: var(--accent2); font-size: 11px; font-weight: 700; text-align: left; cursor: pointer;
+}
+
+/* ── Habit strategy guide ── */
+.hg-card { max-width: 460px; max-height: 90vh; overflow-y: auto; padding: 18px; }
+.hg-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+.hg-icon { font-size: 1.8rem; flex-shrink: 0; line-height: 1.1; }
+.hg-head-text { flex: 1; min-width: 0; }
+.hg-title { font-size: 1.15rem; margin: 0 0 2px; }
+.hg-tagline { font-size: 12px; color: var(--accent2); font-weight: 600; line-height: 1.45; margin: 0; }
+.hg-close {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px;
+  background: var(--card2); border: 1px solid var(--border);
+  color: var(--text2); font-size: 13px; cursor: pointer;
+}
+
+.hg-quick {
+  background: var(--accent-glow); border-left: 3px solid var(--accent2);
+  border-radius: var(--radius-sm); padding: 11px 12px; margin-bottom: 12px;
+}
+.hg-quick-title { font-size: 12px; font-weight: 800; margin-bottom: 6px; }
+.hg-quick-list { margin: 0 0 0 18px; padding: 0; }
+.hg-quick-list li { font-size: 12px; line-height: 1.6; margin-bottom: 3px; }
+
+.hg-check {
+  width: 100%; display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 11px; cursor: pointer; color: var(--text); text-align: left;
+}
+.hg-check.done { background: var(--success-glow); border-color: rgba(16,185,129,0.3); }
+.hg-check-box {
+  width: 24px; height: 24px; border-radius: 7px; flex-shrink: 0;
+  border: 2px solid var(--border); background: var(--card2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800;
+}
+.hg-check-box.checked { background: var(--success); border-color: var(--success); color: #fff; }
+.hg-check-label { font-size: 13px; font-weight: 700; flex: 1; }
+.hg-check-xp { font-size: 11px; font-weight: 700; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+.hg-section { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+.hg-section-toggle {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  background: none; border: none; padding: 0; cursor: pointer; color: var(--text); text-align: left;
+}
+.hg-section-title { font-size: 13px; font-weight: 700; }
+.hg-section-meta { margin-left: auto; font-size: 11px; color: var(--text3); font-weight: 500; }
+.hg-caret { font-size: 11px; color: var(--text3); }
+.hg-section-body { margin-top: 8px; }
+
+.hg-req { font-size: 12px; font-weight: 600; line-height: 1.6; color: var(--text); }
+.hg-blurb { font-size: 12px; color: var(--text2); line-height: 1.6; }
+.hg-list { margin: 6px 0 0 16px; padding: 0; }
+.hg-list li { font-size: 12px; color: var(--text2); line-height: 1.6; margin-bottom: 4px; }
+.hg-note {
+  font-size: 11px; color: var(--text3); line-height: 1.55; margin-top: 8px;
+  border-left: 2px solid var(--border); padding-left: 9px;
+}
+
+.hg-strategy { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.hg-strategy:last-of-type { border-bottom: none; }
+.hg-strategy-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.hg-strategy-title { font-size: 12px; font-weight: 700; flex: 1; min-width: 0; }
+.hg-strategy-body { font-size: 12px; color: var(--text2); line-height: 1.6; margin-top: 3px; }
+.hg-ev { font-size: 10px; font-weight: 800; flex-shrink: 0; white-space: nowrap; }
+
+.hg-mistake { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.hg-mistake:last-of-type { border-bottom: none; }
+.hg-mistake-title { font-size: 12px; font-weight: 700; color: var(--warn); }
+
+.hg-example { margin-bottom: 12px; }
+.hg-example:last-of-type { margin-bottom: 0; }
+.hg-example-label {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--accent2); margin-bottom: 5px;
+}
+.hg-example-list { margin: 0 0 0 16px; padding: 0; }
+.hg-example-list li { font-size: 12px; color: var(--text2); line-height: 1.6; margin-bottom: 4px; }
+
+.hg-done { margin-top: 14px; }
+
+/* Narrow phones: the guide is the longest screen in the app, so give it the
+   full width and keep the side gutter honest. */
+@media (max-width: 380px) {
+  .hg-card { padding: 14px; }
+  .li-facts { flex-wrap: wrap; }
+  .li-fact { min-width: calc(50% - 4px); }
+  .li-stepper-row { flex-wrap: wrap; }
+  .li-stepper-controls { margin-left: auto; }
+}

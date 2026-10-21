@@ -27,10 +27,13 @@ import {
   challengeOf, LANE,
 } from '../utils/challengeStack';
 import * as MB from '../data/muscleBuildingConfig';
+import HabitGuide from './HabitGuide';
+import LockInPanel from './LockInPanel';
+import { guideForTask } from '../data/habitGuides';
 
 const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
 
-function GfTaskCard({ task, checked, onToggle, index, supports = null }) {
+function GfTaskCard({ task, checked, onToggle, index, supports = null, onOpenGuide = null }) {
   const color = task.color || TASK_COLORS[index % TASK_COLORS.length];
   return (
     <div className={`gf-task-card${checked ? ' done-card' : ''}${supports ? ' shared-habit' : ''}`}>
@@ -47,6 +50,13 @@ function GfTaskCard({ task, checked, onToggle, index, supports = null }) {
           {task.desc && <span className="gf-task-desc">{task.desc}</span>}
           {/* One behaviour, two challenges: satisfies both, pays XP once. */}
           {supports && <span className="gf-task-supports">🔗 {supports}</span>}
+          {/* Habits that carry a strategy guide are reachable from this layout
+              too, so the education is not a male-profile-only feature. */}
+          {onOpenGuide && (
+            <button className="gf-task-guide" onClick={onOpenGuide}>
+              Strategy guide →
+            </button>
+          )}
         </span>
         <button
           className={`gf-task-check${checked ? ' done' : ''}`}
@@ -392,6 +402,9 @@ export default function DailyView({ editDayNum, setView }) {
   const [celebrationIsMWD, setCelebrationIsMWD] = useState(false);
   const [prevPct, setPrevPct] = useState(0);
   const [prevMWDDone, setPrevMWDDone] = useState(false);
+  // The task whose strategy guide is open, if any. Held as the task id so the
+  // guide always reads live completion state rather than a snapshot.
+  const [guideTaskId, setGuideTaskId] = useState(null);
 
   useEffect(() => {
     if (editDayNum != null) setSelectedDayNum(editDayNum);
@@ -745,6 +758,7 @@ export default function DailyView({ editDayNum, setView }) {
                   keystone={getTaskKeystone(task)}
                   xp={getTaskXP(task)}
                   supports={supports}
+                  onOpenGuide={guideForTask(task) ? () => setGuideTaskId(task.id) : null}
                 />
               )}
             />
@@ -756,6 +770,24 @@ export default function DailyView({ editDayNum, setView }) {
       {showLetter && (
         <FutureSelfLetterView letter={letter} onClose={() => setShowLetter(false)} />
       )}
+
+      {/* Habit strategy guide. Opened from a task row (either layout) or from a
+          challenge panel; reads live completion state so the checkbox inside it
+          is the same checkbox as the one on the dashboard. */}
+      {guideTaskId && (() => {
+        const task = tasks.find(t => t.id === guideTaskId);
+        const g = guideForTask(task);
+        if (!g) return null;
+        return (
+          <HabitGuide
+            guide={g}
+            xp={getTaskXP(task)}
+            checked={!!dayData?.tasks?.[task.id]}
+            onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
+            onClose={() => setGuideTaskId(null)}
+          />
+        );
+      })()}
 
       {/* ── Body metrics (Fat Loss Challenge) ── */}
       {isMe && showBodyMetrics && !isMWD && (
@@ -822,6 +854,7 @@ export default function DailyView({ editDayNum, setView }) {
                   checked={!!dayData?.tasks?.[task.id]}
                   onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
                   supports={supports}
+                  onOpenGuide={guideForTask(task) ? () => setGuideTaskId(task.id) : null}
                 />
               )}
             />
@@ -898,6 +931,7 @@ export default function DailyView({ editDayNum, setView }) {
       <HormoneHealthPanel />
       <EnergyResetPanel />
       <FatLossHardPanel />
+      <LockInPanel dayNum={selectedDayNum} onOpenGuide={setGuideTaskId} />
       <ChallengePerformance />
       <SupportProgress />
 

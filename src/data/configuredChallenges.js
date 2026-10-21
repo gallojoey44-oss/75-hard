@@ -1,6 +1,7 @@
 import * as MB from './muscleBuildingConfig';
 import * as HH from './hormoneHealthConfig';
 import * as ER from './energyResetConfig';
+import * as LI from './lockInConfig';
 
 /**
  * Challenges whose whole attempt — descriptor, task list and weekly
@@ -19,6 +20,7 @@ export const CONFIGURED_BUILDERS = {
   [MB.MUSCLE_BUILDING_TEMPLATE_ID]: { buildMeta: MB.buildChallengeMeta, buildTasks: MB.buildStartTasks },
   [HH.HORMONE_HEALTH_TEMPLATE_ID]: { buildMeta: HH.buildChallengeMeta, buildTasks: HH.buildStartTasks },
   [ER.ENERGY_RESET_TEMPLATE_ID]: { buildMeta: ER.buildChallengeMeta, buildTasks: ER.buildStartTasks },
+  [LI.LOCK_IN_TEMPLATE_ID]: { buildMeta: LI.buildChallengeMeta, buildTasks: LI.buildStartTasks },
 };
 
 /** True when a template builds its own attempt rather than using variants. */

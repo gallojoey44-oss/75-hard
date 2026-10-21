@@ -16,11 +16,13 @@ import SupportChallengePicker from './SupportChallengePicker';
 import MuscleBuildingSetup from './MuscleBuildingSetup';
 import HormoneHealthSetup from './HormoneHealthSetup';
 import EnergyResetSetup from './EnergyResetSetup';
+import LockInSetup from './LockInSetup';
 import FatLossHardSetup from './FatLossHardSetup';
 import * as FLH from '../data/fatLossHardConfig';
 import * as MB from '../data/muscleBuildingConfig';
 import * as HH from '../data/hormoneHealthConfig';
 import * as ER from '../data/energyResetConfig';
+import * as LI from '../data/lockInConfig';
 import { CONFIGURED_BUILDERS } from '../data/configuredChallenges';
 
 import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
@@ -37,6 +39,7 @@ const CONFIGURED_SETUP_COMPONENTS = {
   [MB.MUSCLE_BUILDING_TEMPLATE_ID]: MuscleBuildingSetup,
   [HH.HORMONE_HEALTH_TEMPLATE_ID]: HormoneHealthSetup,
   [ER.ENERGY_RESET_TEMPLATE_ID]: EnergyResetSetup,
+  [LI.LOCK_IN_TEMPLATE_ID]: LockInSetup,
 };
 
 const CONFIGURED_SETUPS = Object.fromEntries(

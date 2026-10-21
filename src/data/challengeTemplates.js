@@ -3,6 +3,7 @@ import * as MB from './muscleBuildingConfig';
 import * as HH from './hormoneHealthConfig';
 import * as ER from './energyResetConfig';
 import * as FLH from './fatLossHardConfig';
+import * as LI from './lockInConfig';
 
 // Official Forge challenge template library.
 // Display metadata (emoji, startable) lives alongside the template data;
@@ -902,6 +903,45 @@ export const CHALLENGE_TEMPLATES = [
     inspiration_sources: ['Andrew Huberman', 'Matthew Walker', 'Peter Attia', 'Layne Norton'],
     exercise_guidance: ER.EXERCISE_GUIDE,
     why: ER.WHY,
+  },
+  {
+    // LOCK IN — every field below is derived from lockInConfig, so the
+    // challenge is edited there rather than here.
+    id: LI.LOCK_IN_TEMPLATE_ID,
+    overall_difficulty: 'Medium',
+    emoji: LI.IDENTITY.emoji,
+    startable: true,
+    start_flow: 'configured',
+    template_version: 1,
+    task_id_prefix: 'li_',
+    challenge_name: LI.IDENTITY.name,
+    subtitle: LI.IDENTITY.subtitle,
+    purpose: LI.IDENTITY.goal,
+    tagline: LI.IDENTITY.pitch,
+    // A single length: the flow progression (25 → 35 → 45 → 50) is built around
+    // fourteen days, so this challenge does not offer duration options.
+    duration_options_days: [LI.DURATION_DAYS],
+    default_duration_days: LI.DURATION_DAYS,
+    completion_bonus_by_duration: { [LI.DURATION_DAYS]: LI.COMPLETION_BONUS_XP },
+    metrics_targeted: ['energy_rating', 'mood_rating', 'stress_rating', 'sleep_quality', 'daily_task_completion_pct'],
+    insights_triggers: {
+      pre_recommendation: 'user reports difficulty concentrating, scattered days, or working long hours with little to show for it',
+      in_progress_monitoring: 'flow session adherence, priority completion rate, sleep consistency, recovery adherence',
+    },
+    success_threshold: 'habit adherence >= 0.80 AND the flow ramp completed without sleep adherence falling',
+    rewards: { xp: LI.COMPLETION_BONUS_XP, badge_id: 'iron_will' },
+    // Deliberately no bonus_missions: an optional "extra work session" reward
+    // would create exactly the incentive this challenge is built to remove.
+    safety_flags: {
+      contraindications: ['untreated sleep disorder', 'burnout under medical care', 'current severe anxiety or depression without support'],
+      notes: LI.RECOVERY_MODE.sleepRule,
+    },
+    evidence_level: 'moderate',
+    risk_level: 'low',
+    inspiration_sources: ['Cal Newport', 'Mihaly Csikszentmihalyi', 'Anders Ericsson', 'Matthew Walker'],
+    why: Object.fromEntries(LI.DAILY_HABITS.map(h => [h.habitKey, LI.guide(
+      (h.guideId || '').split(':')[1],
+    )?.why?.blurb]).filter(([, v]) => !!v)),
   },
   {
     id: 'recovery_phase',
