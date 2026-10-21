@@ -103,6 +103,12 @@ function sentKey(installId, profileId, type, localDate) {
 
 export const INDEX_KEY = 'push:index';       // set of "installId:profileId" with schedules
 export const CRON_LAST_KEY = 'push:cron:last';
+export const CRON_RUNS_KEY = 'push:cron:runs';   // recent run timestamps (cadence proof)
+export const QUEUE_KEY = 'push:queue';           // one-shot delayed sends
+
+function queueItemKey(id) {
+  return `push:queue:${id}`;
+}
 
 // ── Subscriptions ────────────────────────────────────────────────────────────
 
@@ -165,6 +171,90 @@ export async function alreadySent(installId, profileId, type, localDate) {
 }
 export async function markSent(installId, profileId, type, localDate) {
   return kvSetEx(sentKey(installId, profileId, type, localDate), 1, SENT_TTL);
+}
+/**
+ * Release a claimed send slot after a total delivery failure, so the next
+ * dispatcher run can retry. Without this a single transient push error loses
+ * the reminder for the rest of the local day.
+ */
+export async function unmarkSent(installId, profileId, type, localDate) {
+  return kvDel(sentKey(installId, profileId, type, localDate));
+}
+
+// ── One-shot delayed sends ───────────────────────────────────────────────────
+//
+// The scheduled-reminder path is time-of-day based and idempotent per local
+// date, which makes it useless for "send me something in 3 minutes to prove
+// this works". This queue exists for that: a single payload with a due
+// timestamp, drained by the dispatcher and deleted once attempted.
+
+const QUEUE_TTL = 60 * 60 * 24;   // a queued item is abandoned after a day
+
+export async function enqueueOneShot({ installId, profileId, payload, dueAt, label }) {
+  const id = `${installId}:${profileId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+  await kvSetEx(queueItemKey(id), {
+    id, installId, profileId, payload, dueAt, label: label || 'one-shot',
+    queuedAt: new Date().toISOString(),
+  }, QUEUE_TTL);
+  await kvSAdd(QUEUE_KEY, id);
+  return id;
+}
+
+export async function listOneShots() {
+  const ids = await kvSMembers(QUEUE_KEY);
+  const out = [];
+  for (const id of ids) {
+    const item = await kvGet(queueItemKey(id));
+    if (item) out.push(item);
+    else await kvSRem(QUEUE_KEY, id);          // expired — prune the index
+  }
+  return out;
+}
+
+export async function removeOneShot(id) {
+  await kvDel(queueItemKey(id));
+  await kvSRem(QUEUE_KEY, id);
+}
+
+/** Pending one-shots for one install/profile, for the diagnostics panel. */
+export async function pendingOneShots(installId, profileId) {
+  return (await listOneShots()).filter(i => i.installId === installId && i.profileId === profileId);
+}
+
+// ── Dispatcher cadence ───────────────────────────────────────────────────────
+//
+// The single most important thing to be able to prove is "is the scheduler
+// actually running, and how often?". One timestamp cannot answer that, so keep
+// a short rolling list of run times and derive the real interval from it.
+
+const MAX_RUNS = 12;
+
+export async function recordCronRun(at) {
+  const prev = (await kvGet(CRON_RUNS_KEY)) || [];
+  const runs = [at, ...(Array.isArray(prev) ? prev : [])].slice(0, MAX_RUNS);
+  await kvSetEx(CRON_RUNS_KEY, runs, 60 * 60 * 24 * 3);
+  return runs;
+}
+
+export async function getCronRuns() {
+  const runs = await kvGet(CRON_RUNS_KEY);
+  return Array.isArray(runs) ? runs : [];
+}
+
+// ── Genuine delivery confirmation ────────────────────────────────────────────
+//
+// A 201 from Apple's push service means ACCEPTED FOR DELIVERY, not delivered.
+// The only thing that proves the notification actually reached the device is
+// the service worker saying so. The SW posts back to /api/push/delivered when
+// its push handler fires, and that confirmation is recorded here.
+
+export async function recordDelivery(installId, profileId, info) {
+  await updateDiagnostics(installId, profileId, {
+    lastConfirmedDelivery: new Date().toISOString(),
+    lastConfirmedTag: info?.tag || null,
+    lastConfirmedLabel: info?.label || null,
+    confirmedCount: ((await getDiagnostics(installId, profileId))?.confirmedCount || 0) + 1,
+  });
 }
 
 // ── Diagnostics ──────────────────────────────────────────────────────────────

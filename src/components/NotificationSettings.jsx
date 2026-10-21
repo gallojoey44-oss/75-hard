@@ -5,13 +5,31 @@ import {
   getNotificationSupport, permissionLabel,
   requestNotificationPermission, subscribeToPush, unsubscribeFromPush,
   showTestNotification, backgroundTestPush, getPushStatus, isBackgroundReminder,
+  scheduledTestPush, localSubscriptionState, timeInQuietHours, minutesOf,
 } from '../utils/notificationUtils';
 
+// VITE_VAPID_PUBLIC_KEY is inlined at BUILD time. If it was missing when the
+// production bundle was built, this is false and no push subscription can ever
+// be created — while the local "Send Test Notification" button still works,
+// because that path needs only permission. That combination is exactly what
+// "notifications work in the app but never arrive in the background" looks
+// like, so it is reported loudly rather than silently.
 const PUSH_BACKEND_CONFIGURED = !!import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
 function fmtTime(iso) {
   if (!iso) return '—';
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+
+/** "in 3 min" / "2 min ago" — for queued pushes and scheduler freshness. */
+function fmtRelative(iso) {
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return iso;
+  const mins = Math.round((t - Date.now()) / 60000);
+  if (mins > 0) return `in ${mins} min`;
+  if (mins === 0) return 'any moment';
+  return `${Math.abs(mins)} min ago`;
 }
 
 export default function NotificationSettings() {
@@ -21,9 +39,14 @@ export default function NotificationSettings() {
   const [support, setSupport] = useState(() => getNotificationSupport());
   const [testStatus, setTestStatus] = useState(null); // 'sent' | 'failed' | null
   const [bgStatus, setBgStatus] = useState(null);      // { kind, msg }
+  const [schedStatus, setSchedStatus] = useState(null); // { kind, msg }
   const [showAll, setShowAll] = useState(false);
   const [diag, setDiag] = useState(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  // Read from the browser itself rather than from our server records — this is
+  // the only source that can say whether a genuine Push API subscription exists
+  // for THIS installation.
+  const [local, setLocal] = useState(null);
 
   const status = permissionLabel(support);
   const statusColor = {
@@ -34,10 +57,15 @@ export default function NotificationSettings() {
   }[status];
 
   const refreshDiag = useCallback(async () => {
-    if (!PUSH_BACKEND_CONFIGURED) return;
     setDiagLoading(true);
-    const s = await getPushStatus(activeProfile);
-    setDiag(s);
+    // The local half is always read, even with no build-time key: when the key
+    // is missing it is the evidence of *why* there is no subscription.
+    const l = await localSubscriptionState();
+    setLocal(l);
+    if (PUSH_BACKEND_CONFIGURED) {
+      const s = await getPushStatus(activeProfile);
+      setDiag(s);
+    }
     setDiagLoading(false);
   }, [activeProfile]);
 
@@ -85,6 +113,44 @@ export default function NotificationSettings() {
       setBgStatus({ kind: 'warn', msg: `Background push failed${res.detail ? `: ${res.detail}` : ''}.` });
     }
     setTimeout(refreshDiag, 800);
+  }
+
+  async function handleScheduledTest() {
+    setSchedStatus({ kind: 'pending', msg: 'Queueing a server-sent push for 3 minutes from now…' });
+    await subscribeToPush(activeProfile).catch(() => {});
+    const res = await scheduledTestPush(activeProfile, 3);
+
+    if (res.ok && res.queued) {
+      const sched = res.scheduler || {};
+      if (sched.looksLive) {
+        setSchedStatus({
+          kind: 'ok',
+          msg: `Queued for ${new Date(res.dueAt).toLocaleTimeString()}. Close Forge completely and lock your phone — `
+            + `it should arrive within about ${res.expectedWithinMinutes} minutes. `
+            + `Reopen Forge afterwards and check “Confirmed on device” below.`,
+        });
+      } else {
+        // The push will not be sent if nothing is running the dispatcher. Say
+        // that, rather than reporting a reassuring "queued".
+        setSchedStatus({
+          kind: 'warn',
+          msg: `Queued, but the scheduled dispatcher has not run recently${
+            sched.lastRunAgeMinutes != null ? ` (last run ${sched.lastRunAgeMinutes} min ago)` : ' (never)'
+          }, so this will NOT arrive on time. The external scheduler still needs setting up — see SETUP-PUSH.md.`,
+        });
+      }
+    } else if (res.status === 404) {
+      setSchedStatus({
+        kind: 'warn',
+        msg: 'No push subscription is stored for this install, so there is nothing to send to. '
+          + 'On iPhone, Forge must be opened from the Home Screen icon (not Safari) before a subscription can be created.',
+      });
+    } else if (res.status === 503) {
+      setSchedStatus({ kind: 'warn', msg: `Server not configured: ${res.fix || res.error || 'missing VAPID keys or KV store'}.` });
+    } else {
+      setSchedStatus({ kind: 'warn', msg: `Couldn’t queue the test${res.detail || res.error ? `: ${res.detail || res.error}` : ''}.` });
+    }
+    setTimeout(refreshDiag, 1000);
   }
 
   const canUse = support.supported && support.permission === 'granted';
@@ -150,9 +216,51 @@ export default function NotificationSettings() {
       {/* Delivery status */}
       <div className="notif-banner" style={{ marginTop: 10 }}>
         {PUSH_BACKEND_CONFIGURED
-          ? '📡 Background push is active. Timed reminders are delivered by the server even when Forge is closed. A few reminders that depend on live task state stay in-app (labelled below).'
-          : '⏳ Background push is not configured on the server yet. Until VAPID keys + a KV store are added, reminders fire only while the app is open.'}
+          ? '📡 Timed reminders are sent by the server, so they can arrive with Forge closed. A few reminders depend on live task state and stay in-app (labelled below). Use the 3-minute test to confirm background delivery actually reaches this phone.'
+          : '⏳ Background push cannot work in this build. The VAPID public key was missing when this version was built, so no push subscription can be created — only in-app notifications will appear. See SETUP-PUSH.md, then redeploy.'}
       </div>
+
+      {/* Background-push preconditions, read from the device itself. iOS grants
+          the Push API only to a Home Screen install, and permission alone is
+          not enough — so each precondition is shown separately instead of one
+          misleading "enabled". */}
+      {local && (
+        <div className="notif-diag" style={{ marginTop: 10 }}>
+          <div className="notif-diag-head">
+            <span className="notif-reminder-label">📲 This device</span>
+            <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={refreshDiag}>
+              {diagLoading ? '…' : '↻ Refresh'}
+            </button>
+          </div>
+          <DiagRow
+            label="Installed to Home Screen"
+            value={local.installed ? 'Yes' : local.ios ? 'No — required on iPhone' : 'No (browser tab)'}
+            ok={local.installed ? true : local.ios ? false : undefined}
+          />
+          <DiagRow label="Notification permission" value={permissionLabel(support)} ok={support.permission === 'granted'} />
+          <DiagRow label="Push API available" value={local.pushSupported ? 'Yes' : 'No'} ok={local.pushSupported} />
+          <DiagRow
+            label="Push subscription on device"
+            value={local.hasSubscription ? 'Active' : 'None'}
+            ok={local.hasSubscription}
+          />
+          {local.endpointHost && <DiagRow label="Push service" value={local.endpointHost} />}
+          {local.ios && !local.installed && (
+            <p style={{ fontSize: 11, color: '#F59E0B', marginTop: 8, lineHeight: 1.5 }}>
+              You&apos;re in Safari, not the installed app. iPhone only allows background push from the Home Screen
+              app: tap Share → Add to Home Screen, then open Forge from that icon and enable notifications there.
+            </p>
+          )}
+          {local.installed && local.pushSupported && !local.hasSubscription && support.permission === 'granted' && (
+            <p style={{ fontSize: 11, color: '#F59E0B', marginTop: 8, lineHeight: 1.5 }}>
+              Permission is granted but no push subscription exists, so the server has nowhere to send to.
+              {PUSH_BACKEND_CONFIGURED
+                ? ' Toggle Notifications off and on again to recreate it.'
+                : ' This build has no VAPID public key — the key must be set in Vercel and the app redeployed.'}
+            </p>
+          )}
+        </div>
+      )}
 
       {prefs.masterEnabled && (
         <>
@@ -161,10 +269,19 @@ export default function NotificationSettings() {
             {visibleReminders.map(def => {
               const setting = prefs.reminders?.[def.id] || { enabled: false, time: def.defaultTime };
               const bg = isBackgroundReminder(def.id);
+              // A reminder whose own time sits inside quiet hours can never be
+              // delivered. Unflagged, that is indistinguishable from broken push.
+              const mutedByQuiet = bg && setting.enabled &&
+                timeInQuietHours(prefs.quietHours, minutesOf(setting.time || def.defaultTime));
               return (
                 <div key={def.id} className="notif-reminder-row">
                   <span className="notif-reminder-label">
                     {def.label}
+                    {mutedByQuiet && (
+                      <span className="notif-quiet-warn" title="This time is inside your quiet hours, so it will never be sent.">
+                        😴 inside quiet hours — won&apos;t send
+                      </span>
+                    )}
                     <span
                       className="notif-delivery-tag"
                       style={{
@@ -238,6 +355,18 @@ export default function NotificationSettings() {
           >
             📡 Send Background Test Push
           </button>
+          <button
+            className="btn btn-primary btn-full"
+            style={{ marginTop: 8 }}
+            onClick={handleScheduledTest}
+            disabled={!canUse || !PUSH_BACKEND_CONFIGURED}
+          >
+            ⏱️ Test Background Push in 3 Minutes
+          </button>
+          <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, lineHeight: 1.5 }}>
+            The 3-minute test is the real one: the server sends it later, so close Forge and lock your phone
+            after tapping. The immediate test above only proves the server was reachable while the app was open.
+          </p>
           {!canUse && (
             <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, textAlign: 'center' }}>
               Enable notifications above to send a test.
@@ -264,6 +393,12 @@ export default function NotificationSettings() {
               <span>{bgStatus.msg}</span>
             </div>
           )}
+          {schedStatus && (
+            <div className={`update-status-row ${schedStatus.kind === 'ok' ? 'success' : 'warn'}`} style={{ marginTop: 8 }}>
+              <span>{schedStatus.kind === 'ok' ? '⏱️' : schedStatus.kind === 'pending' ? '⏳' : '⚠️'}</span>
+              <span>{schedStatus.msg}</span>
+            </div>
+          )}
 
           {/* Diagnostics */}
           {PUSH_BACKEND_CONFIGURED && (
@@ -281,19 +416,83 @@ export default function NotificationSettings() {
               <DiagRow label="Timezone" value={diag?.timezone || '—'} />
               <DiagRow label="Schedule local date" value={diag?.scheduleLocalDate || '—'} />
               <DiagRow label="Last synced" value={fmtTime(diag?.syncedAt)} />
-              <DiagRow label="Last server check" value={fmtTime(diag?.lastServerCheck)} />
-              <DiagRow label="Global cron last run" value={fmtTime(diag?.globalCronLastRun)} />
-              <DiagRow label="Last push attempted" value={fmtTime(diag?.lastPushAttempt)} />
+
+              {/* Scheduler — nothing else matters if this is not running. */}
+              <div className="notif-diag-sub">Scheduler</div>
               <DiagRow
-                label="Last push result"
-                value={diag?.lastPushResult ? `${diag.lastPushResult}${diag.lastPushType ? ` (${diag.lastPushType})` : ''}` : '—'}
-                ok={diag?.lastPushResult === 'delivered'}
+                label="Dispatcher running"
+                value={diag?.schedulerLive
+                  ? `Yes (${diag.schedulerLastRunAgeMinutes} min ago)`
+                  : diag?.schedulerLastRun ? `Stale — ${diag.schedulerLastRunAgeMinutes} min ago` : 'Never run'}
+                ok={diag?.schedulerLive}
               />
-              <DiagRow label="Last delivered" value={fmtTime(diag?.lastPushDelivered)} />
-              {diag?.failureReason && <DiagRow label="Failure reason" value={diag.failureReason} ok={false} />}
+              <DiagRow
+                label="Observed interval"
+                value={diag?.schedulerCadenceMinutes != null ? `~${diag.schedulerCadenceMinutes} min` : 'Not enough runs yet'}
+              />
+              <DiagRow label="Last run" value={fmtTime(diag?.schedulerLastRun)} />
+              <DiagRow label="Last check for this profile" value={fmtTime(diag?.lastServerCheck)} />
+
+              {/* Why nothing fired, in the server's own terms. */}
+              <div className="notif-diag-sub">Right now, server-side</div>
+              <DiagRow label="Server local date" value={diag?.evaluation?.localDate || '—'} />
+              <DiagRow
+                label="In quiet hours"
+                value={diag?.evaluation ? (diag.evaluation.inQuietHours ? 'Yes — reminders suppressed' : 'No') : '—'}
+                ok={diag?.evaluation ? !diag.evaluation.inQuietHours : undefined}
+              />
+              <DiagRow
+                label="Schedule is for an earlier day"
+                value={diag?.evaluation ? (diag.evaluation.staleDay ? 'Yes — generic copy will be used' : 'No') : '—'}
+              />
+              <DiagRow
+                label="Due now"
+                value={diag?.evaluation
+                  ? (diag.evaluation.dueNow.length ? diag.evaluation.dueNow.join(', ') : 'Nothing due')
+                  : '—'}
+              />
+
+              {/* Queued one-shot tests. */}
+              {(diag?.queuedCount || diag?.lastQueuedDueAt) && (
+                <>
+                  <div className="notif-diag-sub">Queued test</div>
+                  <DiagRow label="Waiting to send" value={diag?.queuedCount ? `${diag.queuedCount}` : 'None'} />
+                  <DiagRow
+                    label="Due"
+                    value={diag?.queuedDueAt
+                      ? `${fmtTime(diag.queuedDueAt)} (${fmtRelative(diag.queuedDueAt)})`
+                      : diag?.lastQueuedDueAt ? `${fmtTime(diag.lastQueuedDueAt)} — sent or expired` : '—'}
+                  />
+                </>
+              )}
+
+              {/* Acceptance and delivery are deliberately separate rows. A 201
+                  from Apple means the push service took the request; it is not
+                  evidence that the phone received or displayed anything. */}
+              <div className="notif-diag-sub">Push attempts</div>
+              <DiagRow label="Last attempt" value={fmtTime(diag?.lastPushAttempt)} />
+              <DiagRow
+                label="Accepted by push service"
+                value={diag?.lastPushAccepted
+                  ? `${fmtTime(diag.lastPushAccepted)}${diag.lastPushType ? ` (${diag.lastPushType})` : ''}`
+                  : diag?.lastPushResult === 'accepted' ? 'Yes' : '—'}
+                ok={diag?.lastPushAccepted ? true : undefined}
+              />
+              <DiagRow
+                label="Confirmed on device"
+                value={diag?.lastConfirmedDelivery
+                  ? `${fmtTime(diag.lastConfirmedDelivery)}${diag.lastConfirmedLabel ? ` (${diag.lastConfirmedLabel})` : ''}`
+                  : 'Never'}
+                ok={diag?.lastConfirmedDelivery ? true : false}
+              />
+              <DiagRow label="Confirmations recorded" value={String(diag?.confirmedCount ?? 0)} />
+              {diag?.failureReason && <DiagRow label="Last error" value={diag.failureReason} ok={false} />}
+
               <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8, lineHeight: 1.5 }}>
-                Background reminders are delivered by a server cron. Reminders labelled
-                “In-app only” depend on live task state and fire while Forge is open.
+                “Accepted by push service” means Apple took the request — it is <strong>not</strong> proof your
+                phone received anything. Only “Confirmed on device” is, because Forge&apos;s service worker reports
+                it after the push actually arrives. Reminders labelled “In-app only” depend on live task state and
+                fire while Forge is open.
               </p>
             </div>
           )}

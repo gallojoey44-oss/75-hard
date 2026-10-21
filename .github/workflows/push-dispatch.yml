@@ -1,0 +1,68 @@
+name: Push reminder dispatcher
+
+# Forge's scheduled reminders are sent by /api/cron/dispatch. Vercel's Hobby
+# plan only permits ONE cron run per day, which is useless for time-of-day
+# reminders: the single daily run almost never coincides with a reminder's local
+# time, so nothing is ever delivered. (vercel.json keeps a daily entry purely as
+# a backstop — a more frequent schedule there fails deployment on Hobby.)
+#
+# This workflow is the real scheduler. GitHub Actions enforces a 5-minute
+# minimum for scheduled workflows and queues them on a best-effort basis, so a
+# run can land a few minutes late. The dispatcher's catch-up window
+# (CATCH_UP_MINUTES in api/_lib/schedule.js) absorbs that, and its per-day
+# idempotency guarantees a reminder is still sent only once.
+#
+# Setup — two repository secrets (Settings → Secrets and variables → Actions):
+#   FORGE_BASE_URL   https://75-hard-v2.vercel.app
+#   CRON_SECRET      the same value as the CRON_SECRET env var in Vercel
+#
+# IMPORTANT: GitHub runs `schedule:` only from the repository's DEFAULT branch.
+# This repo's default branch is claude/75day-challenge-tracker-pwa-td1cnx, so
+# this file must exist there or the schedule never fires — no error, just
+# silence. `workflow_dispatch` works from any branch.
+#
+# This repository is public, so Actions minutes are free. (On a private repo a
+# 5-minute schedule would exceed the free monthly allowance; use cron-job.org
+# instead — see SETUP-PUSH.md.)
+#
+# It can also be run by hand from the Actions tab (workflow_dispatch), which is
+# the quickest way to flush a queued test push without waiting for the schedule.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+# Never let two dispatcher runs overlap. The endpoint is idempotent, but there
+# is no reason to have them racing.
+concurrency:
+  group: push-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger dispatcher
+        env:
+          BASE: ${{ secrets.FORGE_BASE_URL }}
+          SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE:-}" ] || [ -z "${SECRET:-}" ]; then
+            echo "::error::FORGE_BASE_URL and CRON_SECRET repository secrets must both be set."
+            exit 1
+          fi
+          # Authorization header rather than a query string, so the secret never
+          # appears in a URL that could be logged.
+          code=$(curl -sS -m 60 -o /tmp/dispatch.json -w '%{http_code}' \
+            -X POST "$BASE/api/cron/dispatch" \
+            -H "Authorization: Bearer $SECRET")
+          echo "HTTP $code"
+          cat /tmp/dispatch.json || true
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::error::Dispatcher returned HTTP $code"
+            exit 1
+          fi

@@ -5622,3 +5622,42 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   font-size: 11px; color: var(--text3); margin: 2px 0 8px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ─── v3.49.0: Push diagnostics panel ────────────────────────── */
+
+.notif-diag {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 12px;
+}
+.notif-diag-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+/* Group heading inside the diagnostics list — keeps "accepted by the push
+   service" visually separate from "confirmed on the device". */
+.notif-diag-sub {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin: 10px 0 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.notif-diag-sub:first-of-type { margin-top: 6px; }
+.notif-diag-row { font-variant-numeric: tabular-nums; }
+/* A reminder whose time falls inside quiet hours can never be delivered. */
+.notif-quiet-warn {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #F59E0B;
+}

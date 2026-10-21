@@ -49,6 +49,39 @@ export function isBackgroundReminder(type) {
   return !!def?.hasTime;
 }
 
+/**
+ * Date-independent fallback copy for each background-capable reminder.
+ *
+ * The dynamic copy a reminder normally carries ("3 tasks left today") is
+ * rendered by the app for ONE specific local date, and is wrong on any other
+ * day. The server used to suppress a whole schedule once its date went stale,
+ * which meant background reminders only worked if the app had been opened that
+ * same day — i.e. never, in the case that matters.
+ *
+ * These lines are true on any day, so the server can deliver them on a stale
+ * day without inventing a single dynamic value. No counts, no day numbers, no
+ * streak lengths — just the nudge.
+ */
+export const REMINDER_FALLBACKS = {
+  morning:   { title: '⚔️ Forge', body: 'Your daily mission is waiting. Open Forge and start the day.' },
+  workout:   { title: '🏋️ Training', body: 'Time to train.' },
+  water:     { title: '💧 Water', body: 'Water check — top up.' },
+  reading:   { title: '📚 Reading', body: 'Time to read.' },
+  photo:     { title: '📸 Progress photo', body: 'Time for today\'s progress photo.' },
+  evening:   { title: '⚔️ Forge', body: 'Evening check-in — see what is still open today.' },
+  sleep:     { title: '😴 Wind down', body: 'Time to start winding down for sleep.' },
+  streak:    { title: '🔥 Your streak', body: 'Do not let today slip — open Forge and close it out.' },
+  comeback:  { title: '💪 Back at it', body: 'One day at a time. Open Forge and log today.' },
+  insights:  { title: '🔍 Forge Insights', body: 'There is something worth reading in your Insights.' },
+};
+
+/** The date-independent fallback for a reminder type, or null. */
+export function reminderFallback(type) {
+  const f = REMINDER_FALLBACKS[type];
+  if (!f) return null;
+  return { ...f, tag: `forge-${type}`, view: 'today' };
+}
+
 export const BACKGROUND_REMINDER_IDS = REMINDER_DEFS.filter(d => d.hasTime).map(d => d.id);
 export const APP_ACTIVE_ONLY_IDS = REMINDER_DEFS.filter(d => !d.hasTime).map(d => d.id);
 
@@ -126,6 +159,26 @@ function urlBase64ToUint8Array(base64String) {
  * The VAPID *public* key comes from the build environment — the private key
  * lives only on the server. Returns { ok, reason }.
  */
+/**
+ * Mirror the install id and active profile into a Cache entry.
+ *
+ * The service worker cannot read localStorage, so without this it has no way to
+ * tell the server WHICH install received a push — and delivery confirmation
+ * would be impossible. Written on every subscribe and sync.
+ */
+export async function publishInstallIdentity(profileId) {
+  try {
+    const cache = await caches.open('forge-identity');
+    await cache.put('/__forge_identity', new Response(
+      JSON.stringify({ installId: getInstallId(), profileId }),
+      { headers: { 'Content-Type': 'application/json' } },
+    ));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function subscribeToPush(profileId) {
   const support = getNotificationSupport();
   if (!support.pushSupported) return { ok: false, reason: 'push-unsupported' };
@@ -148,6 +201,7 @@ export async function subscribeToPush(profileId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ installId: getInstallId(), profileId, subscription: sub.toJSON() }),
     });
+    await publishInstallIdentity(profileId);
     return { ok: res.ok, reason: res.ok ? null : 'server-error' };
   } catch {
     return { ok: false, reason: 'subscribe-failed' };
@@ -186,6 +240,7 @@ export async function unsubscribeFromPush(profileId) {
 export async function syncPushSchedule(profileId, prefs, ctx, todayStr) {
   if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) return { ok: false, reason: 'no-vapid-key' };
   try {
+    publishInstallIdentity(profileId);
     const reminders = {};
     if (prefs?.masterEnabled) {
       for (const def of REMINDER_DEFS) {
@@ -193,7 +248,13 @@ export async function syncPushSchedule(profileId, prefs, ctx, todayStr) {
         const setting = prefs.reminders?.[def.id];
         if (!setting?.enabled) continue;
         const payload = buildReminder(def.id, ctx);       // null when not applicable
-        reminders[def.id] = { time: setting.time || def.defaultTime, payload };
+        reminders[def.id] = {
+          time: setting.time || def.defaultTime,
+          payload,
+          // Used by the server on a stale day instead of suppressing the
+          // reminder entirely. Date-independent, so nothing is fabricated.
+          fallback: reminderFallback(def.id),
+        };
       }
     }
     const res = await fetch('/api/push/sync', {
@@ -227,6 +288,79 @@ export async function backgroundTestPush(profileId) {
     return { ok: res.ok, status: res.status, ...data };
   } catch {
     return { ok: false, reason: 'request-failed' };
+  }
+}
+
+/**
+ * Queue a REAL server-sent push for a few minutes' time.
+ *
+ * This is the only test that proves background delivery: the app can be closed
+ * and the phone locked before it fires, because the send originates on the
+ * server with no client involvement at all.
+ */
+export async function scheduledTestPush(profileId, delayMinutes = 3) {
+  try {
+    await publishInstallIdentity(profileId);
+    const res = await fetch('/api/push/test-scheduled', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ installId: getInstallId(), profileId, delayMinutes }),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, ...data };
+  } catch {
+    return { ok: false, reason: 'request-failed' };
+  }
+}
+
+/**
+ * True when the app is running as an installed PWA.
+ *
+ * iOS only grants the Push API to a web app added to the Home Screen. In Safari
+ * proper, `Notification.permission` can read "granted" and local notifications
+ * can work while `pushManager.subscribe()` is unavailable — which is exactly
+ * the state that makes a local test pass and real push silently impossible.
+ */
+export function isInstalledPWA() {
+  try {
+    if (typeof window === 'undefined') return false;
+    return !!(window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator?.standalone);
+  } catch {
+    return false;
+  }
+}
+
+/** True for iOS/iPadOS, where installation is a hard requirement for push. */
+export function isIOS() {
+  try {
+    const ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/.test(ua) ||
+      (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a genuine Push API subscription exists for this installation right
+ * now — read from the browser, not from our own server records.
+ */
+export async function localSubscriptionState() {
+  const out = { pushSupported: false, hasSubscription: false, endpointHost: null, installed: isInstalledPWA(), ios: isIOS() };
+  try {
+    const support = getNotificationSupport();
+    out.pushSupported = support.pushSupported;
+    out.permission = support.permission;
+    if (!support.pushSupported) return out;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    out.hasSubscription = !!sub;
+    if (sub?.endpoint) {
+      try { out.endpointHost = new URL(sub.endpoint).host; } catch { out.endpointHost = 'unknown'; }
+    }
+    return out;
+  } catch {
+    return out;
   }
 }
 
@@ -277,13 +411,30 @@ export async function showTestNotification(profileName) {
 
 export function inQuietHours(quietHours, now = new Date()) {
   if (!quietHours?.start || !quietHours?.end) return false;
-  const mins = now.getHours() * 60 + now.getMinutes();
+  return timeInQuietHours(quietHours, now.getHours() * 60 + now.getMinutes());
+}
+
+/**
+ * Whether a minutes-since-midnight value falls inside the quiet window.
+ *
+ * Used to warn the user when a reminder's own time sits inside quiet hours —
+ * that reminder can never be delivered, and without the warning it looks
+ * exactly like a broken push pipeline.
+ */
+export function timeInQuietHours(quietHours, mins) {
+  if (!quietHours?.start || !quietHours?.end || !Number.isFinite(mins)) return false;
   const [sh, sm] = quietHours.start.split(':').map(Number);
   const [eh, em] = quietHours.end.split(':').map(Number);
   const start = sh * 60 + sm;
   const end   = eh * 60 + em;
   // Window may cross midnight (default 22:30 → 07:00)
   return start <= end ? (mins >= start && mins < end) : (mins >= start || mins < end);
+}
+
+/** Minutes since midnight for an 'HH:MM' string, or NaN. */
+export function minutesOf(hhmm) {
+  const [h, m] = String(hhmm || '').split(':').map(Number);
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN;
 }
 
 // ─── Content builder (mirrors what the future push backend will send) ───────
