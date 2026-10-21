@@ -147,7 +147,12 @@ await page.waitForTimeout(250);
 check('5: opening the ramp shows all four stages', (await page.locator('.li-stage').count()) === 4);
 check('5: the current stage is marked active', (await page.locator('.li-stage.active').count()) === 1);
 panelText = await page.textContent('.li-panel');
-check('5: the ramp explains the lighter days', /Day 7 and Day 14/.test(panelText));
+check('5: the ramp explains the lighter days',
+  /2 planned lighter days/.test(panelText) && /Day 7, 14/.test(panelText), panelText.slice(-260));
+check('5: the ramp says a longer challenge holds rather than escalates',
+  /holds the same working length rather than asking for longer sessions/i.test(panelText));
+check('5: the ramp says not to escalate if quality or recovery is dropping',
+  /stay at the length you can\s+hold|the ramp is a plan, not a requirement to escalate/i.test(panelText));
 
 await page.locator('.li-block-toggle', { hasText: 'Recovery Mode' }).click();
 await page.waitForTimeout(250);

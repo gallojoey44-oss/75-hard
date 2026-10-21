@@ -17,6 +17,9 @@ export default function LockInSetup({ onCancel, onSubmit }) {
 
   const set = (patch) => setS(prev => ({ ...prev, ...patch }));
   const tasks = LI.buildStartTasks(s);
+  const option = LI.durationOption(s.durationDays);
+  const ramp = LI.rampFor(s.durationDays);
+  const lighterDays = LI.lighterDaysFor(s.durationDays);
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -27,12 +30,37 @@ export default function LockInSetup({ onCancel, onSubmit }) {
           <p className="li-hero-sub">{LI.IDENTITY.subtitle}</p>
         </div>
 
-        <div className="li-goal">{LI.IDENTITY.goal}</div>
+        <div className="li-goal">{LI.goalFor(s.durationDays)}</div>
         <div className="li-pitch">{LI.IDENTITY.pitch}</div>
+
+        {/* ── Duration: six lengths, explained before you commit ── */}
+        <div className="li-field">
+          <div className="li-label">How long?</div>
+          <div className="li-durations">
+            {LI.DURATION_OPTIONS.map(o => (
+              <button
+                key={o.days}
+                className={`li-duration${s.durationDays === o.days ? ' active' : ''}`}
+                onClick={() => set({ durationDays: o.days })}
+                aria-pressed={s.durationDays === o.days}
+              >
+                <span className="li-duration-head">
+                  {o.days} Days — {o.label}
+                  {o.days === LI.DEFAULT_DURATION && <span className="li-duration-rec">Recommended</span>}
+                </span>
+                <span className="li-duration-blurb">{o.blurb}</span>
+                <span className="li-duration-reward">
+                  {LI.completionBonusFor(o.days)} XP on completion
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="li-help">{option.detail}</p>
+        </div>
 
         <div className="li-facts">
           <div className="li-fact">
-            <span className="li-fact-value">{LI.DURATION_DAYS}</span>
+            <span className="li-fact-value">{s.durationDays}</span>
             <span className="li-fact-label">days</span>
           </div>
           <div className="li-fact">
@@ -44,25 +72,32 @@ export default function LockInSetup({ onCancel, onSubmit }) {
             <span className="li-fact-label">XP per day</span>
           </div>
           <div className="li-fact">
-            <span className="li-fact-value">{LI.COMPLETION_BONUS_XP}</span>
+            <span className="li-fact-value">{LI.completionBonusFor(s.durationDays)}</span>
             <span className="li-fact-label">on completion</span>
           </div>
         </div>
 
         {/* The flow ramp is the structural thing to understand before starting. */}
         <div className="li-field">
-          <div className="li-label">Focus sessions ramp across the fortnight</div>
+          <div className="li-label">How the focus sessions progress</div>
           <div className="li-ramp">
-            {LI.FLOW_STAGES.map(st => (
-              <div key={st.minutes} className="li-ramp-step">
+            {ramp.map(st => (
+              <div key={`${st.label}-${st.fromDay}`} className="li-ramp-step">
                 <span className="li-ramp-min">{st.minutes}m</span>
-                <span className="li-ramp-days">Days {st.fromDay}–{st.toDay}</span>
+                <span className="li-ramp-days">
+                  {st.fromDay === st.toDay ? `Day ${st.fromDay}` : `Days ${st.fromDay}–${st.toDay}`}
+                </span>
               </div>
             ))}
           </div>
           <p className="li-help">
-            {LI.FLOW_SESSIONS_PER_DAY} sessions a day at the current target. Day{' '}
-            {LI.LIGHTER_DAYS.join(' and Day ')} are planned lighter days — one session instead
+            {LI.FLOW_SESSIONS_PER_DAY} sessions a day at the current target, topping out
+            at {ramp[ramp.length - 1].minutes} minutes. A longer challenge holds that length for
+            longer — it never asks for longer sessions.
+          </p>
+          <p className="li-help">
+            {lighterDays.length} planned lighter {lighterDays.length === 1 ? 'day' : 'days'} —
+            roughly one a week (Day {lighterDays.join(', ')}). One session instead
             of {LI.FLOW_SESSIONS_PER_DAY}, for the same XP.
           </p>
         </div>
@@ -154,7 +189,7 @@ export default function LockInSetup({ onCancel, onSubmit }) {
 
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onCancel}>Back</button>
-          <button className="btn btn-primary" onClick={() => onSubmit({ ...s, durationDays: LI.DURATION_DAYS })}>
+          <button className="btn btn-primary" onClick={() => onSubmit({ ...s, durationDays: LI.resolveDuration(s.durationDays) })}>
             Continue
           </button>
         </div>

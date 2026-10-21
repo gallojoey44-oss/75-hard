@@ -17,6 +17,9 @@ import MuscleBuildingSetup from './MuscleBuildingSetup';
 import HormoneHealthSetup from './HormoneHealthSetup';
 import EnergyResetSetup from './EnergyResetSetup';
 import LockInSetup from './LockInSetup';
+import HabitLibrary from './HabitLibrary';
+import HabitGuide from './HabitGuide';
+import { guideForTask, HABIT_GUIDES } from '../data/habitGuides';
 import FatLossHardSetup from './FatLossHardSetup';
 import * as FLH from '../data/fatLossHardConfig';
 import * as MB from '../data/muscleBuildingConfig';
@@ -224,6 +227,9 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
   // and re-asked for every new attempt (this is local setup state, never a
   // stored profile preference).
   const [coldUpgrade, setColdUpgrade] = useState(false);
+  // The strategy guide opened from a daily-requirement row. Available whether
+  // or not this challenge is active — the guides are education, not progress.
+  const [guideTask, setGuideTask] = useState(null);
 
   return (
     <div className={`challenge-card${isActive ? ' active' : ''}`}>
@@ -350,10 +356,28 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
               )}
               <div className="tpl-variant-section-label">Daily requirements</div>
               <ul className="tpl-task-list">
-                {configuredPreview.daily.map(t => (
-                  <li key={t.id}>{t.icon} {t.name} ({t.xp} XP){t.keystoneHabit ? ' ⭐⭐⭐ Keystone' : ''}</li>
-                ))}
+                {configuredPreview.daily.map(t => {
+                  const label = `${t.icon} ${t.name} (${t.xp} XP)${t.keystoneHabit ? ' \u2b50\u2b50\u2b50 Keystone' : ''}`;
+                  // A requirement with a strategy guide is tappable here, with
+                  // the challenge inactive, never started, or long finished.
+                  return guideForTask(t) ? (
+                    <li key={t.id} className="tpl-task-guided">
+                      <button className="tpl-task-link" onClick={() => setGuideTask(t)}>
+                        {label}
+                        <span className="tpl-task-link-hint">Guide</span>
+                      </button>
+                    </li>
+                  ) : (
+                    <li key={t.id}>{label}</li>
+                  );
+                })}
               </ul>
+              {configuredPreview.daily.some(t => guideForTask(t)) && (
+                <p className="tpl-task-guide-note">
+                  Tap any requirement above to read its full strategy guide. Reading one never
+                  completes a habit or awards XP.
+                </p>
+              )}
               {configuredPreview.weekly.length > 0 && (
                 <>
                   <div className="tpl-variant-section-label">Weekly requirements</div>
@@ -497,6 +521,16 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
           )}
         </div>
       )}
+
+      {/* Read-only strategy guide. No xp, no checked state and no onToggle, so
+          HabitGuide draws no checkbox: nothing opened from the library card can
+          complete a habit or award XP. */}
+      {guideTask && (
+        <HabitGuide
+          guide={guideForTask(guideTask)}
+          onClose={() => setGuideTask(null)}
+        />
+      )}
     </div>
   );
 }
@@ -564,6 +598,9 @@ export default function ChallengesView({ setView }) {
   // step: 'hardWarn' → 'letter'. Standard/Beginner skip straight to 'letter'.
   const [pendingStart, setPendingStart] = useState(null);
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
+  // The permanent Habit Library. Deliberately independent of every challenge:
+  // it reads the shared guide registry and touches no progress data.
+  const [showHabitLibrary, setShowHabitLibrary] = useState(false);
   const [showColdConfirm, setShowColdConfirm] = useState(false);
   const [showSupportPicker, setShowSupportPicker] = useState(false);
   const [showEndSupport, setShowEndSupport] = useState(false);
@@ -801,6 +838,21 @@ export default function ChallengesView({ setView }) {
           </div>
         )}
 
+        {/* Habit Library — permanent, and never gated behind enrolment. The
+            guides are reference material: readable before a challenge, during
+            one, and after it has ended. */}
+        <button className="habit-library-entry" onClick={() => setShowHabitLibrary(true)}>
+          <span className="hle-icon">📖</span>
+          <span className="hle-text">
+            <span className="hle-title">Explore Habits &amp; Strategies</span>
+            <span className="hle-sub">
+              {Object.keys(HABIT_GUIDES).length} habit guides — why each one matters, how to do it
+              well, and what to avoid. No challenge required.
+            </span>
+          </span>
+          <span className="hle-caret">→</span>
+        </button>
+
         {/* Template library */}
         <div className="challenges-section-title">Challenge Library</div>
         <div className="challenges-list">
@@ -829,6 +881,9 @@ export default function ChallengesView({ setView }) {
         </div>
 
       </div>
+
+      {/* Habit Library */}
+      {showHabitLibrary && <HabitLibrary onClose={() => setShowHabitLibrary(false)} />}
 
       {/* Sync active challenge with latest template */}
       {showSyncConfirm && (

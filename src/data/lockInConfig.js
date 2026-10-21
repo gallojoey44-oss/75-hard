@@ -31,8 +31,94 @@ import { HABIT_KEYS } from './habitKeys';
 
 export const LOCK_IN_TEMPLATE_ID = 'lock_in_14_day';
 
-export const DURATION_DAYS = 14;
-export const COMPLETION_BONUS_XP = 700;
+// ── Durations ───────────────────────────────────────────────────────────────
+// Six lengths from a week to a quarter. The eight habits, their XP values and
+// the keystone designations are IDENTICAL across all six — a longer version is
+// not harder and asks for no more work per day. What changes is how long the
+// working session length is HELD, how many lighter days are planned, and how
+// much completion reward the run is worth.
+//
+// 14 remains the default and the recommendation: it is the length the challenge
+// was designed around, and the only one whose flow ramp is hand-authored.
+export const DURATIONS = [7, 14, 21, 30, 60, 90];
+export const DEFAULT_DURATION = 14;
+
+/** Back-compatible alias. The default length, not a fixed one. */
+export const DURATION_DAYS = DEFAULT_DURATION;
+
+export const DURATION_OPTIONS = [
+  {
+    days: 7, weeks: 1, label: 'Lock In Sprint',
+    headline: '7 Days — Lock In Sprint',
+    blurb: 'One week to find out what a genuinely focused day feels like. Nothing to talk yourself out of.',
+    detail: 'The ramp is compressed and tops out at 45 minutes rather than 50 — reaching a working length in a week is enough, and sprinting through the progression would teach the wrong lesson.',
+  },
+  {
+    days: 14, weeks: 2, label: 'Focus Reset',
+    headline: '14 Days — Focus Reset',
+    blurb: 'The recommended default. Long enough to complete the full focus progression and feel the difference.',
+    detail: 'Two weeks takes you through the whole ramp — 25 to 50 minutes — with a few days at the top to hold it. This is the length the challenge was designed around.',
+  },
+  {
+    days: 21, weeks: 3, label: 'Discipline Builder',
+    headline: '21 Days — Discipline Builder',
+    blurb: 'Three weeks. The ramp is the same; the extra week is spent holding the working length rather than extending it.',
+    detail: 'Reaching 50 minutes is the easy part. Doing it on an ordinary Tuesday in week three is the part that changes anything.',
+  },
+  {
+    days: 30, weeks: 4, label: 'High Performance',
+    headline: '30 Days — High Performance',
+    blurb: 'A month of protected focus and defended sleep. Long enough that the habits stop being a project.',
+    detail: 'Over a month the thing being trained shifts from focus duration to consistency: showing up at the working length on the days you do not feel like it.',
+  },
+  {
+    days: 60, weeks: 8, label: 'Deep Discipline',
+    headline: '60 Days — Deep Discipline',
+    blurb: 'Two months. Same eight habits, same session length — the test is whether it survives a bad week.',
+    detail: 'Nine planned lighter days and Recovery Mode exist precisely because a run this long will meet illness, travel and flat weeks. Using them is how it gets finished.',
+  },
+  {
+    days: 90, weeks: 13, label: 'Lifestyle Transformation',
+    headline: '90 Days — Lifestyle Transformation',
+    blurb: 'A full quarter. Not a harder challenge — the same day, held long enough to stop being a challenge at all.',
+    detail: 'Nothing is escalated at this length. The honest goal is that by the end these are simply how you work, which takes repetition rather than intensity.',
+  },
+];
+
+export const DURATION_LABELS = Object.fromEntries(DURATION_OPTIONS.map(o => [o.days, o.label]));
+
+/**
+ * Completion reward by length — exactly 50 XP per day, so a longer run is
+ * worth proportionally more and never disproportionately more. The 14-day
+ * value is unchanged from before this challenge gained other durations.
+ */
+export const COMPLETION_BONUS_BY_DURATION =
+  Object.fromEntries(DURATIONS.map(d => [d, d * 50]));
+
+/** The 14-day completion reward. Kept as a named export for the template. */
+export const COMPLETION_BONUS_XP = COMPLETION_BONUS_BY_DURATION[DEFAULT_DURATION];
+
+/** The option record for a duration, falling back to the recommended one. */
+export function durationOption(days) {
+  return DURATION_OPTIONS.find(o => o.days === days)
+    || DURATION_OPTIONS.find(o => o.days === DEFAULT_DURATION);
+}
+
+/** A valid duration, or the default. Never trusts caller input. */
+export function resolveDuration(days) {
+  return DURATIONS.includes(Number(days)) ? Number(days) : DEFAULT_DURATION;
+}
+
+/** The completion reward for a duration. */
+export function completionBonusFor(days) {
+  return COMPLETION_BONUS_BY_DURATION[resolveDuration(days)];
+}
+
+/** The goal sentence, phrased for the chosen length. */
+export function goalFor(days) {
+  const d = resolveDuration(days);
+  return `${d} days of focused work, protected attention and real recovery — building the capacity to do demanding work without burning out.`;
+}
 
 export const IDENTITY = {
   id: LOCK_IN_TEMPLATE_ID,
@@ -85,36 +171,132 @@ export const SHUTDOWN_MINUTES = { suggested: 5, min: 5 };
 export const SLEEP_OPPORTUNITY = { suggested: 8, min: 6, max: 10, unit: 'hours' };
 
 /**
- * The flow-session progression across the 14 days.
+ * The flow-session progression.
  *
  * Focus duration is trained like any other capacity: start at a length you can
- * actually hold and extend it. The ramp is 25 → 35 → 45 → 50 minutes, and the
- * target is the length of EACH of the day's two sessions.
+ * actually hold and extend it. The build ramp is 25 → 35 → 45 minutes and the
+ * working length is 50, and the target is the length of EACH of the day's
+ * sessions.
  *
- * 50 minutes is the end of the ramp rather than a waypoint on the way to
- * something longer. Longer blocks are not automatically better, and a session
- * you abandon teaches the opposite of what this habit is for.
+ * 50 minutes is the END of the ramp, not a waypoint. Longer blocks are not
+ * automatically better, and a session you abandon teaches the opposite of what
+ * this habit is for.
+ *
+ * ── How this scales to longer challenges ───────────────────────────────────
+ * The build ramp is DURATION-INDEPENDENT. A 90-day run does not work up to
+ * three-hour sessions; it reaches the same working length on the same schedule
+ * and then holds it. Every extra day goes into the hold phases below, whose
+ * labels and notes shift the emphasis from extending focus to sustaining it.
+ * Making a longer challenge mean more required hours per day would be the
+ * easy design and the wrong one.
  */
-export const FLOW_STAGES = [
-  { minutes: 25, fromDay: 1,  toDay: 3,  label: 'Baseline', note: 'Short enough that starting is never the hard part. Find out what a genuinely undistracted 25 minutes feels like.' },
-  { minutes: 35, fromDay: 4,  toDay: 7,  label: 'Extend',   note: 'Past the point where most people reach for their phone. This is where the habit starts to be worth something.' },
-  { minutes: 45, fromDay: 8,  toDay: 11, label: 'Deepen',   note: 'Long enough to get properly into something difficult. Protect the start of these.' },
-  { minutes: 50, fromDay: 12, toDay: 14, label: 'Hold',     note: 'The top of the ramp. The goal is to hold this well, not to keep climbing.' },
+export const BUILD_STAGES = [
+  { minutes: 25, days: 3, label: 'Baseline', note: 'Short enough that starting is never the hard part. Find out what a genuinely undistracted 25 minutes feels like.' },
+  { minutes: 35, days: 4, label: 'Extend',   note: 'Past the point where most people reach for their phone. This is where the habit starts to be worth something.' },
+  { minutes: 45, days: 4, label: 'Deepen',   note: 'Long enough to get properly into something difficult. Protect the start of these.' },
 ];
 
+/** The working session length, held for the rest of the challenge. */
+export const HOLD_MINUTES = 50;
+
+/** Fewer than this many days in a stage is not a stage. */
+export const MIN_STAGE_DAYS = 2;
+
 /**
- * Planned lighter days.
+ * The phases spent at the working length. All the same number of minutes —
+ * only the emphasis changes, because what a long challenge trains is not a
+ * bigger number but turning up at the same one on an ordinary day.
+ */
+export const HOLD_PHASES = [
+  { label: 'Hold', note: 'The top of the ramp. The goal is to hold this well, not to keep climbing.' },
+  { label: 'Consolidate', note: 'No longer about what you can do on a good day. Same two sessions, on the days you do not feel like it.' },
+  { label: 'Sustain', note: 'Nothing left to escalate. By now the question is whether this is simply how you work — which is the point of a run this long.' },
+];
+
+/** Days spent in each hold phase, given how many hold days there are. */
+function holdAllocation(holdDays) {
+  if (holdDays <= 0) return [];
+  // One phase for a short tail, two up to a month, three beyond that. Each
+  // phase keeps at least MIN_STAGE_DAYS, so a phase is never a single day.
+  const wanted = holdDays > 28 ? 3 : holdDays > 7 ? 2 : 1;
+  const n = Math.max(1, Math.min(wanted, Math.floor(holdDays / MIN_STAGE_DAYS) || 1));
+  const base = Math.floor(holdDays / n);
+  const lens = Array.from({ length: n }, () => base);
+  lens[n - 1] += holdDays - base * n;        // the remainder extends the last phase
+  return lens.map((len, i) => ({ ...HOLD_PHASES[Math.min(i, HOLD_PHASES.length - 1)], len }));
+}
+
+/** Days spent in each build stage, compressing the ramp on short challenges. */
+function buildAllocation(total) {
+  const full = BUILD_STAGES.reduce((s, b) => s + b.days, 0);
+  if (total > full) return BUILD_STAGES.map(b => ({ ...b, len: b.days }));
+
+  // The whole ramp will not fit. Drop stages from the END (so the challenge
+  // tops out at a shorter session rather than racing through the progression),
+  // then share the days out in the canonical proportions.
+  let n = BUILD_STAGES.length;
+  while (n > 1 && n * MIN_STAGE_DAYS > total) n--;
+  const chosen = BUILD_STAGES.slice(0, n);
+  const weight = chosen.reduce((s, b) => s + b.days, 0);
+  const lens = chosen.map(b => Math.max(MIN_STAGE_DAYS, Math.floor((total * b.days) / weight)));
+  // Spend whatever is left on the longest stage: the most practice goes to the
+  // longest session length the challenge reaches.
+  lens[lens.length - 1] += total - lens.reduce((a, b) => a + b, 0);
+  return chosen.map((b, i) => ({ ...b, len: lens[i] }));
+}
+
+/**
+ * The full ramp for a duration: an array of
+ * { minutes, label, note, fromDay, toDay } covering every day exactly once.
  *
- * Two weeks of escalating focus work with no planned relief is how people
- * finish a challenge and never do it again. These days are built into the plan
- * from the start — they are not failures, not a penalty, and not optional extra
- * credit for skipping them.
+ * At the default length this reproduces the hand-authored 14-day ramp
+ * (25/35/45/50 over 3/4/4/3 days) exactly, so existing attempts and the
+ * recommended length are unchanged.
+ */
+export function rampFor(days) {
+  const total = Math.max(1, Number(days) || DEFAULT_DURATION);
+  const build = buildAllocation(total);
+  const used = build.reduce((s, b) => s + b.len, 0);
+  const segments = [
+    ...build,
+    ...holdAllocation(total - used).map(h => ({ ...h, minutes: HOLD_MINUTES })),
+  ];
+
+  let cursor = 1;
+  return segments.map(seg => {
+    const stage = {
+      minutes: seg.minutes, label: seg.label, note: seg.note,
+      fromDay: cursor, toDay: cursor + seg.len - 1,
+    };
+    cursor += seg.len;
+    return stage;
+  });
+}
+
+/** The ramp at the default length. Kept as a named export for existing callers. */
+export const FLOW_STAGES = rampFor(DEFAULT_DURATION);
+
+/**
+ * Planned lighter days — approximately one per week, at every seventh day.
+ *
+ * Weeks of focus work with no planned relief is how people finish a challenge
+ * and never do it again. These days are built into the plan from the start:
+ * they are not failures, not a penalty, and not optional extra credit for
+ * ignoring them.
  *
  * On a lighter day the FLOW requirement drops to one session instead of two.
  * Nothing else changes, and sleep in particular is untouched: a lighter day
  * reduces work volume, never recovery.
  */
-export const LIGHTER_DAYS = [7, 14];
+export function lighterDaysFor(days) {
+  const total = Math.max(1, Number(days) || DEFAULT_DURATION);
+  const out = [];
+  for (let d = 7; d <= total; d += 7) out.push(d);
+  return out;
+}
+
+/** The lighter days at the default length. */
+export const LIGHTER_DAYS = lighterDaysFor(DEFAULT_DURATION);
 export const LIGHTER_DAY_SESSIONS = 1;
 
 export const LIGHTER_DAY_NOTE =
@@ -140,38 +322,59 @@ export const RECOVERY_MODE = {
   sleepRule: 'Either way, sleep is never the thing you cut. There is no version of this challenge where less sleep earns more.',
 };
 
-/** The flow stage covering a day number (clamped to the ramp's ends). */
-export function flowStageForDay(dayNum) {
+/**
+ * The flow stage covering a day number (clamped to the ramp's ends).
+ *
+ * `stages` defaults to the ramp at the recommended length, but callers that
+ * have an ATTEMPT should pass that attempt's own stored ramp — a running
+ * challenge keeps the progression it was started with, whatever this file
+ * later says.
+ */
+export function flowStageForDay(dayNum, stages = FLOW_STAGES) {
+  const list = Array.isArray(stages) && stages.length ? stages : FLOW_STAGES;
   const d = Number(dayNum) || 1;
-  return FLOW_STAGES.find(s => d >= s.fromDay && d <= s.toDay)
-    || (d < FLOW_STAGES[0].fromDay ? FLOW_STAGES[0] : FLOW_STAGES[FLOW_STAGES.length - 1]);
+  return list.find(s => d >= s.fromDay && d <= s.toDay)
+    || (d < list[0].fromDay ? list[0] : list[list.length - 1]);
 }
 
 /** True when a day number is a planned lighter day. */
-export function isLighterDay(dayNum) {
-  return LIGHTER_DAYS.includes(Number(dayNum));
+export function isLighterDay(dayNum, lighterDays = LIGHTER_DAYS) {
+  return (Array.isArray(lighterDays) ? lighterDays : LIGHTER_DAYS).includes(Number(dayNum));
 }
 
 /** How many flow sessions a given day asks for. */
-export function flowSessionsForDay(dayNum) {
-  return isLighterDay(dayNum) ? LIGHTER_DAY_SESSIONS : FLOW_SESSIONS_PER_DAY;
+export function flowSessionsForDay(dayNum, lighterDays = LIGHTER_DAYS) {
+  return isLighterDay(dayNum, lighterDays) ? LIGHTER_DAY_SESSIONS : FLOW_SESSIONS_PER_DAY;
 }
 
 /**
  * The full flow requirement for a day, as one object the UI can render without
  * recomputing anything: how many sessions, how long each, and why.
+ *
+ * Pass `{ stages, lighterDays }` from an attempt's stored config to describe
+ * that attempt; omit them for the recommended length.
  */
-export function flowRequirement(dayNum) {
-  const stage = flowStageForDay(dayNum);
-  const sessions = flowSessionsForDay(dayNum);
+export function flowRequirement(dayNum, { stages, lighterDays } = {}) {
+  const stage = flowStageForDay(dayNum, stages);
+  const lighter = isLighterDay(dayNum, lighterDays);
+  const sessions = lighter ? LIGHTER_DAY_SESSIONS : FLOW_SESSIONS_PER_DAY;
   return {
     dayNum: Number(dayNum) || 1,
     minutes: stage.minutes,
     sessions,
     stage,
-    lighter: isLighterDay(dayNum),
+    lighter,
     label: `${sessions} × ${stage.minutes} min`,
     totalMinutes: sessions * stage.minutes,
+  };
+}
+
+/** The ramp and lighter days an attempt was started with, or the defaults. */
+export function progressionOf(meta) {
+  const cfg = lockInConfig(meta);
+  return {
+    stages: cfg?.flowStages?.length ? cfg.flowStages : FLOW_STAGES,
+    lighterDays: cfg?.lighterDays?.length ? cfg.lighterDays : LIGHTER_DAYS,
   };
 }
 
@@ -349,13 +552,13 @@ export const GUIDES = {
       ],
     },
     how: {
-      requirement: `Complete ${FLOW_SESSIONS_PER_DAY} focused work sessions at today's target length. The target progresses across the challenge: ${FLOW_STAGES.map(s => `${s.minutes} min (Days ${s.fromDay}–${s.toDay})`).join(', ')}.`,
+      requirement: `Complete ${FLOW_SESSIONS_PER_DAY} focused work sessions at today's target length. The build ramp is ${BUILD_STAGES.map(s => s.minutes).join(' → ')} minutes and the working length is ${HOLD_MINUTES} — your exact schedule depends on the duration you chose, and today's target is always shown in the LOCK IN panel.`,
       earns: [
         `Checking this habit earns ${XP.flow} XP once per day.`,
-        `On a planned lighter day (Day ${LIGHTER_DAYS.join(' and Day ')}), the requirement is ${LIGHTER_DAY_SESSIONS} session instead of ${FLOW_SESSIONS_PER_DAY}. The XP is identical — a lighter day is worth exactly as much as a full one.`,
+        `On a planned lighter day — roughly one a week — the requirement is ${LIGHTER_DAY_SESSIONS} session instead of ${FLOW_SESSIONS_PER_DAY}. The XP is identical: a lighter day is worth exactly as much as a full one.`,
         'A session counts if you worked on one thing, without switching, for the target length. It does not have to have felt good.',
       ],
-      notes: 'You are not required to experience flow. Flow is a state you cannot summon on demand, and grading yourself on whether it arrived would make this habit unachievable. What you can control — and what this habit asks for — is the conditions and the time.',
+      notes: 'You are not required to experience flow. Flow is a state you cannot summon on demand, and grading yourself on whether it arrived would make this habit unachievable. What you can control — and what this habit asks for — is the conditions and the time. Longer durations do not ask for longer sessions: the working length is the same, held for longer.',
     },
     optimize: [
       {
@@ -1199,9 +1402,9 @@ export const DAILY_HABITS = [
   {
     id: 'li_flow', habitKey: HABIT_KEYS.FLOW_SESSION, guideId: guideRef('flow'),
     icon: '🌊', color: '#60A5FA', xp: XP.flow, keystone: 3, keystoneHabit: true,
-    build: () => ({
-      name: 'Flow training: 2 focused sessions',
-      desc: `Session length ramps across the challenge: ${FLOW_STAGES.map(s => `${s.minutes}`).join(' → ')} minutes. Today's target is in the LOCK IN panel.`,
+    build: (s) => ({
+      name: `Flow training: ${FLOW_SESSIONS_PER_DAY} focused sessions`,
+      desc: `Session length ramps to ${rampFor(s.durationDays).slice(-1)[0].minutes} minutes and then holds. Today's target is in the LOCK IN panel.`,
     }),
   },
   {
@@ -1268,7 +1471,7 @@ export const DAILY_HABITS = [
 /** Setup defaults. Every value is pre-filled so the challenge starts in one tap. */
 export function defaultSetup() {
   return {
-    durationDays: DURATION_DAYS,
+    durationDays: DEFAULT_DURATION,
     sleepHours: SLEEP_OPPORTUNITY.suggested,
     attentionMinutes: ATTENTION_MINUTES.suggested,
     recoveryMinutes: RECOVERY_MINUTES.suggested,
@@ -1293,25 +1496,29 @@ export function dailyXPTotal(setup = defaultSetup()) {
 /** The challenge-attempt metadata written by the setup flow. */
 export function buildChallengeMeta(setup = defaultSetup()) {
   const s = { ...defaultSetup(), ...setup };
+  const days = resolveDuration(s.durationDays);
   return {
     templateId: LOCK_IN_TEMPLATE_ID,
     name: IDENTITY.name,
     emoji: IDENTITY.emoji,
     subtitle: IDENTITY.subtitle,
     variant: 'standard',
-    durationDays: DURATION_DAYS,
+    // Whichever of the six lengths the user chose. The habits, their XP and the
+    // keystone designations are identical across all of them.
+    durationDays: days,
     templateVersion: 1,
-    completionBonusXP: COMPLETION_BONUS_XP,
-    // The attempt's own copy of its configuration, so later edits to this file
-    // never rewrite a running challenge.
+    completionBonusXP: completionBonusFor(days),
+    // The attempt's own copy of its configuration — including the ramp and the
+    // lighter days it was started with — so later edits to this file never
+    // rewrite a running challenge.
     lockIn: {
-      durationDays: DURATION_DAYS,
+      durationDays: days,
       sleepHours: s.sleepHours,
       attentionMinutes: s.attentionMinutes,
       recoveryMinutes: s.recoveryMinutes,
       shutdownMinutes: s.shutdownMinutes,
-      flowStages: FLOW_STAGES,
-      lighterDays: LIGHTER_DAYS,
+      flowStages: rampFor(days),
+      lighterDays: lighterDaysFor(days),
     },
   };
 }
@@ -1327,8 +1534,31 @@ export function isLockIn(meta) {
 }
 
 // ── Completion ─────────────────────────────────────────────────────────────
-export const COMPLETION_MESSAGE = {
-  title: 'LOCK IN complete',
-  body: 'Fourteen days of planned priorities, protected focus, real recovery and defended sleep. You trained focus from 25 minutes to 50 and you did it without borrowing from the night — which is the part most people get wrong.',
-  next: 'The habits underneath this — sleep, attention, recovery — are the foundation under every other challenge in Forge. Whatever you run next, they carry over.',
-};
+/**
+ * What the completion screen says about the length actually chosen.
+ *
+ * None of these frames a shorter run as a lesser one — a finished 7-day Sprint
+ * is a finished challenge. The honest difference is how long the habits were
+ * held, and that is what these say.
+ */
+export function completionMessage(days) {
+  const d = resolveDuration(days);
+  const option = durationOption(d);
+  const top = rampFor(d).slice(-1)[0].minutes;
+  const bodies = {
+    7: `A week of planned priorities, protected focus and defended sleep, with the session length worked up to ${top} minutes. That is a finished LOCK IN — not a short version of one. You now know what a genuinely focused day feels like.`,
+    14: `Fourteen days of planned priorities, protected focus, real recovery and defended sleep. You trained focus from ${BUILD_STAGES[0].minutes} minutes to ${top} and you did it without borrowing from the night — which is the part most people get wrong.`,
+    21: `Three weeks held. Reaching ${top} minutes was the first week and a half; doing it in week three, on ordinary days, is what actually changed.`,
+    30: `A month of the same eight habits. Long enough that the question stopped being whether you could focus for ${top} minutes and became whether you would, on a Tuesday, when nothing felt like it.`,
+    60: `Two months. The same day, repeated through whatever the last eight weeks contained — including the weeks you used the lighter days and Recovery Mode for exactly what they are there for.`,
+    90: `A full quarter of protected focus and defended sleep, with nothing escalated along the way. If these now feel less like a challenge and more like how you work, that was the entire point.`,
+  };
+  return {
+    title: `${option.label} complete`,
+    body: bodies[d] || bodies[DEFAULT_DURATION],
+    next: 'The habits underneath this — sleep, attention, recovery — are the foundation under every other challenge in Forge. Whatever you run next, they carry over.',
+  };
+}
+
+/** The completion message at the recommended length. */
+export const COMPLETION_MESSAGE = completionMessage(DEFAULT_DURATION);

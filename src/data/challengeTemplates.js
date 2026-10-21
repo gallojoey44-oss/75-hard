@@ -918,11 +918,16 @@ export const CHALLENGE_TEMPLATES = [
     subtitle: LI.IDENTITY.subtitle,
     purpose: LI.IDENTITY.goal,
     tagline: LI.IDENTITY.pitch,
-    // A single length: the flow progression (25 → 35 → 45 → 50) is built around
-    // fourteen days, so this challenge does not offer duration options.
-    duration_options_days: [LI.DURATION_DAYS],
-    default_duration_days: LI.DURATION_DAYS,
-    completion_bonus_by_duration: { [LI.DURATION_DAYS]: LI.COMPLETION_BONUS_XP },
+    // Six lengths from a week to a quarter. The habits, their XP values and the
+    // keystone designations are identical across all of them — a longer run
+    // holds the same working session length for longer rather than asking for
+    // more hours per day.
+    duration_options_days: LI.DURATIONS,
+    default_duration_days: LI.DEFAULT_DURATION,
+    recommended_duration_days: LI.DEFAULT_DURATION,
+    duration_labels: LI.DURATION_LABELS,
+    completion_bonus_by_duration: LI.COMPLETION_BONUS_BY_DURATION,
+    duration_options: LI.DURATION_OPTIONS,
     metrics_targeted: ['energy_rating', 'mood_rating', 'stress_rating', 'sleep_quality', 'daily_task_completion_pct'],
     insights_triggers: {
       pre_recommendation: 'user reports difficulty concentrating, scattered days, or working long hours with little to show for it',

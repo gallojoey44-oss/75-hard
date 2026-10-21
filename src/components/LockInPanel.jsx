@@ -32,11 +32,14 @@ export default function LockInPanel({ dayNum, onOpenGuide }) {
   if (!cfg) return null;                        // not a LOCK IN attempt
   if (!getRawDayNumber()) return null;          // scheduled, not begun
 
-  const duration = meta.durationDays || cfg.durationDays || LI.DURATION_DAYS;
+  const duration = meta.durationDays || cfg.durationDays || LI.DEFAULT_DURATION;
+  // The ramp and lighter days THIS ATTEMPT was started with, so a running
+  // challenge keeps its progression whatever the config file later says.
+  const progression = LI.progressionOf(meta);
   // The day being VIEWED, so looking back at Day 3 shows Day 3's flow target
   // rather than today's.
   const day = Number(dayNum) || 1;
-  const req = LI.flowRequirement(day);
+  const req = LI.flowRequirement(day, progression);
 
   // The habits that carry guides, in teaching order, resolved against the
   // attempt's own task list so an archived or edited task list still matches.
@@ -72,25 +75,34 @@ export default function LockInPanel({ dayNum, onOpenGuide }) {
         <button className="li-block-toggle" onClick={() => setOpenRamp(v => !v)}>
           <span className="li-block-title">📈 The ramp</span>
           <span className="li-block-meta">
-            {LI.FLOW_STAGES.map(s => s.minutes).join(' → ')} min
+            {[...new Set(progression.stages.map(s => s.minutes))].join(' → ')} min
           </span>
           <span className="li-caret">{openRamp ? '▾' : '▸'}</span>
         </button>
         {openRamp && (
           <>
-            {LI.FLOW_STAGES.map(s => (
+            {progression.stages.map(s => (
               <div
-                key={s.minutes}
+                key={`${s.label}-${s.fromDay}`}
                 className={`li-stage${day >= s.fromDay && day <= s.toDay ? ' active' : ''}${day > s.toDay ? ' done' : ''}`}
               >
-                <span className="li-stage-days">Days {s.fromDay}–{s.toDay}</span>
+                <span className="li-stage-days">
+                  {s.fromDay === s.toDay ? `Day ${s.fromDay}` : `Days ${s.fromDay}–${s.toDay}`}
+                </span>
                 <span className="li-stage-min">{s.minutes} min</span>
                 <span className="li-stage-label">{s.label}</span>
               </div>
             ))}
             <div className="li-note">
-              Planned lighter days: Day {LI.LIGHTER_DAYS.join(' and Day ')} — one session instead
+              {progression.lighterDays.length} planned lighter{' '}
+              {progression.lighterDays.length === 1 ? 'day' : 'days'} — roughly one a week
+              (Day {progression.lighterDays.join(', ')}). One session instead
               of {LI.FLOW_SESSIONS_PER_DAY}, same XP. Sleep is unchanged on those days.
+            </div>
+            <div className="li-note">
+              A longer challenge holds the same working length rather than asking for longer
+              sessions. If work quality or recovery is deteriorating, stay at the length you can
+              hold — the ramp is a plan, not a requirement to escalate.
             </div>
           </>
         )}

@@ -48,8 +48,11 @@ check('1: the template id is unique in the library',
   CHALLENGE_TEMPLATES.filter(t => t.id === LI.LOCK_IN_TEMPLATE_ID).length === 1);
 check('1: every template id is still unique',
   new Set(CHALLENGE_TEMPLATES.map(t => t.id)).size === CHALLENGE_TEMPLATES.length);
-check('1: it offers exactly one duration — the ramp is built around 14 days',
-  template.duration_options_days.length === 1 && template.duration_options_days[0] === 14);
+check('1: it offers all six durations',
+  JSON.stringify(template.duration_options_days) === JSON.stringify([7, 14, 21, 30, 60, 90]));
+check('1: 14 days remains the default and the recommendation',
+  template.default_duration_days === 14 && template.recommended_duration_days === 14 &&
+  LI.DEFAULT_DURATION === 14);
 check('1: the completion bonus agrees between config and template',
   template.completion_bonus_by_duration[14] === LI.COMPLETION_BONUS_XP &&
   meta.completionBonusXP === LI.COMPLETION_BONUS_XP);
@@ -353,8 +356,13 @@ check('13: a custom setup flows into the task names',
     .find(t => t.id === 'li_attention').name.includes('20'));
 check('13: a custom setup flows into the stored targets',
   LI.buildStartTasks({ sleepHours: 7 }).find(t => t.id === 'li_sleep').target.value === 7);
-check('13: the duration cannot be overridden — the ramp depends on it',
-  LI.buildChallengeMeta({ durationDays: 30 }).durationDays === 14);
+check('13: a chosen duration is honoured',
+  LI.buildChallengeMeta({ durationDays: 30 }).durationDays === 30 &&
+  LI.buildChallengeMeta({ durationDays: 90 }).durationDays === 90);
+check('13: an invalid duration falls back to the default rather than throwing',
+  LI.buildChallengeMeta({ durationDays: 11 }).durationDays === 14 &&
+  LI.buildChallengeMeta({ durationDays: 'x' }).durationDays === 14 &&
+  LI.buildChallengeMeta({ durationDays: null }).durationDays === 14);
 check('13: building twice produces identical tasks',
   JSON.stringify(LI.buildStartTasks()) === JSON.stringify(LI.buildStartTasks()));
 check('13: the completion message does not frame the challenge as a cure or a transformation',
@@ -399,6 +407,180 @@ check('15: every LOCK IN pairing carries a reason',
   [CHALLENGE_IDS.SLEEP_RESET, CHALLENGE_IDS.ENERGY_RESET, CHALLENGE_IDS.RECOVERY, CHALLENGE_IDS.STRENGTH,
    CHALLENGE_IDS.MUSCLE_BUILDING, CHALLENGE_IDS.HORMONE_HEALTH, CHALLENGE_IDS.MENTAL_TRAINING, CHALLENGE_IDS.FAT_LOSS]
     .every(id => (getCompatibility(CHALLENGE_IDS.LOCK_IN, id).reason || '').length > 30));
+
+// ══ 16: the six durations ═══════════════════════════════════════════════════
+check('16: six durations are offered',
+  JSON.stringify(LI.DURATIONS) === JSON.stringify([7, 14, 21, 30, 60, 90]));
+check('16: every duration has an option record with a label and an explanation',
+  LI.DURATIONS.every(d => {
+    const o = LI.durationOption(d);
+    return o.days === d && o.label && o.blurb && o.detail && o.headline;
+  }));
+check('16: the labels are the ones specified',
+  LI.DURATION_LABELS[7] === 'Lock In Sprint' &&
+  LI.DURATION_LABELS[14] === 'Focus Reset' &&
+  LI.DURATION_LABELS[21] === 'Discipline Builder' &&
+  LI.DURATION_LABELS[30] === 'High Performance' &&
+  LI.DURATION_LABELS[60] === 'Deep Discipline' &&
+  LI.DURATION_LABELS[90] === 'Lifestyle Transformation');
+check('16: no blurb frames a shorter run as a lesser one',
+  LI.DURATION_OPTIONS.every(o => !/only|just a|lesser|inferior|not enough|fail/i.test(o.blurb)));
+check('16: the completion reward is exactly proportional to length',
+  LI.DURATIONS.every(d => LI.completionBonusFor(d) === d * 50),
+  LI.DURATIONS.map(d => `${d}:${LI.completionBonusFor(d)}`).join(' '));
+check('16: the 14-day reward is unchanged from before the other durations existed',
+  LI.completionBonusFor(14) === 700 && LI.COMPLETION_BONUS_XP === 700);
+check('16: a longer run is never worth less than a shorter one',
+  LI.DURATIONS.every((d, i) => i === 0 || LI.completionBonusFor(d) > LI.completionBonusFor(LI.DURATIONS[i - 1])));
+check('16: resolveDuration rejects anything not on the list',
+  LI.resolveDuration(7) === 7 && LI.resolveDuration(90) === 90 &&
+  LI.resolveDuration(11) === 14 && LI.resolveDuration(0) === 14 &&
+  LI.resolveDuration(undefined) === 14);
+check('16: the goal sentence names the chosen length',
+  LI.goalFor(7).startsWith('7 days') && LI.goalFor(90).startsWith('90 days'));
+check('16: every duration has its own completion message, titled by its label',
+  LI.DURATIONS.every(d => {
+    const m = LI.completionMessage(d);
+    return m.title === `${LI.DURATION_LABELS[d]} complete` && m.body.length > 60 && m.next;
+  }));
+check('16: no completion message contains an invented statistic',
+  LI.DURATIONS.every(d => !/\d{1,3}\s?%/.test(LI.completionMessage(d).body)));
+
+// ══ 17: scaling — longer means longer, not harder ═══════════════════════════
+const ramps = Object.fromEntries(LI.DURATIONS.map(d => [d, LI.rampFor(d)]));
+check('17: every duration produces a ramp covering every day exactly once',
+  LI.DURATIONS.every(d => {
+    const r = ramps[d];
+    return r[0].fromDay === 1 && r[r.length - 1].toDay === d &&
+      r.every((s, i) => i === 0 || s.fromDay === r[i - 1].toDay + 1) &&
+      r.every(s => s.toDay >= s.fromDay);
+  }),
+  LI.DURATIONS.map(d => `${d}:${ramps[d].map(s => `${s.fromDay}-${s.toDay}`).join('|')}`).join(' '));
+check('17: the 14-day ramp is byte-for-byte what it was before durations existed',
+  JSON.stringify(ramps[14].map(s => [s.minutes, s.fromDay, s.toDay, s.label])) ===
+  JSON.stringify([[25, 1, 3, 'Baseline'], [35, 4, 7, 'Extend'], [45, 8, 11, 'Deepen'], [50, 12, 14, 'Hold']]));
+check('17: FLOW_STAGES is still the 14-day ramp',
+  JSON.stringify(LI.FLOW_STAGES) === JSON.stringify(ramps[14]));
+// THE scaling rule: a 90-day run does not ask for longer sessions than a
+// 14-day one. Required minutes per day must not grow with duration.
+check('17: no duration asks for a longer session than the working length',
+  LI.DURATIONS.every(d => ramps[d].every(s => s.minutes <= LI.HOLD_MINUTES)),
+  `cap ${LI.HOLD_MINUTES} min`);
+check('17: the longest session is the SAME at 14, 30 and 90 days',
+  [14, 30, 90].every(d => Math.max(...ramps[d].map(s => s.minutes)) === LI.HOLD_MINUTES));
+check('17: required daily minutes never increase with duration',
+  LI.DURATIONS.every(d =>
+    LI.flowRequirement(d, { stages: ramps[d], lighterDays: LI.lighterDaysFor(d) }).totalMinutes <=
+    LI.FLOW_SESSIONS_PER_DAY * LI.HOLD_MINUTES));
+check('17: every ramp is monotonic — it never steps back down',
+  LI.DURATIONS.every(d => ramps[d].every((s, i) => i === 0 || s.minutes >= ramps[d][i - 1].minutes)));
+check('17: the build ramp is duration-independent — 14, 21, 30, 60 and 90 reach the working length on the same day',
+  [14, 21, 30, 60, 90].every(d => {
+    const first50 = ramps[d].find(s => s.minutes === LI.HOLD_MINUTES);
+    return first50 && first50.fromDay === 12;
+  }),
+  [14, 21, 30, 60, 90].map(d => `${d}:${ramps[d].find(s => s.minutes === LI.HOLD_MINUTES)?.fromDay}`).join(' '));
+check('17: extra days go into HOLD phases, not into longer sessions',
+  ramps[90].filter(s => s.minutes === LI.HOLD_MINUTES).reduce((n, s) => n + (s.toDay - s.fromDay + 1), 0) === 79);
+check('17: a 7-day sprint compresses the ramp instead of racing through it',
+  ramps[7].length === 3 && Math.max(...ramps[7].map(s => s.minutes)) === 45 &&
+  ramps[7].every(s => s.toDay - s.fromDay + 1 >= LI.MIN_STAGE_DAYS),
+  ramps[7].map(s => `${s.minutes}m:${s.fromDay}-${s.toDay}`).join(' '));
+check('17: no stage anywhere is shorter than the minimum',
+  LI.DURATIONS.every(d => ramps[d].every(s => s.toDay - s.fromDay + 1 >= LI.MIN_STAGE_DAYS)));
+check('17: longer runs get more hold PHASES, shifting the emphasis to consistency',
+  ramps[14].filter(s => s.minutes === LI.HOLD_MINUTES).length === 1 &&
+  ramps[30].filter(s => s.minutes === LI.HOLD_MINUTES).length === 2 &&
+  ramps[90].filter(s => s.minutes === LI.HOLD_MINUTES).length === 3,
+  [14, 30, 90].map(d => `${d}:${ramps[d].filter(s => s.minutes === LI.HOLD_MINUTES).length}`).join(' '));
+check('17: the hold phases are about sustaining, not escalating',
+  /not to keep climbing/i.test(LI.HOLD_PHASES[0].note) &&
+  /do not feel like it/i.test(LI.HOLD_PHASES[1].note) &&
+  /Nothing left to escalate/i.test(LI.HOLD_PHASES[2].note));
+check('17: the flow guide tells the user longer does not mean longer sessions',
+  /working length is the same, held for longer/i.test(LI.GUIDES.flow.how.notes));
+
+// Lighter days: about one a week at every length.
+const lighter = Object.fromEntries(LI.DURATIONS.map(d => [d, LI.lighterDaysFor(d)]));
+check('17: lighter days are planned at every length',
+  LI.DURATIONS.every(d => lighter[d].length >= 1));
+check('17: they land roughly once a week',
+  LI.DURATIONS.every(d => lighter[d].length === Math.floor(d / 7)),
+  LI.DURATIONS.map(d => `${d}:${lighter[d].length}`).join(' '));
+check('17: they are all inside the challenge and every seventh day',
+  LI.DURATIONS.every(d => lighter[d].every(x => x >= 1 && x <= d && x % 7 === 0)));
+check('17: the 14-day lighter days are unchanged',
+  JSON.stringify(lighter[14]) === JSON.stringify([7, 14]) &&
+  JSON.stringify(LI.LIGHTER_DAYS) === JSON.stringify([7, 14]));
+check('17: a lighter day reduces sessions at every length, never session length',
+  LI.DURATIONS.every(d => lighter[d].every(x => {
+    const req = LI.flowRequirement(x, { stages: ramps[d], lighterDays: lighter[d] });
+    return req.sessions === LI.LIGHTER_DAY_SESSIONS &&
+      req.minutes === LI.flowStageForDay(x, ramps[d]).minutes;
+  })));
+check('17: sleep XP is identical at every duration — no length rewards less sleep',
+  LI.DURATIONS.every(d =>
+    LI.buildStartTasks({ durationDays: d }).find(t => t.id === 'li_sleep').xp === LI.XP.sleep));
+check('17: the eight habits and their XP are identical at every duration',
+  LI.DURATIONS.every(d => {
+    const t = LI.buildStartTasks({ durationDays: d });
+    return t.length === tasks.length &&
+      t.every((x, i) => x.id === tasks[i].id && x.xp === tasks[i].xp &&
+        x.keystone === tasks[i].keystone && x.habitKey === tasks[i].habitKey);
+  }));
+check('17: the daily XP total is the same at every duration',
+  LI.DURATIONS.every(d => LI.dailyXPTotal({ durationDays: d }) === LI.dailyXPTotal()));
+
+// ══ 18: an attempt keeps the progression it was started with ════════════════
+check('18: each attempt snapshots its own ramp and lighter days',
+  LI.DURATIONS.every(d => {
+    const m = LI.buildChallengeMeta({ durationDays: d });
+    return JSON.stringify(m.lockIn.flowStages) === JSON.stringify(ramps[d]) &&
+      JSON.stringify(m.lockIn.lighterDays) === JSON.stringify(lighter[d]);
+  }));
+check('18: progressionOf reads the attempt\'s stored progression, not the module default',
+  (() => {
+    const m = LI.buildChallengeMeta({ durationDays: 90 });
+    const p = LI.progressionOf(m);
+    return p.stages.length === ramps[90].length && p.lighterDays.length === lighter[90].length;
+  })());
+check('18: progressionOf falls back to the default for a legacy attempt with no snapshot',
+  (() => {
+    const p = LI.progressionOf({ templateId: LI.LOCK_IN_TEMPLATE_ID, lockIn: { durationDays: 14 } });
+    return JSON.stringify(p.stages) === JSON.stringify(LI.FLOW_STAGES) &&
+      JSON.stringify(p.lighterDays) === JSON.stringify(LI.LIGHTER_DAYS);
+  })());
+check('18: a day resolves against the passed ramp, not the global one',
+  LI.flowStageForDay(40, ramps[90]).minutes === LI.HOLD_MINUTES &&
+  LI.flowStageForDay(40, ramps[14]).minutes === LI.HOLD_MINUTES &&
+  LI.flowStageForDay(6, ramps[7]).minutes === 45 &&
+  LI.flowStageForDay(6, ramps[14]).minutes === 35);
+check('18: a bad stages argument falls back instead of throwing',
+  LI.flowStageForDay(1, null).minutes === 25 && LI.flowStageForDay(1, []).minutes === 25);
+check('18: lighter-day lookup respects the attempt\'s own list',
+  LI.isLighterDay(21, lighter[30]) && !LI.isLighterDay(21, lighter[14]));
+
+// ══ 19: guides are independent of enrolment ═════════════════════════════════
+// The registry is a plain data module. Nothing about reading a guide needs an
+// attempt, a profile, a day record or an XP ledger.
+check('19: all eight guides resolve from the registry with no challenge involved',
+  LI.GUIDE_ORDER.every(id => !!getGuide(`${LI.GUIDE_SOURCE}:${id}`)));
+check('19: every registry entry records its source, so the library can group them',
+  Object.values(HABIT_GUIDES).every(g => g.source === LI.GUIDE_SOURCE));
+check('19: the registry carries no XP, completion or progress fields',
+  Object.values(HABIT_GUIDES).every(g =>
+    g.xp === undefined && g.checked === undefined && g.completed === undefined &&
+    g.habitKey === undefined && g.keystone === undefined));
+check('19: a guide can be resolved from a task snapshot alone — no live attempt',
+  LI.buildStartTasks().filter(t => t.guideId).every(t => !!guideForTask({ guideId: t.guideId })));
+check('19: the Daily Log stays a tracking requirement, not an educational habit',
+  !LI.GUIDE_ORDER.includes('dailyLog') && !LI.GUIDE_ORDER.includes('log') &&
+  LI.DAILY_HABITS.find(h => h.id === 'daily_log').guideId === null &&
+  Object.keys(HABIT_GUIDES).length === 8);
+check('19: the eight library guides are exactly the eight specified habits',
+  LI.GUIDE_ORDER.map(id => LI.GUIDES[id].title).sort().join('|') ===
+  ['Attention Training', 'Daily Mission', 'Execute Your Priorities', 'Flow Training',
+   'Mental Recovery', 'Physical Energy', 'Sleep Optimization', 'Stress Off-Switch'].sort().join('|'));
 
 const failed = results.filter(x => !x.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
