@@ -158,8 +158,13 @@ check('5: a malformed entry returns a zero charge rather than throwing',
 // ══ 6: the preview totals correctly ═════════════════════════════════════════
 const archives = [healthy.entry, abandoned.entry, partial.entry];
 const preview = previewReconciliation(archives);
+// The preview totals in DISPLAY units, so it can be compared against a rank
+// floor; a segment's own `discarded` stays in the units its archive stored.
 check('6: the preview sums only the charged segments',
-  preview.amount === dAbandoned.discarded, `${preview.amount}`);
+  preview.amount === dAbandoned.discardedDisplay, `${preview.amount}`);
+check('6: and it does so in display units',
+  dAbandoned.discardedDisplay === dAbandoned.discarded * 10,
+  `${dAbandoned.discarded} stored → ${dAbandoned.discardedDisplay} shown`);
 check('6: it reports how many archives it looked at', preview.archiveCount === 3);
 check('6: it names exactly the segments being charged',
   preview.charged.length === 1 && preview.charged[0].name === 'Forge Daily');
@@ -190,29 +195,36 @@ check('7: it records the balance before, so it can be undone exactly',
 // ══ 8: the breakdown — earned and deductions kept separate ══════════════════
 const ledger = { version: LEDGER_VERSION, reconciled: applied };
 const current = { gained: 120, lost: 50, rawTotal: 70 };
-const bd = computeXPBreakdown({ archives, currentSegment: current, ledger });
+// The breakdown reports in DISPLAY units. These fixtures are all era-1, so
+// every figure is the stored one times ten; D() makes that explicit.
+const D = (era1XP) => era1XP * 10;
+const bd = computeXPBreakdown({ archives, currentSegment: current, ledger, currentEra: 1 });
 check('8: earned is archived XP plus what the current segment earned',
-  bd.earned === archives.reduce((s, a) => s + a.xpEarned, 0) + 120, `${bd.earned}`);
+  bd.earned === D(archives.reduce((s, a) => s + a.xpEarned, 0) + 120), `${bd.earned}`);
+// A reconciliation built now stores DISPLAY units and says so (ledgerUnits: 2),
+// so it is not scaled again on read — only the era-1 live segment is.
 check('8: penalties are the historical figure plus the live deficit',
-  bd.penalties === applied.amount + 50, `${bd.penalties}`);
+  bd.penalties === applied.amount + D(50), `${bd.penalties}`);
 check('8: net is earned minus penalties', bd.net === bd.earned - bd.penalties);
 check('8: the historical and current deductions are reported separately',
-  bd.historicalPenalty === applied.amount && bd.currentPenalty === 50);
+  bd.historicalPenalty === applied.amount && bd.currentPenalty === D(50));
+check('8: a reconciliation records the units it stored',
+  applied.ledgerUnits === 2);
 check('8: with no ledger, only the live deficit is deducted',
-  computeXPBreakdown({ archives, currentSegment: current, ledger: makeLedger() }).penalties === 50);
+  computeXPBreakdown({ archives, currentSegment: current, ledger: makeLedger(), currentEra: 1 }).penalties === D(50));
 
 // ══ 9: a live deficit now reduces Lifetime XP ═══════════════════════════════
 // This is the behaviour that used to be clipped at zero.
 check('9: a negative current segment reduces Lifetime XP',
   rawLifetimeWithLedger({
     archives: [{ xpEarned: 8245 }], currentSegment: { gained: 76, lost: 725 }, ledger: makeLedger(),
-  }) === 8245 + 76 - 725, `${8245 + 76 - 725}`);
+  }) === D(8245 + 76 - 725), `${D(8245 + 76 - 725)}`);
 check('9: the old behaviour floored it at zero — this is the change',
   computeLifetimeXP([{ xpEarned: 8245 }], 76 - 725) === 8245);
 check('9: a positive segment still adds, as before',
   rawLifetimeWithLedger({
     archives: [{ xpEarned: 8245 }], currentSegment: { gained: 120, lost: 0 }, ledger: makeLedger(),
-  }) === 8365);
+  }) === D(8365));
 check('9: returning after 7, 14 and 30 days costs progressively more',
   (() => {
     const at = (gap) => {
@@ -224,23 +236,24 @@ check('9: returning after 7, 14 and 30 days costs progressively more',
   })());
 
 // ══ 10: THE FLOOR — a rank, once unlocked, is never lost ════════════════════
+// The floor and every balance compared against it are in DISPLAY units.
 const floor = rankFloorXP(TRUE_WARRIOR.rank);
-check('10: the floor for True Warrior is 7,500', floor === 7500);
+check('10: the floor for True Warrior is the converted threshold', floor === D(7500));
 check('10: a deduction that lands above the floor applies in full',
-  effectiveLifetimeXP(8245 - 500, TRUE_WARRIOR.rank) === 7745);
+  effectiveLifetimeXP(D(8245) - D(500), TRUE_WARRIOR.rank) === D(7745));
 check('10: a deduction that would breach the floor is held at it',
-  effectiveLifetimeXP(8245 - 5000, TRUE_WARRIOR.rank) === 7500);
+  effectiveLifetimeXP(D(8245) - D(5000), TRUE_WARRIOR.rank) === D(7500));
 check('10: even a catastrophic deficit cannot breach the floor',
-  effectiveLifetimeXP(-99999, TRUE_WARRIOR.rank) === 7500);
+  effectiveLifetimeXP(-99999, TRUE_WARRIOR.rank) === D(7500));
 check('10: the rank itself survives any balance',
   [-5000, 0, 100].every(xp =>
     resolveRankState({ rawLifetimeXP: xp, highestRank: TRUE_WARRIOR.rank }).current.name === 'True Warrior'));
 check('10: the displayed XP at the floor is the floor, not the raw figure',
-  resolveRankState({ rawLifetimeXP: -400, highestRank: TRUE_WARRIOR.rank }).xp === 7500);
+  resolveRankState({ rawLifetimeXP: -400, highestRank: TRUE_WARRIOR.rank }).xp === D(7500));
 check('10: progress toward the NEXT rank is what is actually lost',
   (() => {
-    const before = resolveRankState({ rawLifetimeXP: 8245, highestRank: TRUE_WARRIOR.rank });
-    const after = resolveRankState({ rawLifetimeXP: 7600, highestRank: TRUE_WARRIOR.rank });
+    const before = resolveRankState({ rawLifetimeXP: D(8245), highestRank: TRUE_WARRIOR.rank });
+    const after = resolveRankState({ rawLifetimeXP: D(7600), highestRank: TRUE_WARRIOR.rank });
     return after.xpToNext > before.xpToNext && after.current.name === before.current.name;
   })());
 
@@ -266,7 +279,7 @@ check('12: a scheduled challenge contributes nothing before its start date',
   (() => {
     const profiles = { p: { challengeStart: dstr(5), activeChallenge: { templateId: 'lock_in_14_day', durationDays: 14 }, tasks: LI_TASKS, xpPenalties: true } };
     const r = computeTotalXP({ p: {} }, profiles, 'p', () => 0, 1, 1);
-    return r.lost === 0 && rawLifetimeWithLedger({ archives: [{ xpEarned: 8245 }], currentSegment: r, ledger: makeLedger() }) === 8245;
+    return r.lost === 0 && rawLifetimeWithLedger({ archives: [{ xpEarned: 8245 }], currentSegment: r, ledger: makeLedger() }) === D(8245);
   })());
 check('12: the current unfinished day is never charged',
   (() => {
@@ -279,9 +292,9 @@ check('12: a profile with no archives and no challenge is unaffected',
 // ══ 13: migration — existing profiles are untouched until they approve ══════
 check('13: a profile with no xpLedger field behaves exactly as before',
   (() => {
-    const withoutLedger = computeXPBreakdown({ archives, currentSegment: { gained: 100, lost: 0 }, ledger: undefined });
+    const withoutLedger = computeXPBreakdown({ archives, currentSegment: { gained: 100, lost: 0 }, ledger: undefined, currentEra: 1 });
     return withoutLedger.penalties === 0 &&
-      withoutLedger.net === archives.reduce((s, a) => s + a.xpEarned, 0) + 100;
+      withoutLedger.net === D(archives.reduce((s, a) => s + a.xpEarned, 0) + 100);
   })());
 check('13: no other profile is charged by one profile reconciling',
   (() => {
@@ -324,52 +337,57 @@ check('14: a 100-day Forge Daily run archives all 100 days of earned XP',
 // If the penalties found exceed the XP held above the floor, the excess is
 // written off at the moment the charge is fixed. Otherwise the balance would
 // read as the floor while the gap quietly swallowed the next XP earned.
+//
+// Expressed in DISPLAY units throughout — the archive is marked era 2 so
+// nothing is scaled — because that is the scale the floor and the ledger now
+// work in. The figures are the era-1 ones times ten.
 {
-  const FLOOR = 7500;
-  const archivesN = [{ xpEarned: 8285 }];
-  const before = 8260;          // 8,285 earned less 25 already-counted penalties
-  const found = 1136;           // uncounted missed days
+  const FLOOR = rankFloorXP(TRUE_WARRIOR.rank);         // 75,000
+  const archivesN = [{ xpEarned: D(8285), challenge: { xpEconomyVersion: 2 } }];
+  const before = D(8260);       // earned less penalties already counted
+  const found = D(1136);        // uncounted missed days
+  const headroom = before - FLOOR;
 
   const cap = capToFloor(found, before, FLOOR);
   check('15: only the XP above the floor can be charged',
-    cap.applied === 760, `applied ${cap.applied}`);
+    cap.applied === headroom, `applied ${cap.applied} of ${headroom}`);
   check('15: the excess is written off, not deferred',
-    cap.forgiven === found - 760 && cap.total === found, `forgiven ${cap.forgiven}`);
-  check('15: the headroom is the distance to the floor', cap.headroom === 760);
+    cap.forgiven === found - headroom && cap.total === found, `forgiven ${cap.forgiven}`);
+  check('15: the headroom is the distance to the floor', cap.headroom === headroom);
   check('15: a charge that fits is applied in full',
-    capToFloor(300, before, FLOOR).applied === 300 && capToFloor(300, before, FLOOR).forgiven === 0);
+    capToFloor(3000, before, FLOOR).applied === 3000 && capToFloor(3000, before, FLOOR).forgiven === 0);
   check('15: a profile already at its floor is charged nothing at all',
-    capToFloor(500, FLOOR, FLOOR).applied === 0 && capToFloor(500, FLOOR, FLOOR).forgiven === 500);
+    capToFloor(5000, FLOOR, FLOOR).applied === 0 && capToFloor(5000, FLOOR, FLOOR).forgiven === 5000);
   check('15: a profile below its floor is charged nothing',
-    capToFloor(500, 7000, FLOOR).applied === 0);
+    capToFloor(5000, FLOOR - 5000, FLOOR).applied === 0);
 
   const entry = buildReconciliation({ amount: found, archiveCount: 1, unverifiedCount: 0, charged: [] }, before, FLOOR, 0);
   check('15: the ledger stores the CAPPED amount, so the balance is real',
-    entry.amount === 760 && entry.uncounted === found && entry.forgiven === found - 760);
+    entry.amount === headroom && entry.uncounted === found && entry.forgiven === found - headroom);
 
   const ledgerN = { version: LEDGER_VERSION, reconciled: entry };
   const at = (gained) => computeXPBreakdown({
-    archives: archivesN, currentSegment: { gained, lost: 25 }, ledger: ledgerN,
+    archives: archivesN, currentSegment: { gained, lost: D(25) }, ledger: ledgerN, currentEra: 2,
   }).net;
   check('15: after applying, the balance is exactly the floor', at(0) === FLOOR, `${at(0)}`);
-  check('15: EARNING 20 XP RAISES IT TO 7,520 IMMEDIATELY — no hidden debt',
-    at(20) === FLOOR + 20, `${at(20)}`);
-  check('15: earning 200 XP raises it to 7,700', at(200) === FLOOR + 200, `${at(200)}`);
+  check('15: EARNING 200 XP RAISES IT TO THE FLOOR + 200 — no hidden debt',
+    at(200) === FLOOR + 200, `${at(200)}`);
+  check('15: earning 2,000 XP raises it by 2,000', at(2000) === FLOOR + 2000, `${at(2000)}`);
   check('15: every subsequent XP earned moves the balance one for one',
-    [1, 5, 50, 500].every(x => at(x) === FLOOR + x));
+    [10, 50, 500, 5000].every(x => at(x) === FLOOR + x));
   check('15: the displayed figure never dips below the floor',
-    [0, 20, 200].every(x => effectiveLifetimeXP(at(x), TRUE_WARRIOR.rank) >= FLOOR));
+    [0, 200, 2000].every(x => effectiveLifetimeXP(at(x), TRUE_WARRIOR.rank) >= FLOOR));
   check('15: and the rank is untouched throughout',
-    [0, 20, 200].every(x =>
+    [0, 200, 2000].every(x =>
       resolveRankState({ rawLifetimeXP: at(x), highestRank: TRUE_WARRIOR.rank }).current.name === 'True Warrior'));
 
   // The regression this replaces: storing the UNCAPPED figure left a debt.
-  const buggy = { version: LEDGER_VERSION, reconciled: { amount: found } };
+  const buggy = { version: LEDGER_VERSION, reconciled: { amount: found, ledgerUnits: 2 } };
   const buggyAt = (gained) => effectiveLifetimeXP(computeXPBreakdown({
-    archives: archivesN, currentSegment: { gained, lost: 25 }, ledger: buggy,
+    archives: archivesN, currentSegment: { gained, lost: D(25) }, ledger: buggy, currentEra: 2,
   }).net, TRUE_WARRIOR.rank);
-  check('15: (regression) the uncapped version swallowed 200 XP of earnings',
-    buggyAt(0) === FLOOR && buggyAt(200) === FLOOR,
+  check('15: (regression) the uncapped version swallowed 2,000 XP of earnings',
+    buggyAt(0) === FLOOR && buggyAt(2000) === FLOOR,
     'the behaviour this cap removes');
 }
 
@@ -377,41 +395,42 @@ check('14: a 100-day Forge Daily run archives all 100 days of earned XP',
 // Weeks away while Forge Daily was running can push the net below the floor
 // with no reconciliation involved. The shortfall is reported so the caller can
 // persist it, and once credited the balance behaves normally again.
+// Display units throughout, as in section 15.
 {
-  const FLOOR = 7500;
-  const archivesN = [{ xpEarned: 7600 }];
+  const FLOOR = rankFloorXP(TRUE_WARRIOR.rank);
+  const archivesN = [{ xpEarned: D(7600), challenge: { xpEconomyVersion: 2 } }];
   const inputs = (gained, lost, forgiven = 0) => ({
-    archives: archivesN, currentSegment: { gained, lost },
-    ledger: { version: LEDGER_VERSION, reconciled: null, forgiven },
+    archives: archivesN, currentSegment: { gained, lost }, currentEra: 2,
+    ledger: { version: LEDGER_VERSION, reconciled: null, forgiven, forgivenUnits: 2 },
   });
-  const short = forgivenessShortfall(inputs(76, 725), FLOOR);
+  const short = forgivenessShortfall(inputs(D(76), D(725)), FLOOR);
   check('16: a live deficit below the floor reports a shortfall',
-    short === FLOOR - (7600 + 76 - 725), `${short}`);
+    short === FLOOR - (D(7600) + D(76) - D(725)), `${short}`);
   check('16: crediting it puts the balance exactly on the floor',
-    computeXPBreakdown(inputs(76, 725, short)).net === FLOOR);
-  check('16: and then earning 20 XP raises it to 7,520',
-    computeXPBreakdown(inputs(96, 725, short)).net === FLOOR + 20,
-    `${computeXPBreakdown(inputs(96, 725, short)).net}`);
+    computeXPBreakdown(inputs(D(76), D(725), short)).net === FLOOR);
+  check('16: and then earning 200 XP raises it by 200',
+    computeXPBreakdown(inputs(D(76) + 200, D(725), short)).net === FLOOR + 200,
+    `${computeXPBreakdown(inputs(D(76) + 200, D(725), short)).net}`);
   check('16: once credited, no further shortfall is reported — it is idempotent',
-    forgivenessShortfall(inputs(76, 725, short), FLOOR) === 0);
+    forgivenessShortfall(inputs(D(76), D(725), short), FLOOR) === 0);
   check('16: a healthy balance reports no shortfall at all',
-    forgivenessShortfall(inputs(500, 0), FLOOR) === 0);
+    forgivenessShortfall(inputs(D(500), 0), FLOOR) === 0);
   // Zero is a floor too — XP is never displayed below it, so a deficit there
   // would be the same invisible debt.
   check('16: zero is protected as well, so XP can never go secretly negative',
-    forgivenessShortfall(inputs(0, 99999), 0) === 99999 - 7600,
-    `${forgivenessShortfall(inputs(0, 99999), 0)}`);
+    forgivenessShortfall(inputs(0, 999990), 0) === 999990 - D(7600),
+    `${forgivenessShortfall(inputs(0, 999990), 0)}`);
   check('16: a profile with nothing earned and nothing lost needs no credit',
-    forgivenessShortfall({ archives: [], currentSegment: { gained: 0, lost: 0 }, ledger: makeLedger() }, 0) === 0);
+    forgivenessShortfall({ archives: [], currentSegment: { gained: 0, lost: 0 }, ledger: makeLedger(), currentEra: 2 }, 0) === 0);
   // Forgiveness cancels a charge. It must never hand out XP to a profile that
   // holds a rank but has little or no earned XP behind it.
   check('16: a profile holding a rank with NO penalties is credited nothing',
-    forgivenessShortfall({ archives: [], currentSegment: { gained: 0, lost: 0 }, ledger: makeLedger() }, 7500) === 0);
+    forgivenessShortfall({ archives: [], currentSegment: { gained: 0, lost: 0 }, ledger: makeLedger(), currentEra: 2 }, FLOOR) === 0);
   check('16: the credit never exceeds the penalties actually incurred',
-    forgivenessShortfall({ archives: [], currentSegment: { gained: 0, lost: 40 }, ledger: makeLedger() }, 7500) === 40);
+    forgivenessShortfall({ archives: [], currentSegment: { gained: 0, lost: 400 }, ledger: makeLedger(), currentEra: 2 }, FLOOR) === 400);
   check('16: forgiven XP is excluded from the "lost" figure shown to the user',
     (() => {
-      const b = computeXPBreakdown(inputs(76, 725, short));
+      const b = computeXPBreakdown(inputs(D(76), D(725), short));
       return b.penalties === b.grossPenalties - short && b.penalties >= 0;
     })());
 }

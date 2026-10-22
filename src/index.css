@@ -6417,3 +6417,62 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   border-top: 1px solid var(--border); margin-top: 4px; padding-top: 7px;
 }
 .xph-note { font-size: 11px; color: var(--text3); line-height: 1.5; margin-top: 7px; }
+
+/* ─── v3.58.0: Coming Soon, XP Breakdown ──────────────────────────────────── */
+
+/* A challenge that is designed but has no playable habits yet. */
+.tpl-soon-chip {
+  display: inline-block; margin-left: 8px; padding: 2px 7px;
+  border-radius: 999px; background: var(--card2); border: 1px solid var(--border);
+  font-size: 9px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text3); vertical-align: middle;
+}
+.tpl-soon-note {
+  font-size: 11px; color: var(--text3); line-height: 1.55;
+  border-left: 2px solid var(--border); padding-left: 9px;
+}
+.tpl-soon-note strong { color: var(--text2); }
+
+/* Per-challenge XP breakdown. */
+.xph-detail-toggle {
+  width: 100%; margin-top: 7px; padding: 0;
+  background: none; border: none; text-align: left; cursor: pointer;
+  font-size: 11px; font-weight: 700; color: var(--accent2);
+}
+.cxb { margin-top: 9px; background: var(--card2); border-radius: var(--radius-sm); padding: 11px 12px; }
+.cxb-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+.cxb-name { font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }
+.cxb-dates { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.cxb-close {
+  margin-left: auto; width: 26px; height: 26px; border-radius: 7px;
+  background: none; border: none; color: var(--text3); font-size: 12px; cursor: pointer;
+}
+.cxb-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+.cxb-tag {
+  padding: 2px 7px; border-radius: 999px; background: var(--bg2);
+  border: 1px solid var(--border); font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--text3);
+}
+.cxb-tag.era { color: var(--text2); }
+.cxb-group {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text3); margin: 9px 0 5px;
+}
+.cxb-rows { display: flex; flex-direction: column; gap: 2px; }
+.cxb-row {
+  display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
+  font-size: 11px; color: var(--text2); font-variant-numeric: tabular-nums;
+}
+.cxb-label { min-width: 0; overflow-wrap: anywhere; }
+.cxb-sub { color: var(--text3); font-size: 10px; }
+.cxb-value { flex-shrink: 0; font-weight: 700; }
+.cxb-row.deduct { color: var(--warn); }
+.cxb-row.subtotal {
+  color: var(--text); font-weight: 700;
+  border-top: 1px solid var(--border); margin-top: 3px; padding-top: 4px;
+}
+.cxb-row.net {
+  color: var(--text); font-weight: 800; font-size: 12px;
+  border-top: 1px solid var(--border); margin-top: 5px; padding-top: 6px;
+}
+.cxb-note { font-size: 10px; color: var(--text3); line-height: 1.5; margin-top: 7px; }

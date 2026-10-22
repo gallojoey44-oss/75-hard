@@ -1,6 +1,8 @@
 import { computeTotalXP, computeLifetimeXP } from './gamification';
 import { missedDayDetail } from './missedDays';
 import { dayNumberForDate, getDayNumberFromStart } from './dateUtils';
+import { toDisplayXP, archiveEraOf, ledgerDisplayAmount, forgivenDisplayAmount } from './xpAttempt';
+import { displayScaleFor, CURRENT_ECONOMY_VERSION } from '../data/xpEconomy';
 
 /**
  * The XP penalty ledger.
@@ -103,7 +105,9 @@ export function archiveDeficit(entry) {
     startDate: entry?.challengeStart || null,
     days: entry?.endDayNum || 0,
     stored: Math.max(0, Number(entry?.xpEarned) || 0),
-    gained: 0, lost: 0, missedDays: 0, missedPenalty: 0, discarded: 0, verified: false, reason: null,
+    gained: 0, lost: 0, missedDays: 0, missedPenalty: 0, discarded: 0,
+    era: archiveEraOf(entry), scale: displayScaleFor(archiveEraOf(entry)),
+    discardedDisplay: 0, verified: false, reason: null,
   };
   if (!entry || !entry.days || !entry.endDayNum) {
     return { ...base, reason: 'no day records stored' };
@@ -151,7 +155,7 @@ export function archiveDeficit(entry) {
     return {
       ...base, gained: withoutPenalties.gained, lost: 0,
       missedDays: off.missedDays, missedPenalty: 0,
-      discarded: 0, verified: true, reason: 'penalties were off',
+      discarded: 0, discardedDisplay: 0, verified: true, reason: 'penalties were off',
     };
   }
   if (!matchesOn) {
@@ -175,6 +179,10 @@ export function archiveDeficit(entry) {
     // "missed days" label.
     missedPenalty: detail.totalPenalty,
     discarded,
+    // The same figure in display units. The reconciliation compares against a
+    // rank floor, which is in display units, so mixing the two would charge
+    // the wrong amount by a factor of ten.
+    discardedDisplay: toDisplayXP(discarded, base.era),
     verified: true,
     reason: discarded > 0 ? null : 'already counted',
   };
@@ -194,7 +202,7 @@ export function previewReconciliation(archiveList) {
     segments,
     charged,
     skipped,
-    amount: charged.reduce((s, x) => s + x.discarded, 0),
+    amount: charged.reduce((s, x) => s + (x.discardedDisplay ?? x.discarded), 0),
     archiveCount: segments.length,
     // Surfaced rather than buried: a segment we could not reproduce is not
     // charged, and the user is told how many there were.
@@ -234,6 +242,10 @@ export function buildReconciliation(preview, lifetimeBefore, floor, forgivenBefo
   return {
     at: new Date().toISOString(),
     version: LEDGER_VERSION,
+    // Stored in DISPLAY units and marked as such: an amount written before
+    // era 2 is in era-1 units and is scaled on read, so the marker is what
+    // keeps the two apart.
+    ledgerUnits: CURRENT_ECONOMY_VERSION,
     amount: cap.applied,
     uncounted: cap.total,
     forgiven: cap.forgiven,
@@ -245,6 +257,7 @@ export function buildReconciliation(preview, lifetimeBefore, floor, forgivenBefo
     segments: preview.charged.map(s => ({
       id: s.id, name: s.name, endDate: s.endDate, startDate: s.startDate,
       missedDays: s.missedDays, gained: s.gained, lost: s.lost, discarded: s.discarded,
+      era: s.era, discardedDisplay: s.discardedDisplay,
     })),
   };
 }
@@ -261,27 +274,23 @@ export function buildReconciliation(preview, lifetimeBefore, floor, forgivenBefo
  * The current segment is counted RAW: a deficit now reduces Lifetime XP
  * directly, which is the behaviour that was previously clipped at zero.
  */
-export function computeXPBreakdown({ archives, currentSegment, ledger }) {
-  const archived = (archives || []).reduce((s, a) => s + (Number(a?.xpEarned) || 0), 0);
-  const currentGained = Math.max(0, Number(currentSegment?.gained) || 0);
-  const currentLost = Math.max(0, Number(currentSegment?.lost) || 0);
-  const historical = ledgerPenalty(ledger);
-  // Penalties already written off because they would have pushed the balance
-  // below a protected floor. Monotonic and persisted, so XP earned afterwards
-  // raises the balance immediately instead of quietly paying down a debt.
-  const forgiven = Math.max(0, Number(ledger?.forgiven) || 0);
-
+export function computeXPBreakdown({ archives, currentSegment, ledger, currentEra = 1 }) {
+  // Each record is converted to display units by the ERA THAT PRODUCED IT.
+  // Era-1 archives keep their stored figures on disk and are scaled on the way
+  // out, so the conversion never touches history and can be undone by removing
+  // the scale table.
+  const archived = (archives || []).reduce(
+    (s, a) => s + toDisplayXP(a?.xpEarned, archiveEraOf(a)), 0);
+  const curScale = displayScaleFor(currentEra);
+  const currentGained = Math.max(0, Number(currentSegment?.gained) || 0) * curScale;
+  const currentLost = Math.max(0, Number(currentSegment?.lost) || 0) * curScale;
+  const historical = ledgerDisplayAmount(ledger?.reconciled);
+  const forgiven = forgivenDisplayAmount(ledger);
   const earned = archived + currentGained;
   const penalties = historical + currentLost;
   return {
-    archivedXP: archived,
-    currentEarned: currentGained,
-    currentPenalty: currentLost,
-    historicalPenalty: historical,
-    forgiven,
-    earned,
-    // What the user is shown as lost: the gross penalties less anything
-    // forgiven, so this figure always reconciles with the balance.
+    archivedXP: archived, currentEarned: currentGained, currentPenalty: currentLost,
+    historicalPenalty: historical, forgiven, earned,
     penalties: Math.max(0, penalties - forgiven),
     grossPenalties: penalties,
     net: earned - penalties + forgiven,
@@ -296,8 +305,8 @@ export function computeXPBreakdown({ archives, currentSegment, ledger }) {
  * the caller persists. Because the credit is stored and only ever grows, the
  * next XP earned moves the balance rather than disappearing into the gap.
  */
-export function forgivenessShortfall({ archives, currentSegment, ledger }, floor) {
-  const b = computeXPBreakdown({ archives, currentSegment, ledger });
+export function forgivenessShortfall({ archives, currentSegment, ledger, currentEra = 1 }, floor) {
+  const b = computeXPBreakdown({ archives, currentSegment, ledger, currentEra });
   const f = Math.max(0, Number(floor) || 0);
   if (b.net >= f) return 0;
   // Only a PENALTY can be forgiven. Without this bound, a profile holding a
@@ -315,8 +324,8 @@ export function forgivenessShortfall({ archives, currentSegment, ledger }, floor
  * floor is applied separately, in the rank layer, so an unlocked rank is never
  * lost however far this falls.
  */
-export function rawLifetimeWithLedger({ archives, currentSegment, ledger }) {
-  return computeXPBreakdown({ archives, currentSegment, ledger }).net;
+export function rawLifetimeWithLedger({ archives, currentSegment, ledger, currentEra = 1 }) {
+  return computeXPBreakdown({ archives, currentSegment, ledger, currentEra }).net;
 }
 
 /**

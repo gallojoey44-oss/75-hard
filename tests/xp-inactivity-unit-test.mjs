@@ -59,19 +59,26 @@ const LOCK_IN = { templateId: 'lock_in_14_day', name: 'LOCK IN', durationDays: 1
 const FORGE_DAILY = { templateId: 'forge_daily', name: 'Forge Daily', durationDays: null, isBaseline: true };
 
 // ══ 1: the rank floor itself ════════════════════════════════════════════════
-check('1: True Warrior is rank 7 with a 7,500 XP threshold',
-  TRUE_WARRIOR.rank === 7 && TRUE_WARRIOR.minXP === 7500);
-check('1: the floor for True Warrior is 7,500', rankFloorXP(TRUE_WARRIOR.rank) === 7500);
+// The ladder moved to display units with XP economy v2 (thresholds x10), and
+// `rankFloorXP`, `effectiveLifetimeXP` and `rankForXP` all take display units.
+// D() converts the era-1 figures this suite was written around, so the same
+// facts are asserted on the current scale rather than the old one.
+const D = (era1XP) => era1XP * 10;
+
+check('1: True Warrior is rank 7, at the converted threshold',
+  TRUE_WARRIOR.rank === 7 && TRUE_WARRIOR.minXP === D(7500));
+check('1: the floor for True Warrior is the converted threshold',
+  rankFloorXP(TRUE_WARRIOR.rank) === D(7500));
 check('1: the floor clamps UPWARD only — it never reduces a higher balance',
-  effectiveLifetimeXP(8245, TRUE_WARRIOR.rank) === 8245 &&
-  effectiveLifetimeXP(7000, TRUE_WARRIOR.rank) === 7500 &&
-  effectiveLifetimeXP(0, TRUE_WARRIOR.rank) === 7500);
-check('1: at 8,245 the floor is not even engaged — it is 745 XP above it',
-  8245 > 7500 && effectiveLifetimeXP(8245, TRUE_WARRIOR.rank) === 8245);
+  effectiveLifetimeXP(D(8245), TRUE_WARRIOR.rank) === D(8245) &&
+  effectiveLifetimeXP(D(7000), TRUE_WARRIOR.rank) === D(7500) &&
+  effectiveLifetimeXP(0, TRUE_WARRIOR.rank) === D(7500));
+check('1: at 8,245 era-1 XP the floor is not even engaged',
+  D(8245) > D(7500) && effectiveLifetimeXP(D(8245), TRUE_WARRIOR.rank) === D(8245));
 check('1: True Warrior can never be lost, whatever happens to raw XP',
-  [0, 100, 7499].every(xp => resolveRankState({ rawLifetimeXP: xp, highestRank: TRUE_WARRIOR.rank }).current.name === 'True Warrior'));
-check('1: 8,245 raw sits inside the True Warrior band',
-  rankForXP(8245).name === 'True Warrior');
+  [0, 100, D(7499)].every(xp => resolveRankState({ rawLifetimeXP: xp, highestRank: TRUE_WARRIOR.rank }).current.name === 'True Warrior'));
+check('1: 8,245 era-1 XP, converted, sits inside the True Warrior band',
+  rankForXP(D(8245)).name === 'True Warrior');
 
 // ══ 2: penalties DO apply during an active challenge ════════════════════════
 check('2: an untouched PAST day costs the flat 25 XP miss penalty',
@@ -160,8 +167,8 @@ const reportedLifetime = computeLifetimeXP([{ xpEarned: 8245 }], reported.rawTot
 check('7: on Day 1 the current segment is exactly zero',
   reported.rawTotal === 0 && reported.lost === 0, JSON.stringify(reported));
 check('7: Lifetime XP is therefore 8,245, unchanged', reportedLifetime === 8245);
-check('7: and the effective balance is 8,245, above the 7,500 floor',
-  effectiveLifetimeXP(reportedLifetime, TRUE_WARRIOR.rank) === 8245);
+check('7: and the effective balance is that figure, above the floor',
+  effectiveLifetimeXP(D(reportedLifetime), TRUE_WARRIOR.rank) === D(8245));
 check('7: Day 1 of a new challenge cannot be penalised, by design',
   computeDayXP(undefined, CHALLENGE_TASKS, 'me', 1, 1, true, 1).lost === 0);
 
@@ -203,14 +210,14 @@ check('8: computing XP does not mutate the day records it reads',
   })());
 
 // ══ 9: the floor holds even if a segment is deeply negative ═════════════════
-check('9: a True Warrior with a −725 segment still shows 8,245',
-  effectiveLifetimeXP(computeLifetimeXP([{ xpEarned: 8245 }], -725), TRUE_WARRIOR.rank) === 8245);
-check('9: a True Warrior with NO archives at all still shows 7,500',
-  effectiveLifetimeXP(computeLifetimeXP([], -725), TRUE_WARRIOR.rank) === 7500);
+check('9: a True Warrior with a −725 segment still shows the full 8,245',
+  effectiveLifetimeXP(D(computeLifetimeXP([{ xpEarned: 8245 }], -725)), TRUE_WARRIOR.rank) === D(8245));
+check('9: a True Warrior with NO archives at all is still held at the floor',
+  effectiveLifetimeXP(D(computeLifetimeXP([], -725)), TRUE_WARRIOR.rank) === D(7500));
 check('9: the rank itself survives a zero raw balance',
   resolveRankState({ rawLifetimeXP: 0, highestRank: TRUE_WARRIOR.rank }).current.name === 'True Warrior');
 check('9: and the displayed XP is the floor, not zero',
-  resolveRankState({ rawLifetimeXP: 0, highestRank: TRUE_WARRIOR.rank }).xp === 7500);
+  resolveRankState({ rawLifetimeXP: 0, highestRank: TRUE_WARRIOR.rank }).xp === D(7500));
 
 // ══ 10: a latent defect found during the audit ══════════════════════════════
 // buildArchiveEntry caps the archived day count at `meta.durationDays || 75`.

@@ -5,7 +5,7 @@ import {
   METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK,
   applyColdExposureUpgrade, isColdExposureEnabled,
   getDefaultDuration, getDurationLabel, isRecommendedDuration,
-  getCompletionBonusForDuration, getProgramForDuration, getTemplateById,
+  getCompletionBonusForDuration, getProgramForDuration, getTemplateById, difficultyLabel,
 } from '../data/challengeTemplates';
 import { formatDateLong, getTodayStr } from '../utils/dateUtils';
 import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
@@ -56,6 +56,7 @@ const DIFFICULTY_COLOR = {
   'Medium':      '#F59E0B',
   'Medium/Hard': '#F97316',
   'Hard':        '#EF4444',
+  'Elite':       '#DC2626',
   'You decide':  '#8B5CF6',
 };
 
@@ -240,18 +241,24 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
       >
         <span className="challenge-card-emoji">{template.emoji}</span>
         <div className="challenge-card-info">
-          <div className="challenge-card-name">{template.challenge_name}</div>
+          <div className="challenge-card-name">
+            {template.challenge_name}
+            {/* A designed-but-unbuilt challenge says so on the card itself, not
+                only once it is expanded, so the library never reads as a list
+                of things that can all be started. */}
+            {!template.startable && <span className="tpl-soon-chip">Coming Soon</span>}
+          </div>
           <div className="challenge-card-meta">
             {isCustom ? (
               <>
-                Custom · <span style={{ color: DIFFICULTY_COLOR[template.overall_difficulty] }}>Difficulty: {template.overall_difficulty}</span>
+                Custom · <span style={{ color: DIFFICULTY_COLOR[difficultyLabel(template)] }}>Difficulty: {difficultyLabel(template)}</span>
               </>
             ) : (
               <>
                 {durationText(template.duration_options_days)}
                 {' • '}
-                <span style={{ color: DIFFICULTY_COLOR[template.overall_difficulty] }}>
-                  {template.overall_difficulty} Challenge
+                <span style={{ color: DIFFICULTY_COLOR[difficultyLabel(template)] }}>
+                  {difficultyLabel(template)} Challenge
                 </span>
               </>
             )}
@@ -329,8 +336,8 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
 
           <div className="tpl-detail-row">
             <span className="tpl-detail-label">Difficulty</span>
-            <span className="tpl-level-value" style={{ color: DIFFICULTY_COLOR[template.overall_difficulty] }}>
-              {template.overall_difficulty}
+            <span className="tpl-level-value" style={{ color: DIFFICULTY_COLOR[difficultyLabel(template)] }}>
+              {difficultyLabel(template)}
             </span>
             {isActive && activeVariant && (
               <>
@@ -517,7 +524,11 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
             </button>
           )}
           {!isActive && !template.startable && (
-            <div className="tpl-ready-note">Template ready — start flow coming next.</div>
+            <div className="tpl-soon-note">
+              <strong>Coming Soon.</strong> This challenge is designed but not
+              playable yet — its daily habits are not built, so it cannot be
+              started or earn XP.
+            </div>
           )}
         </div>
       )}

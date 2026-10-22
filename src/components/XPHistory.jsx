@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import ChallengeXPBreakdown from './ChallengeXPBreakdown';
 
 /**
  * XP History — the permanent record, kept out of the way.
@@ -43,13 +44,15 @@ export default function XPHistory() {
           {live && (
             <>
               <div className="xph-group">In progress</div>
-              <Period row={live} n={n} fmt={fmt} />
+              <Period row={live} n={n} fmt={fmt} detailId="current" />
             </>
           )}
           {archived.length > 0 && (
             <>
               <div className="xph-group">Completed</div>
-              {[...archived].reverse().map(r => <Period key={r.id} row={r} n={n} fmt={fmt} />)}
+              {[...archived].reverse().map(r => (
+                <Period key={r.id} row={r} n={n} fmt={fmt} detailId={r.id} />
+              ))}
             </>
           )}
 
@@ -84,7 +87,8 @@ export default function XPHistory() {
   );
 }
 
-function Period({ row, n, fmt }) {
+function Period({ row, n, fmt, detailId = null }) {
+  const [open, setOpen] = useState(false);
   const dates = row.startDate
     ? `${fmt(row.startDate)}${row.endDate ? ` – ${fmt(row.endDate)}` : ' – now'}`
     : fmt(row.endDate);
@@ -115,6 +119,12 @@ function Period({ row, n, fmt }) {
           <div className="xph-period-row net">
             <span>{row.archived ? 'Banked' : 'So far'}</span><span>{n(row.banked)} XP</span>
           </div>
+          {detailId && (
+            <button className="xph-detail-toggle" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+              {open ? 'Hide where this XP came from' : 'Where did this XP come from?'}
+            </button>
+          )}
+          {open && detailId && <ChallengeXPBreakdown which={detailId} />}
         </div>
       ) : (
         <div className="xph-period-rows">

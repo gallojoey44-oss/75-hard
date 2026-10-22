@@ -1,3 +1,4 @@
+import { TIER_LABELS } from './xpEconomy';
 import { HABIT_KEYS } from './habitKeys';
 import * as MB from './muscleBuildingConfig';
 import * as HH from './hormoneHealthConfig';
@@ -111,6 +112,21 @@ export function applyColdExposureUpgrade(tasks, enabled) {
 // choices are never forced on challenges that have not opted in.
 
 /** The durations a template offers (always at least one). */
+/**
+ * The difficulty rating shown to the user.
+ *
+ * Derived from `effort_tier`, which is also what sets the challenge's daily XP
+ * budget — so the rating on the card and the rating that governs XP are the
+ * same fact. Templates used to carry a free-text `overall_difficulty` AND a
+ * per-variant `difficulty`, which disagreed: the 75-Day challenge was rated
+ * Hard at template level and 'medium' on its own standard variant.
+ */
+export function difficultyLabel(template, mode = null) {
+  const tier = (mode && template?.effort_tier_by_variant?.[mode])
+    || template?.effort_tier;
+  return TIER_LABELS[tier] || template?.overall_difficulty || 'Medium';
+}
+
 export function getDurationOptions(template) {
   const opts = template?.duration_options_days;
   return Array.isArray(opts) && opts.length ? opts : [];
@@ -195,6 +211,11 @@ export const FORGE_DAILY_META = {
   variant: null,
   durationDays: null, // open-ended, never "completes"
   isBaseline: true,
+  // The baseline is an EASY-tier challenge. Stating it explicitly is what stops
+  // it out-earning real challenges: under era 1 its ad-hoc per-task values plus
+  // flat day bonuses cleared the whole rank ladder in 76 days with no
+  // challenge running at all.
+  effort_tier: 'easy',
 };
 
 export const FORGE_DAILY_TASKS = [
@@ -251,6 +272,7 @@ export function visibleNextGoals(profileId) {
 export const CHALLENGE_TEMPLATES = [
   {
     id: 'sleep_reset_challenge',
+    effort_tier: 'easy',
     overall_difficulty: 'Easy',
     emoji: '😴',
     startable: false,
@@ -273,7 +295,6 @@ export const CHALLENGE_TEMPLATES = [
     inspiration_sources: ['Andrew Huberman', 'Matthew Walker', 'Peter Attia'],
     variants: {
       beginner: {
-        difficulty: 'easy',
         required_daily_tasks: [
           'Get outdoor morning light for 5–10 minutes.',
           'Set a consistent bedtime window.',
@@ -286,7 +307,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       standard: {
-        difficulty: 'medium',
         required_daily_tasks: [
           'Get outdoor morning light for 10 minutes.',
           'Hit your chosen sleep target or give yourself enough sleep opportunity.',
@@ -301,7 +321,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       hard: {
-        difficulty: 'hard',
         required_daily_tasks: [
           'Get outdoor morning light for 10–20 minutes.',
           'Hit your chosen sleep target.',
@@ -320,6 +339,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: 'fat_loss_phase',
+    effort_tier: 'medium',
     overall_difficulty: 'Medium',
     emoji: '⚡',
     startable: true,
@@ -485,7 +505,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     variants: {
       beginner: {
-        difficulty: 'easy',
         expected_results: '1–2 lb body fat loss',
         required_daily_tasks: [
           '⭐⭐⭐ Hit protein goal (0.8–1.0 g per lb of goal body weight) (40 XP).',
@@ -519,7 +538,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       standard: {
-        difficulty: 'medium',
         expected_results: '2–4 lb body fat loss',
         required_daily_tasks: [
           '⭐⭐⭐ Hit protein goal (0.8–1.0 g per lb of goal body weight) (40 XP).',
@@ -559,7 +577,6 @@ export const CHALLENGE_TEMPLATES = [
       // "stay in a 300–600 calorie deficit" task, because a numeric deficit
       // requires exactly the calorie tracking this mode is built to avoid.
       hard: {
-        difficulty: 'hard',
         recommended_duration_days: FLH.HARD_DURATION_DAYS,
         expected_results: 'Typical target: approximately 3–5 lb of body fat over 30 days for an appropriate candidate following the program consistently. Results vary.',
         required_daily_tasks: [
@@ -592,6 +609,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: 'strength_phase',
+    effort_tier: 'medium_hard',
     overall_difficulty: 'Medium/Hard',
     emoji: '💪',
     startable: false,
@@ -614,7 +632,6 @@ export const CHALLENGE_TEMPLATES = [
     inspiration_sources: ['Peter Attia', 'Layne Norton', 'Andrew Huberman'],
     variants: {
       beginner: {
-        difficulty: 'easy',
         required_daily_tasks: [
           'Complete 3 strength sessions per week.',
           'Log workout effort.',
@@ -628,7 +645,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       standard: {
-        difficulty: 'medium',
         required_daily_tasks: [
           'Complete 4 strength sessions per week.',
           'Track reps, weight, or progression.',
@@ -643,7 +659,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       hard: {
-        difficulty: 'hard',
         required_daily_tasks: [
           'Complete 4–5 planned strength sessions per week.',
           'Track progressive overload.',
@@ -663,6 +678,7 @@ export const CHALLENGE_TEMPLATES = [
     // Muscle Building — every field below is derived from muscleBuildingConfig,
     // so the challenge is edited there rather than here.
     id: MB.MUSCLE_BUILDING_TEMPLATE_ID,
+    effort_tier: 'medium_hard',
     overall_difficulty: 'Medium/Hard',
     emoji: MB.IDENTITY.emoji,
     startable: true,
@@ -703,6 +719,8 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: 'mental_training_phase',
+    effort_tier: 'medium',
+    effort_tier_by_variant: { beginner: 'easy', standard: 'medium', hard: 'medium' },
     overall_difficulty: 'Medium',
     emoji: '🧠',
     startable: true,
@@ -752,7 +770,6 @@ export const CHALLENGE_TEMPLATES = [
     inspiration_sources: ['Andrew Huberman', 'Matthew Walker', 'James Clear'],
     variants: {
       beginner: {
-        difficulty: 'easy',
         progression: 'Build the habit.',
         required_daily_tasks: [
           '⭐⭐⭐ Mental Training — 2 minutes (100 XP).',
@@ -775,7 +792,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       standard: {
-        difficulty: 'medium',
         progression: 'Strengthen the habit.',
         required_daily_tasks: [
           '⭐⭐⭐ Mental Training — 5 minutes (100 XP).',
@@ -798,7 +814,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       hard: {
-        difficulty: 'hard',
         progression: 'Optimize the habit.',
         required_daily_tasks: [
           '⭐⭐⭐ Mental Training — 10 minutes (100 XP).',
@@ -826,6 +841,7 @@ export const CHALLENGE_TEMPLATES = [
     // Women's Hormone Health — every field below is derived from
     // hormoneHealthConfig, so the challenge is edited there rather than here.
     id: HH.HORMONE_HEALTH_TEMPLATE_ID,
+    effort_tier: 'medium',
     overall_difficulty: 'Medium',
     emoji: HH.IDENTITY.emoji,
     startable: true,
@@ -868,6 +884,7 @@ export const CHALLENGE_TEMPLATES = [
     // 10-Day Energy Reset — every field below is derived from energyResetConfig,
     // so the challenge is edited there rather than here.
     id: ER.ENERGY_RESET_TEMPLATE_ID,
+    effort_tier: 'medium',
     overall_difficulty: 'Medium',
     emoji: ER.IDENTITY.emoji,
     startable: true,
@@ -908,6 +925,7 @@ export const CHALLENGE_TEMPLATES = [
     // LOCK IN — every field below is derived from lockInConfig, so the
     // challenge is edited there rather than here.
     id: LI.LOCK_IN_TEMPLATE_ID,
+    effort_tier: 'medium_hard',
     overall_difficulty: 'Medium',
     emoji: LI.IDENTITY.emoji,
     startable: true,
@@ -950,6 +968,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: 'recovery_phase',
+    effort_tier: 'easy',
     overall_difficulty: 'Easy',
     emoji: '🔋',
     startable: false,
@@ -972,7 +991,6 @@ export const CHALLENGE_TEMPLATES = [
     inspiration_sources: ['Andrew Huberman', 'Peter Attia', 'Matthew Walker'],
     variants: {
       beginner: {
-        difficulty: 'easy',
         required_daily_tasks: [
           'Complete 10–15 minutes of easy movement.',
           'Complete 5 minutes of stretching or mobility.',
@@ -985,7 +1003,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       standard: {
-        difficulty: 'medium',
         required_daily_tasks: [
           'Complete 20 minutes of easy Zone 2 or walking.',
           'Complete mobility or stretching.',
@@ -999,7 +1016,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       hard: {
-        difficulty: 'hard',
         required_daily_tasks: [
           'Complete 30 minutes of easy movement or Zone 2.',
           'Complete 15–20 minutes of mobility, NSDR, or relaxation.',
@@ -1016,6 +1032,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: '75_day_discipline_challenge',
+    effort_tier: 'hard',
     overall_difficulty: 'Hard',
     emoji: '🔥',
     startable: true,
@@ -1041,7 +1058,6 @@ export const CHALLENGE_TEMPLATES = [
     inspiration_sources: ['Layne Norton', 'James Clear', 'Peter Attia', 'Andrew Huberman'],
     variants: {
       beginner: {
-        difficulty: 'easy',
         required_daily_tasks: [
           'Complete daily movement.',
           'Follow your nutrition goal.',
@@ -1056,7 +1072,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       standard: {
-        difficulty: 'medium',
         required_daily_tasks: [
           'Complete 45-minute workout.',
           'Follow diet / eat clean.',
@@ -1074,7 +1089,6 @@ export const CHALLENGE_TEMPLATES = [
         ],
       },
       hard: {
-        difficulty: 'hard',
         required_daily_tasks: [
           'Complete 45-minute workout.',
           'Complete additional movement or conditioning.',
@@ -1096,6 +1110,7 @@ export const CHALLENGE_TEMPLATES = [
   },
   {
     id: 'custom_challenge_framework',
+    effort_tier: 'medium',
     overall_difficulty: 'You decide',
     emoji: '🎯',
     startable: false,
@@ -1118,7 +1133,6 @@ export const CHALLENGE_TEMPLATES = [
     inspiration_sources: ['User-defined'],
     variants: {
       beginner: {
-        difficulty: 'easy',
         required_daily_tasks: [
           'Track 1 custom daily task.',
           'Log one target metric.',
@@ -1126,7 +1140,6 @@ export const CHALLENGE_TEMPLATES = [
         optional_tasks: [],
       },
       standard: {
-        difficulty: 'medium',
         required_daily_tasks: [
           'Track 2 custom daily tasks.',
           'Log selected metrics.',
@@ -1135,7 +1148,6 @@ export const CHALLENGE_TEMPLATES = [
         optional_tasks: [],
       },
       hard: {
-        difficulty: 'hard',
         required_daily_tasks: [
           'Track 3 custom daily tasks.',
           'Log selected metrics.',

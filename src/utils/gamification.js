@@ -4,6 +4,7 @@ import { readDayMetric, dayHasAnyMetric } from './insightsUtils';
 import { computeWeeklyRequirements } from './weeklyRequirements';
 import { isScheduled } from './challengeSchedule';
 import { LANE, challengeOf, startOf, tasksForLane, recordKeyForLaneDay } from './challengeStack';
+import { dayRules, bonusCapForAttempt, RANKS as ECONOMY_RANKS } from '../data/xpEconomy';
 
 /**
  * The effective required-task list for a specific challenge day. The only
@@ -37,19 +38,17 @@ export function getMWDComplete(dayData) {
 
 // ─── Ranks ──────────────────────────────────────────────────────────────────
 
-// XP thresholds and names are frozen — never change them (rank history and
-// user progression depend on them). `philosophy` is a short identity line shown
-// in the rank-up ceremony and on the XP Ladder.
-export const RANKS = [
-  { rank: 1, name: 'Initiate',      minXP: 0,     desc: 'You began.',                        philosophy: 'You chose to begin.' },
-  { rank: 2, name: 'Apprentice',    minXP: 250,   desc: 'You are learning consistency.',     philosophy: 'You are learning to show up.' },
-  { rank: 3, name: 'Disciplined',   minXP: 750,   desc: 'You keep promises more often.',     philosophy: 'You learned to show up.' },
-  { rank: 4, name: 'Resilient',     minXP: 1500,  desc: 'You return after setbacks.',        philosophy: 'You continue even when motivation disappears.' },
-  { rank: 5, name: 'Warrior',       minXP: 3000,  desc: 'You execute under pressure.',       philosophy: 'You execute under pressure.' },
-  { rank: 6, name: 'Elite Warrior', minXP: 5000,  desc: 'Discipline is becoming identity.',  philosophy: 'You protect your standards.' },
-  { rank: 7, name: 'True Warrior',  minXP: 7500,  desc: 'You act from principle, not mood.', philosophy: 'You act from principle, not mood.' },
-  { rank: 8, name: 'Unbreakable',   minXP: 10000, desc: 'You are hard to derail.',           philosophy: 'Your habits now define you.' },
-];
+/**
+ * The rank ladder, re-exported from `src/data/xpEconomy.js` so every existing
+ * import keeps working while names and thresholds live in one configurable
+ * place.
+ *
+ * Thresholds are no longer frozen — they are data, and changing them is how
+ * Forge rebalances. What IS frozen is the past: a profile's `highestRank` is
+ * permanent, and an archive recomputes under the economy version it ran under,
+ * so moving a threshold can never revoke a rank someone earned.
+ */
+export const RANKS = ECONOMY_RANKS;
 
 // ─── Rank rewards ─────────────────────────────────────────────────────────────
 // Each rank permanently unlocks one cosmetic/achievement. Purely additive and
@@ -211,6 +210,16 @@ export const BADGE_DEFS = [
   { id: 'body_fat_slayer',        emoji: '🗡️', label: 'Body Fat Slayer',     desc: 'Completed the 30-day Fat Loss Challenge.' },
 ];
 
+/**
+ * The era-1 rate card, used whenever a caller does not supply one.
+ *
+ * Every XP function takes a `rules` object and defaults to this, which is what
+ * makes the versioned engine safe to introduce: an existing call site that has
+ * not been updated computes exactly what it computed before, so era-1 archives
+ * and in-progress era-1 attempts cannot shift by a single point.
+ */
+export const ERA1_RULES = dayRules({ xpEconomyVersion: 1 });
+
 // ─── High-value task IDs ─────────────────────────────────────────────────────
 
 export const HIGH_VALUE_TASK_IDS = new Set([
@@ -228,9 +237,17 @@ export const HIGH_VALUE_TASK_IDS = new Set([
 // in reminders. Legacy tasks without these fields fall back to the flat
 // high-value scheme so existing challenges are unaffected.
 
-/** XP a single task is worth when completed. */
-export function getTaskXP(task) {
+/**
+ * XP a single task is worth when completed.
+ *
+ * Era 2 prices every task explicitly when the attempt starts, so the flat
+ * 10/15 fallback is era-1 only. Keeping it alive for era 2 would silently
+ * reintroduce the two-scheme problem the budget model exists to remove: a task
+ * added later without an `xp` would land outside its challenge's budget.
+ */
+export function getTaskXP(task, rules = ERA1_RULES) {
   if (task && typeof task.xp === 'number') return task.xp;
+  if (!rules?.legacyTaskFallback) return 0;
   return HIGH_VALUE_TASK_IDS.has(task?.id) ? 15 : 10;
 }
 
@@ -267,8 +284,11 @@ export function keystoneStars(tier) {
 }
 
 /** XP lost for missing a task (kept modest — the app never punishes harshly). */
-function taskMissPenalty(task) {
-  if (task && typeof task.xp === 'number') return Math.round(Math.min(task.xp * 0.25, 12));
+function taskMissPenalty(task, rules = ERA1_RULES) {
+  const rate = rules.taskMissRate ?? 0.25;
+  const cap = rules.taskMissFlatCap ?? 12;
+  if (task && typeof task.xp === 'number') return Math.round(Math.min(task.xp * rate, cap));
+  if (!rules?.legacyTaskFallback) return 0;
   return HIGH_VALUE_TASK_IDS.has(task?.id) ? 10 : 5;
 }
 
@@ -332,57 +352,63 @@ export function getBonusCount(dayData) {
  * is the uncapped local day number; it defaults to currentDayNum so callers that
  * only track a single "today" still get correct (penalty-free) current-day XP.
  */
-export function computeDayXP(dayData, tasks, profId, dayNum, currentDayNum, penaltiesEnabled, currentRawDay = currentDayNum) {
+export function computeDayXP(dayData, tasks, profId, dayNum, currentDayNum, penaltiesEnabled, currentRawDay = currentDayNum, rules = ERA1_RULES) {
   if (dayNum > currentDayNum) return { gained: 0, lost: 0 };
   const isPast = dayNum < currentRawDay;
 
-  // Entire day missed — only a finalised (past) day incurs the flat penalty.
-  // An untouched current day stays neutral (nothing missed yet).
+  // Entire day missed — only a finalised (past) day incurs the penalty. An
+  // untouched current day stays neutral (nothing missed yet). Era 2 charges a
+  // share of the day's own budget, so the cost is proportionate at every
+  // difficulty instead of a flat 25 that barely registered against a hard day.
   if (!hasAnyActivity(dayData)) {
-    return { gained: 0, lost: (penaltiesEnabled && isPast) ? 25 : 0 };
+    return { gained: 0, lost: (penaltiesEnabled && isPast) ? rules.missedDay : 0 };
   }
 
   let gained = 0;
   let lost   = 0;
   const mwdDone = getMWDComplete(dayData);
   // Penalty multiplier: 0.3× when MWD was completed (user still showed up)
-  const penaltyMult = (mwdDone && penaltiesEnabled) ? 0.3 : 1.0;
+  const penaltyMult = (mwdDone && penaltiesEnabled) ? (rules.recoveryPenaltyMult ?? 0.3) : 1.0;
 
-  // Task XP — per-task weighting when the task carries an xp value, otherwise
-  // the flat high-value scheme. Keystone habits earn significantly more.
-  // Unchecked tasks only cost XP once the day is finalised (isPast).
+  // Task XP. Unchecked tasks only cost XP once the day is finalised (isPast).
   for (const task of tasks) {
     const done = !!dayData.tasks?.[task.id];
     if (done) {
-      gained += getTaskXP(task);
+      gained += getTaskXP(task, rules);
     } else if (penaltiesEnabled && isPast) {
-      lost += Math.round(taskMissPenalty(task) * penaltyMult);
+      lost += Math.round(taskMissPenalty(task, rules) * penaltyMult);
     }
   }
 
-  // All tasks complete bonus (+50)
+  // Every required task complete.
   const tasksDone = tasks.filter(t => dayData.tasks?.[t.id]).length;
-  if (tasks.length > 0 && tasksDone === tasks.length) gained += 50;
+  if (tasks.length > 0 && tasksDone === tasks.length) gained += rules.perfectDay;
 
-  // Mental training section completed (+15, on top of task XP)
-  if (dayData.mentalTraining?.completed) gained += 15;
+  // Mental training section. Era 2 drops this: in a challenge that requires
+  // mental training it paid twice for one action, and in one that does not it
+  // awarded XP for work the challenge never asked for.
+  if (dayData.mentalTraining?.completed) gained += rules.mentalSection;
 
-  // All five ratings logged (+10)
+  // All five ratings logged. Era 2 drops this too — filling in the Daily Log is
+  // already paid as the Daily Log task.
   if ((dayData.mood || 0) > 0 && (dayData.energy || 0) > 0 &&
       (dayData.sleep || 0) > 0 && (dayData.stress || 0) > 0 &&
-      (dayData.recovery || 0) > 0) gained += 10;
+      (dayData.recovery || 0) > 0) gained += rules.allRatings;
 
-  // Faith reflection (+10)
-  if (dayData.faithReflection?.completed) gained += 10;
+  // Faith reflection.
+  if (dayData.faithReflection?.completed) gained += rules.faith;
 
-  // MWD complete (+25)
-  if (mwdDone) gained += 25;
+  // A Minimum Warrior Day. Era 2 treats it as a reduced day rather than a
+  // bonus on top, which is what it is.
+  if (mwdDone) gained += rules.recoveryDay;
 
-  // Bonus Missions (optional) — extra XP that never affects required completion.
-  gained += getBonusXP(dayData);
+  // Bonus Missions (optional) — never affect required completion, and under
+  // era 2 are capped per day so optional XP cannot reorder the difficulty
+  // ranking.
+  gained += Math.min(getBonusXP(dayData), rules.bonusPerDayCap ?? Infinity);
 
-  // Cap per-day loss to 80 XP
-  lost = Math.min(lost, 80);
+  // A day can never cost more than its own ceiling.
+  lost = Math.min(lost, rules.dayLossCap ?? 80);
 
   return { gained, lost };
 }
@@ -402,35 +428,52 @@ const STREAK_MILESTONES = [
  * Each new streak that hits a milestone earns the bonus (can be earned multiple times).
  * Break penalty (-30) fires once per streak break, only if streak was ≥ 3.
  */
-export function computeStreakEvents(allDays, profId, getDayCompletion, dayNum, penaltiesEnabled, currentRawDay = dayNum + 1) {
+export function computeStreakEvents(allDays, profId, getDayCompletion, dayNum, penaltiesEnabled, currentRawDay = dayNum + 1, rules = ERA1_RULES) {
   const profDays = allDays[profId] || {};
   let gained = 0;
   let lost   = 0;
   const events = [];
   let streak   = 0;
   let hitInStreak = new Set();
+  // Era 2 pays a milestone the FIRST time an attempt reaches it and never
+  // again, and caps the attempt's total. Era 1 re-armed the whole ladder on
+  // every new streak, which made deliberately breaking one worth +920 XP.
+  const oncePerAttempt = !!rules.streakOncePerAttempt;
+  const ladder = (rules.streakLadder || []).map(m => ({ days: m.days, bonus: m.xp ?? m.bonus }));
+  const hitInAttempt = new Set();
 
   for (let i = 1; i <= dayNum; i++) {
     const pct = getDayCompletion(i, profId);
     if (pct === 100) {
       streak++;
-      for (const m of STREAK_MILESTONES) {
-        if (streak === m.days && !hitInStreak.has(m.days)) {
+      for (const m of ladder) {
+        const alreadyHit = oncePerAttempt ? hitInAttempt.has(m.days) : hitInStreak.has(m.days);
+        if (streak === m.days && !alreadyHit) {
           gained += m.bonus;
           hitInStreak.add(m.days);
+          hitInAttempt.add(m.days);
           events.push({ day: i, type: 'streak_bonus', xp: m.bonus, label: `${m.days}-day streak bonus` });
         }
       }
     } else {
       // A streak break only costs XP for a finalised (past) day. Today being
       // incomplete does not break — and penalise — a streak before it ends.
-      if (penaltiesEnabled && streak >= 3 && i < currentRawDay) {
-        lost += 30;
-        events.push({ day: i, type: 'streak_break', xp: -30, label: 'Streak broken' });
+      const breakPenalty = rules.streakBreakPenalty ?? 30;
+      if (penaltiesEnabled && breakPenalty > 0 && streak >= 3 && i < currentRawDay) {
+        lost += breakPenalty;
+        events.push({ day: i, type: 'streak_break', xp: -breakPenalty, label: 'Streak broken' });
       }
       streak = 0;
       hitInStreak = new Set();
     }
+  }
+
+  // The per-attempt ceiling is what stops a run of short attempts out-earning
+  // one long attempt of the same total length.
+  const cap = rules.streakCap ?? Infinity;
+  if (gained > cap) {
+    events.push({ day: dayNum, type: 'streak_cap', xp: cap - gained, label: 'Streak bonus cap' });
+    gained = cap;
   }
 
   return { gained, lost, events };
@@ -438,12 +481,13 @@ export function computeStreakEvents(allDays, profId, getDayCompletion, dayNum, p
 
 // ─── Comeback bonuses ────────────────────────────────────────────────────────
 
-function computeComebackXP(profiles, profId, xpStartDay) {
+function computeComebackXP(profiles, profId, xpStartDay, rules = ERA1_RULES) {
+  const cfg = rules.economy?.comeback || { start: 20, complete: 100 };
   let gained = 0;
   for (const cb of (profiles[profId]?.comebackHistory || [])) {
     if (!xpStartDay || (cb.startDay >= xpStartDay)) {
-      gained += 20;             // started
-      if (cb.completed) gained += 100; // finished
+      gained += cfg.start;
+      if (cb.completed) gained += cfg.complete;
     }
   }
   return gained;
@@ -880,6 +924,10 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
   const rawDay         = getDayNumberFromStart(profiles[profId]?.challengeStart) ?? currentDayNum ?? dayNum;
   const meta           = profiles[profId]?.activeChallenge;
   const challengeStart = profiles[profId]?.challengeStart;
+  // The attempt's own rate card. Resolved from the version stamped on the
+  // descriptor, so an era-1 attempt keeps era-1 rates for its whole life and
+  // an archive recomputes under the rules it ran under.
+  const rules          = dayRules(meta);
 
   let totalGained = 0;
   let totalLost   = 0;
@@ -889,7 +937,7 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
   // XP on and after its activation date — never on earlier days.
   for (let i = xpStartDay; i <= dayNum; i++) {
     const dayTasks = requiredTasksForDay(tasks, meta, challengeStart, i);
-    const { gained, lost } = computeDayXP(profDays[i], dayTasks, profId, i, currentDayNum, penaltiesOn, rawDay);
+    const { gained, lost } = computeDayXP(profDays[i], dayTasks, profId, i, currentDayNum, penaltiesOn, rawDay, rules);
     totalGained += gained;
     totalLost   += lost;
   }
@@ -898,13 +946,13 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
   const { gained: sG, lost: sL } = computeStreakEvents(
     allDays, profId,
     (n, p) => (n >= xpStartDay ? getDayCompletion(n, p) : 0),
-    dayNum, penaltiesOn, rawDay
+    dayNum, penaltiesOn, rawDay, rules
   );
   totalGained += sG;
   totalLost   += sL;
 
   // Comeback bonuses
-  totalGained += computeComebackXP(profiles, profId, xpStartDay);
+  totalGained += computeComebackXP(profiles, profId, xpStartDay, rules);
 
   // Weekly Requirements (Fat Loss): every logged session awards its XP, and each
   // shortfall unit costs the standard miss penalty ONCE the week is finalised —
@@ -919,6 +967,19 @@ export function computeTotalXP(allDays, profiles, profId, getDayCompletion, dayN
   });
   totalGained += weeklyXP.sessionXP;
   totalLost += weeklyXP.missedPenalty;
+
+  // Optional Bonus Mission XP is capped per ATTEMPT as well as per day, so a
+  // long challenge cannot accumulate enough optional XP to out-earn a harder
+  // one. Each day was already clamped in computeDayXP; this removes any excess
+  // above the attempt's ceiling.
+  const attemptBonusCap = bonusCapForAttempt(meta);
+  if (Number.isFinite(attemptBonusCap)) {
+    let bonusTotal = 0;
+    for (let i = xpStartDay; i <= dayNum; i++) {
+      bonusTotal += Math.min(getBonusXP(profDays[i]), rules.bonusPerDayCap ?? Infinity);
+    }
+    if (bonusTotal > attemptBonusCap) totalGained -= (bonusTotal - attemptBonusCap);
+  }
 
   // Completion Bonus — awarded ONCE at the final day, and ONLY when the
   // challenge is passed (final Challenge Score ≥ passing score AND keystone

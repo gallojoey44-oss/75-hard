@@ -26,6 +26,9 @@ import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, c
 import { makeDefaultNotifPrefs, migrateAllNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS } from '../utils/gamification';
 import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLedger, isReconciled, capToFloor, forgivenessShortfall, archiveDeficit } from '../utils/xpLedger';
+import { stampAttempt, repriceTasks, archiveEraOf, ledgerDisplayAmount, forgivenDisplayAmount, toDisplayXP } from '../utils/xpAttempt';
+import { reconciledSegmentBreakdown, toDisplay } from '../utils/xpBreakdown';
+import { CURRENT_ECONOMY_VERSION, economyVersionOf, displayScaleFor } from '../data/xpEconomy';
 import { recentGap, shouldShowComeback, missedDayDetail, buildXPHistory } from '../utils/missedDays';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 
@@ -605,8 +608,55 @@ export function migrateProfiles(stored, days = {}) {
     }
   }
 
+  // ── XP economy v2 ────────────────────────────────────────────────────────
+  //
+  // Attempts are stamped with the economy they run under. Two cases:
+  //
+  //   A FINITE attempt in progress keeps era 1 to its end. Changing its rates
+  //   mid-attempt would revalue work already done, so it is left alone and
+  //   stamped explicitly as era 1 — "unstamped" never has to mean "unknown".
+  //
+  //   The OPEN-ENDED baseline (Forge Daily) never completes, so left alone it
+  //   would stay on era-1 rates forever — at ten times the era-2 rate once
+  //   converted, which would undo the whole rebalance. It is migrated by the
+  //   `migrateBaselineEconomy` effect below, which archives its era-1 segment
+  //   first so the XP already earned is banked as a real archive row rather
+  //   than silently repriced.
+  for (const profId of ['me', 'girlfriend']) {
+    const prof = profiles[profId];
+    const meta = prof?.activeChallenge;
+    if (!meta) continue;
+    if (Number(meta.xpEconomyVersion) >= CURRENT_ECONOMY_VERSION) continue;
+
+    if (meta.durationDays != null) {
+      // Finite and already running: pin it to era 1.
+      if (meta.xpEconomyVersion == null) {
+        profiles[profId] = { ...prof, activeChallenge: { ...meta, xpEconomyVersion: 1 } };
+        changed = true;
+      }
+      continue;
+    }
+
+    // The open-ended baseline is handled by a dedicated effect below, which
+    // can archive its era-1 segment properly. Stamping it here would change
+    // its rates before that XP had been banked anywhere.
+  }
+
   if (changed) saveLS('profiles', profiles);
   return profiles;
+}
+
+/**
+ * Re-price an attempt's TEMPLATE tasks onto its daily budget, leaving custom
+ * tasks alone. A user who added their own habit decided what it is worth; the
+ * budget guarantee applies to the challenge Forge defined.
+ */
+function repriceStampedTasks(tasks, meta) {
+  const templateTasks = (tasks || []).filter(t => t?.source !== 'custom');
+  const custom = (tasks || []).filter(t => t?.source === 'custom');
+  const priced = repriceTasks(meta, templateTasks);
+  const byId = new Map(priced.map(t => [t.id, t]));
+  return (tasks || []).map(t => byId.get(t.id) || t);
 }
 
 const DAILY_LOG_METRIC_FIELDS = ['mood', 'confidence', 'sleep', 'energy', 'recovery', 'workoutEffort', 'stress', 'hoursSlept'];
@@ -1269,7 +1319,17 @@ export function AppProvider({ children }) {
     if (newEntries.length) {
       setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), ...newEntries] }));
     }
-    const meta = { ...NEW_ATTEMPT_DEFAULTS, ...options.challenge };
+    // Stamp the attempt with the current XP economy and price its tasks from
+    // the resulting daily budget. Doing this at START is what keeps an attempt
+    // on its own rates for life: the engine reads the stamp, never global
+    // config, so a later rebalance cannot change a running challenge.
+    const stamp = stampAttempt({
+      meta: { ...NEW_ATTEMPT_DEFAULTS, ...options.challenge },
+      tasks: options.tasks,
+      template: getTemplateById(options.challenge.templateId),
+    });
+    const meta = stamp.meta;
+    const stampedTasks = stamp.tasks;
     // A setup-time Cold Exposure Upgrade is required from day one — pin its
     // activation to the challenge start (today) so date-aware grading matches.
 
@@ -1305,7 +1365,7 @@ export function AppProvider({ children }) {
         // duration/upgrades and REPLACES whatever was there. It is never merged
         // with, or defaulted to, the outgoing challenge's list — that list has
         // already been snapshotted into the archive entry above.
-        tasks: options.tasks.map((t, i) => ({ ...t, source: 'template', order: i, challenges: [LANE.PRIMARY] })),
+        tasks: stampedTasks.map((t, i) => ({ ...t, source: 'template', order: i, challenges: [LANE.PRIMARY] })),
         // Bonus Missions are per-challenge: seed from the new challenge (or clear).
         bonusMissions: (options?.bonusMissions || []).map((m, i) => ({ ...m, source: 'template', recurring: true, order: i })),
         xpOffset: 0,
@@ -2423,6 +2483,7 @@ export function AppProvider({ children }) {
       archives: archives[profId] || [],
       currentSegment,
       ledger: profiles[profId]?.xpLedger,
+      currentEra: economyVersionOf(profiles[profId]?.activeChallenge),
     });
   }, [activeProfile, allDays, profiles, archives, getDayCompletion, getDayNumber]);
 
@@ -2471,7 +2532,8 @@ export function AppProvider({ children }) {
         ? computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum)
         : { gained: 0, lost: 0 };
       const short = forgivenessShortfall(
-        { archives: archives[profId] || [], currentSegment, ledger: prof.xpLedger },
+        { archives: archives[profId] || [], currentSegment, ledger: prof.xpLedger,
+          currentEra: economyVersionOf(prof.activeChallenge) },
         floor,
       );
       if (short > 0) {
@@ -2481,7 +2543,10 @@ export function AppProvider({ children }) {
             ...prev[profId],
             xpLedger: {
               ...(prev[profId]?.xpLedger || makeLedger()),
-              forgiven: (prev[profId]?.xpLedger?.forgiven ?? 0) + short,
+              // `short` is already in display units, so the stored credit is
+              // marked as such and never scaled again on read.
+              forgiven: forgivenDisplayAmount(prev[profId]?.xpLedger) + short,
+              forgivenUnits: CURRENT_ECONOMY_VERSION,
             },
           },
         }));
@@ -2489,6 +2554,56 @@ export function AppProvider({ children }) {
       }
     }
   }, [profiles, archives, allDays, getDayNumber, getDayCompletion, setProfiles]);
+
+  // ── XP economy v2: migrating the open-ended baseline ─────────────────────
+  //
+  // Forge Daily never completes, so it has no natural moment to change rates
+  // at. Left on era 1 it would keep earning ten times the era-2 rate once
+  // converted, which would defeat the rebalance; repriced in place it would
+  // revalue days already logged.
+  //
+  // So its era-1 segment is ARCHIVED — the same thing starting a new challenge
+  // does — and a fresh era-2 segment begins today. The XP already earned
+  // becomes a normal archive row, scaled on read like every other era-1
+  // record, and nothing is recomputed under rates it did not run under.
+  //
+  // Runs once per profile. A profile whose baseline is already era 2, or which
+  // has no day records to archive, is skipped, so the effect settles.
+  useEffect(() => {
+    for (const profId of ['me', 'girlfriend']) {
+      const prof = profiles[profId];
+      const meta = prof?.activeChallenge;
+      if (!meta || !prof?.challengeStart) continue;
+      if (meta.durationDays != null) continue;                  // finite: left alone
+      if (economyVersionOf(meta) >= CURRENT_ECONOMY_VERSION) continue;
+      if (isScheduled(prof)) continue;
+
+      const entry = buildArchiveEntry(profId);
+      const stamped = stampAttempt({
+        meta: { ...meta },
+        tasks: prof.tasks || [],
+        template: getTemplateById(meta.templateId),
+      });
+      if (entry) {
+        setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
+      }
+      setProfiles(prev => ({
+        ...prev,
+        [profId]: {
+          ...prev[profId],
+          activeChallenge: stamped.meta,
+          // Only template tasks are repriced: a habit the user added is worth
+          // what they said it was worth.
+          tasks: repriceStampedTasks(prev[profId]?.tasks || [], stamped.meta),
+          challengeStart: getTodayStr(),
+          xpStartDay: 1,
+          xpOffset: 0,
+          xpEconomyMigratedAt: getTodayStr(),
+        },
+      }));
+      return;   // one profile per pass; the next render settles the other
+    }
+  }, [profiles, allDays, buildArchiveEntry, setArchives, setProfiles]);
 
   // ── Missed days: recent notice vs permanent record ───────────────────────
 
@@ -2575,6 +2690,61 @@ export function AppProvider({ children }) {
       floor: rankFloorXP(prof?.highestRank ?? 0),
     };
   }, [activeProfile, profiles, archives, allDays, getDayNumber, getDayCompletion, getCurrentMissedDays, getXPBreakdown]);
+
+  /**
+   * Where one challenge's XP came from — daily tasks, perfect days, streaks,
+   * weekly sessions, optional missions and each deduction.
+   *
+   * `which` is an archive id, or 'current' for the live attempt. Figures come
+   * back in DISPLAY units, computed under the segment's OWN era, so an era-1
+   * period is explained by era-1 rules and then converted.
+   */
+  const getChallengeXPBreakdown = useCallback((which = 'current', profId = activeProfile) => {
+    const prof = profiles[profId];
+    if (which === 'current') {
+      const dayNum = getDayNumber(profId);
+      if (!prof?.activeChallenge || !prof?.challengeStart || !dayNum) return null;
+      const parts = reconciledSegmentBreakdown({
+        days: allDays[profId] || {},
+        tasks: prof.tasks || [],
+        meta: prof.activeChallenge,
+        challengeStart: prof.challengeStart,
+        dayNum,
+        rawDay: getRawDayNumber(profId),
+        penaltiesEnabled: prof.xpPenalties !== false,
+        xpStartDay: prof.xpStartDay ?? 1,
+        weeklySessions: prof.weeklySessions || [],
+        comebackHistory: prof.comebackHistory || [],
+        getDayCompletion: (n) => getDayCompletion(n, profId),
+      });
+      return { ...toDisplay(parts), name: prof.activeChallenge.name || 'Current challenge',
+        startDate: prof.challengeStart, endDate: null, archived: false };
+    }
+    const entry = (archives[profId] || []).find(a => a.id === which);
+    if (!entry || !entry.days || !entry.endDayNum) return null;
+    const tasks = entry.tasks || [];
+    const completion = (n) => {
+      const d = (entry.days || {})[n];
+      if (!d || !tasks.length) return 0;
+      return Math.round((tasks.filter(t => d.tasks?.[t.id]).length / tasks.length) * 100);
+    };
+    const parts = reconciledSegmentBreakdown({
+      days: entry.days,
+      tasks,
+      meta: entry.challenge,
+      challengeStart: entry.challengeStart,
+      dayNum: entry.endDayNum,
+      rawDay: entry.endDayNum,
+      penaltiesEnabled: true,
+      xpStartDay: entry.xpStartDay ?? 1,
+      weeklySessions: entry.weeklySessions || [],
+      comebackHistory: entry.comebackHistory || [],
+      getDayCompletion: completion,
+    });
+    return { ...toDisplay(parts), name: entry.challenge?.name || 'Challenge',
+      startDate: entry.challengeStart, endDate: entry.endDate || entry.archivedAt,
+      archived: true, banked: toDisplayXP(entry.xpEarned, archiveEraOf(entry)) };
+  }, [activeProfile, profiles, archives, allDays, getDayNumber, getRawDayNumber, getDayCompletion]);
 
   // ── One-time historical reconciliation ────────────────────────────────────
   //
@@ -2847,6 +3017,7 @@ export function AppProvider({ children }) {
       getRankState, getRawLifetimeXP, getRankFloorXP, clearPendingRankUp,
       getXPBreakdown, previewXPReconciliation, applyXPReconciliation, undoXPReconciliation,
       getComeback, dismissComebackNotice, getCurrentMissedDays, getXPHistory,
+      getChallengeXPBreakdown,
       MENTAL_OPTIONS,
       // Quote
       quoteData,

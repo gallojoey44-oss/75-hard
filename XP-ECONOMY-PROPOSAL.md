@@ -380,8 +380,15 @@ allocation).
 | **200** | | **= budget** |
 
 Perfect day 230 · missed day −100 (43%) · completion 3,000 · perfect attempt **21,000**.
-**One canonical task list replaces both profile defaults**, so 75 Hard is worth
-the same to everyone.
+
+**On the two profile task lists.** Revision 2 said a single canonical list would
+replace both profile defaults. Implementation went a different way, and better:
+the lists stay as they are — one profile tracks 7 habits, the other 13, and they
+genuinely track different things — but **both divide the same 200 budget**, so a
+perfect day is worth 230 to each and an attempt banks 21,000 for each
+(5 assertions, §16 of `xp-economy-unit-test.mjs`). The inequity is fixed without
+removing habits anyone is tracking. The per-task values differ between the two,
+which is simply what dividing one budget across different habits means.
 
 ### 7.2 LOCK IN — medium_hard / standard — 180/day
 
@@ -465,7 +472,7 @@ Perfect day 138 · missed day −60 · no completion bonus (open-ended).
 |---|---|---|---|
 | Streak-break farming (**+920 XP** to skip a day) | milestones award **once per attempt per milestone**, tracked on the attempt; break penalty removed | §8.2 |
 | Short-challenge restarts | completion *and* streak XP are linear in duration | §8.2 |
-| Profile task-count disparity (+29%) | one canonical 75 Hard task list; budget model makes count irrelevant | §7.1 |
+| Profile task-count disparity (+29%) | both profiles' lists divide one budget, so count is irrelevant | §7.1, §16 |
 | Beginner = Standard | multiplier applies to the budget | §7.4 |
 | Uncapped Bonus Missions (105/day) | per-day `0.10 × budget`, per-attempt `0.05 × budget × duration` | §5.2 |
 | Uncapped weekly session XP | weekly budget `0.50 × budget` per week | §7.4 |
@@ -684,10 +691,15 @@ starts · the −649 at its original value · both profiles.
 Things I found that are *not* addressed by this proposal and need a separate
 decision:
 
-1. **Fat Loss hard mode advertises five weekly requirements** (resistance ×3,
-   Zone 2 ×2, interval ×1, waist ×1, review ×1) but `weeklyRequirementDefs`
-   only implements lifting and Zone 2 equivalents. The other three are shown to
-   the user and never tracked or paid.
+1. ~~**Fat Loss hard mode advertises five weekly requirements but only
+   implements two.**~~ **This finding was wrong.** I read the legacy module
+   constant `WEEKLY_REQUIREMENT_DEFS` (which has two entries, used by Fat Loss
+   beginner and standard) rather than `fatLossHardConfig.weeklyRequirementDefs()`,
+   which Hard mode attaches to the attempt and which declares all five. Verified
+   in the implementation: all five are declared, resolved by the engine, priced,
+   shown in the week's requirement list with log buttons, paid when logged and
+   charged when missed (7 assertions, §14 of `xp-economy-unit-test.mjs`).
+   Nothing needed fixing.
 2. **75 Hard's template rating contradicts its own standard variant**
    (`overall_difficulty: 'Hard'` vs `variants.standard.difficulty: 'medium'`).
    Per-variant tiers (§4) resolve this, but the duplicated field should go.
@@ -761,3 +773,135 @@ Unbreakable — and the production app stays working throughout.
 | Rank behaviour past the cap | 18 assertions against the live `resolveRankState` |
 
 Regenerate everything: `tools/xp-audit/revised.mjs` (see `tools/xp-audit/README.md`).
+
+---
+
+## 14. Implementation status (revision 3)
+
+**Implemented on `claude/challenge-archive-data-pi5lah`. Not deployed to
+production — awaiting your approval of the figures below.**
+
+### 14.1 What was built
+
+| Piece | File |
+|---|---|
+| Versioned economy: tiers, modes, rates, ladder, caps, penalties, ranks | `src/data/xpEconomy.js` (new) |
+| Attempt stamping, task pricing, the reversible display conversion | `src/utils/xpAttempt.js` (new) |
+| Per-challenge breakdown that reconciles with the engine | `src/utils/xpBreakdown.js` (new) |
+| The breakdown UI, reachable from each XP History period | `src/components/ChallengeXPBreakdown.jsx` (new) |
+| Era-aware day XP, streaks, task fallback, penalties | `src/utils/gamification.js` |
+| Era-aware weekly shortfall charge | `src/utils/weeklyRequirements.js` |
+| Era-scaled lifetime XP, ledger and forgiveness units | `src/utils/xpLedger.js` |
+| Stamping at challenge start, the two migrations, breakdown accessor | `src/context/AppContext.jsx` |
+| Per-variant tiers, derived difficulty label, baseline tier | `src/data/challengeTemplates.js` |
+| Derived difficulty display, Coming Soon marking | `src/components/ChallengesView.jsx` |
+
+Ranks, tiers, mode multipliers, every rate and every cap are in one module and
+are data. A future rebalance is `version: 3` plus a table entry.
+
+### 14.2 Benchmark, measured through the shipped engine
+
+```
+one perfect 75-day attempt          21,000
+365 days (4 cycles + 65 days)       99,500      272.6 XP/day
+Unbreakable (100,000) on            DAY 367
+```
+
+| Rank | XP | Day |
+|---|---|---|
+| Apprentice | 2,500 | 10 |
+| Disciplined | 7,500 | 28 |
+| Resilient | 15,000 | 56 |
+| Warrior | 30,000 | 111 |
+| Elite Warrior | 50,000 | 184 |
+| True Warrior | 75,000 | 276 |
+| **Unbreakable** | **100,000** | **367** |
+
+One attempt is now 21% of the ladder, against 153% before.
+
+### 14.3 Anti-farm, measured
+
+| Check | Era 1 | Era 2 (shipped) |
+|---|---|---|
+| Skipping day 31 of a 62-day run | **+920 XP** | **−580 XP** |
+| 7-day restarts over 90 days | — | 22,430 XP |
+| 14-day restarts over 90 days | — | 22,430 XP |
+| 30-day restarts over 90 days | — | 22,680 XP |
+| One 90-day attempt | — | **22,680 XP** |
+
+Breaking a streak now costs; restarting short challenges earns slightly less
+than holding one long attempt, never more.
+
+### 14.4 Difficulty ordering, measured
+
+Days to Unbreakable at full adherence, every XP source included (optional
+missions at their cap, weekly sessions fully logged):
+
+| Configuration | Day |
+|---|---|
+| 75 Hard — hard mode | **328** |
+| Muscle Building — hard | 339 |
+| **75 Hard — standard** | **354** |
+| LOCK IN — hard | 356 |
+| LOCK IN — standard | 398 |
+| Mental Training — hard | 414 |
+| Fat Loss — standard | 424 |
+| Mental Training — standard | 447 |
+| Forge Daily alone | **713** |
+
+75 Hard is the fastest route in the app. Mental Training, which reached the top
+rank on **day 20** under era 1, is now mid-pack. Forge Daily alone yields
+51,220 XP over a perfect year — Elite Warrior, not Unbreakable.
+
+### 14.5 Long-term simulations (requirement 9)
+
+| Scenario | 30d | 90d | 180d | 365d | →Unbreakable |
+|---|---|---|---|---|---|
+| 75 Hard, perfect | 7,200 | 24,600 | 49,200 | 99,500 | **367** |
+| 75 Hard, 90% adherence | 6,080 | 21,200 | 42,100 | 85,080 | 430 |
+| Mental Training standard | 6,640 | 19,940 | 39,910 | 81,720 | 447 |
+| Mental Training hard | 7,180 | 21,560 | 43,150 | 88,365 | 414 |
+| Fat Loss standard 30d | 7,092 | 21,276 | 42,552 | 86,122 | 424 |
+| LOCK IN standard 14d | 7,470 | 22,430 | 44,890 | 91,935 | 398 |
+| LOCK IN hard 14d | 8,048 | 24,164 | 48,358 | 99,049 | 369 |
+| LOCK IN standard 90d | 6,510 | 22,680 | 45,360 | 91,775 | 398 |
+| Inconsistent, 70% adherence | 3,330 | 9,990 | 19,980 | 40,698 | 897 |
+| Forge Daily only | 4,440 | 13,270 | 25,690 | 51,220 | 713 |
+
+Consistency matters: dropping from perfect to 90% adherence costs 63 days;
+70% adherence costs 530.
+
+### 14.6 Migration, verified in the app
+
+| Case | Behaviour |
+|---|---|
+| Legacy profile loads | 8,245 displays as **82,450**, True Warrior kept, archive still stores 8,245 |
+| XP to next rank | 17,550 on the converted ladder |
+| Finite era-1 attempt in progress | pinned to era 1; task XP, budget and completion bonus untouched |
+| Open-ended baseline | era-1 segment **archived**, fresh era-2 segment at easy/120; earned XP survives |
+| Reload | does not archive the segment twice |
+| Second profile | migrates independently, keeps its own rank and archives |
+| Reconciliation | still opt-in; charges **6,490** (the converted −649), balance 82,450 → **75,960**, rank kept, archives never rewritten |
+
+The conversion is reversible: stored values are untouched and scaling happens
+at read time, so removing the scale table restores the previous display exactly.
+
+### 14.7 Tests
+
+| Suite | Assertions |
+|---|---|
+| `xp-economy-unit-test.mjs` | **102** — era-1 fidelity, budget exactness across 120 tier/mode/count combinations, ordering, stamping, era isolation under a live rebalance, era-2 day XP, streak and restart farming, duration neutrality, ×10 exactness through floors and forgiveness, mixed-era lifetime XP, the benchmark, XP past the top rank, weekly budgets, optional caps, Fat Loss Hard's five weekly requirements, Daily Log consistency |
+| `xp-breakdown-unit-test.mjs` | **33** — the breakdown reconciles with the engine in 9 adherence shapes, attribution by source, deductions split by kind, era-1 segments under era-1 rules, weekly requirements |
+| `xp-economy-e2e-test.mjs` | **38** — legacy conversion, in-progress era-1 attempt, baseline migration and idempotence, era-2 attempt untouched, the breakdown UI adding up, dual-profile isolation, opt-in reconciliation end to end |
+
+### 14.8 Corrections to earlier revisions
+
+- **§12.1 was wrong.** Fat Loss Hard's five weekly requirements *are* all
+  tracked, priced, shown with log buttons, paid and charged. I had read the
+  legacy module constant instead of the per-attempt defs. Pinned by 7
+  assertions; nothing needed fixing.
+- Two implementation bugs the tests caught: the Forge Daily baseline resolved
+  to `medium`/160 instead of `easy`/120 because it is not a registry template
+  and `getTemplateById` returns nothing for it; and the breakdown charged one
+  missed day the balance never charged, because it trusted a caller-supplied
+  `rawDay` while the engine derives that boundary from `challengeStart`.

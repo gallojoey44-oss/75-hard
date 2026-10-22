@@ -211,7 +211,11 @@ function WhereDidILose({ open, onToggle, applied, pending, excluded }) {
 }
 
 function Period({ s, fmt }) {
-  const n = (x) => Math.round(Math.abs(Number(x) || 0)).toLocaleString();
+  // A segment's figures are in the units its archive STORED. The totals above
+  // are in display units, so these are converted by the segment's own era —
+  // otherwise this breakdown would show -649 beside a headline of -6,490.
+  const scale = s.scale || 1;
+  const n = (x) => Math.round(Math.abs((Number(x) || 0) * scale)).toLocaleString();
   return (
     <div className="xpr-period">
       <div className="xpr-period-head">

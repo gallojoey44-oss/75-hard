@@ -1,4 +1,5 @@
 import { dayNumberForDate, getDateForDayNumber } from './dateUtils';
+import { dayRules } from '../data/xpEconomy';
 
 /**
  * Weekly Requirements — required challenge activities tracked per CHALLENGE WEEK
@@ -143,6 +144,9 @@ export function sessionsInWeek(sessions, type, week, challengeStart) {
  * }}
  */
 export function computeWeeklyRequirements({ sessions, meta, challengeStart, currentRawDay, penaltiesEnabled = false }) {
+  const rules = dayRules(meta);
+  const missRate = rules.taskMissRate ?? 0.25;
+  const missCap = rules.taskMissFlatCap ?? 12;
   const defs = getWeeklyRequirementDefs(meta);
   if (!defs.length || !challengeStart || !currentRawDay) {
     return { supported: false, weeks: [], current: null, earnedXP: 0, availableXP: 0, missedUnits: 0, missedPenalty: 0, totals: {}, sessionXP: 0 };
@@ -172,7 +176,10 @@ export function computeWeeklyRequirements({ sessions, meta, challengeStart, curr
         earnedXP += credited * def.xp;
         const missed = Math.max(0, target - done);
         missedUnits += missed;
-        if (penaltiesEnabled) missedPenalty += missed * Math.round(Math.min(def.xp * 0.25, 12));
+        // Era 2 drops the flat 12-XP ceiling: the shortfall costs a quarter of
+        // what the session was worth, which keeps it proportionate to the
+        // weekly budget the session was priced from.
+        if (penaltiesEnabled) missedPenalty += missed * Math.round(Math.min(def.xp * missRate, missCap));
         totals[def.id].required += target;
         totals[def.id].done += credited;
       } else if (tracked && isCurrent) {
