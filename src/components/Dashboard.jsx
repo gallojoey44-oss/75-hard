@@ -434,7 +434,7 @@ function XPWidget({ rankInfo, challengeXP, todayXP, onToggleDetails, showDetails
       </div>
       {rankInfo.floored && (
         <div className="xp-floor-row">
-          🔒 {rankInfo.current.name} is permanently unlocked — your Lifetime XP cannot fall below {rankInfo.floorXP.toLocaleString()}.
+          🔒 {rankInfo.current.name} is permanently unlocked — your XP cannot fall below {rankInfo.floorXP.toLocaleString()}.
         </div>
       )}
       {(todayXP.gained > 0 || todayXP.lost > 0) && (
@@ -460,7 +460,7 @@ function RankLadderCard({ rankInfo, rankHistory = [], highestRank = 0 }) {
           <span className="rank-ladder-summary-value">{rankInfo.current.name}</span>
         </div>
         <div className="rank-ladder-summary-row">
-          <span className="rank-ladder-summary-label">Lifetime XP</span>
+          <span className="rank-ladder-summary-label">Current XP</span>
           <span className="rank-ladder-summary-value">{rankInfo.xp.toLocaleString()}</span>
         </div>
         {rankInfo.next ? (
@@ -565,48 +565,25 @@ function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, t
             <span className="rank-detail-value">{rankInfo.next.name}</span>
           </div>
         )}
-        <div className="rank-detail-row">
-          <span className="rank-detail-label">Lifetime XP</span>
-          <span className="rank-detail-value">{rankInfo.xp.toLocaleString()}</span>
+        {/* Current XP leads and is the prominent figure: it is the number
+            that moves, that ranks are measured against, and the one people
+            actually mean when they ask how much XP they have. */}
+        <div className="rank-detail-row primary">
+          <span className="rank-detail-label">Current XP</span>
+          <span className="rank-detail-value big">{rankInfo.xp.toLocaleString()}</span>
         </div>
-
-        {/* Earned and deducted, shown separately. XP represents ongoing
-            discipline, so a deduction is not a correction to hide — it is the
-            rule working, and it has to be legible. */}
         {breakdown && (
           <>
-            <div className="rank-detail-row sub">
-              <span className="rank-detail-label">— Earned</span>
-              <span className="rank-detail-value earned">+{breakdown.earned.toLocaleString()}</span>
+            <div className="rank-detail-row">
+              <span className="rank-detail-label">Total XP Earned</span>
+              <span className="rank-detail-value earned">{breakdown.earned.toLocaleString()}</span>
             </div>
-            {breakdown.penalties > 0 && (
-              <div className="rank-detail-row sub">
-                <span className="rank-detail-label">— Inactivity deductions</span>
-                <span className="rank-detail-value deducted">−{breakdown.penalties.toLocaleString()}</span>
-              </div>
-            )}
-            {breakdown.historicalPenalty > 0 && (
-              <div className="rank-detail-row sub2">
-                <span className="rank-detail-label">of which historical</span>
-                <span className="rank-detail-value">−{breakdown.historicalPenalty.toLocaleString()}</span>
-              </div>
-            )}
-            {breakdown.currentPenalty > 0 && (
-              <div className="rank-detail-row sub2">
-                <span className="rank-detail-label">of which this challenge</span>
-                <span className="rank-detail-value">−{breakdown.currentPenalty.toLocaleString()}</span>
-              </div>
-            )}
-            {/* When the floor is holding the displayed figure up, say so —
-                otherwise the arithmetic above looks wrong. */}
-            {breakdown.net < rankInfo.xp && (
-              <div className="rank-detail-row sub2">
-                <span className="rank-detail-label">held at your {rankInfo.current.name} floor</span>
-                <span className="rank-detail-value floored">
-                  {breakdown.net.toLocaleString()} → {rankInfo.xp.toLocaleString()}
-                </span>
-              </div>
-            )}
+            <div className="rank-detail-row">
+              <span className="rank-detail-label">XP Lost from Missed Days</span>
+              <span className="rank-detail-value deducted">
+                {breakdown.penalties > 0 ? `−${breakdown.penalties.toLocaleString()}` : '0'}
+              </span>
+            </div>
           </>
         )}
         <div className="rank-detail-row">
@@ -621,7 +598,7 @@ function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, t
         )}
         {rankInfo.next && (
           <div className="rank-detail-row">
-            <span className="rank-detail-label">XP to Next</span>
+            <span className="rank-detail-label">XP Until Next Rank</span>
             <span className="rank-detail-value">{rankInfo.xpToNext.toLocaleString()}</span>
           </div>
         )}
@@ -640,6 +617,10 @@ function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, t
           </div>
         )}
       </div>
+      <p className="rank-details-note">
+        Your rank and achievements are permanent. If your Current XP goes down, you keep
+        everything you have already unlocked.
+      </p>
     </div>
   );
 }

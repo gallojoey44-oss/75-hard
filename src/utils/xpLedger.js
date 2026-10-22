@@ -99,8 +99,10 @@ export function archiveDeficit(entry) {
     id: entry?.id || null,
     name: entry?.challenge?.name || 'Challenge',
     endDate: entry?.endDate || entry?.archivedAt || null,
+    startDate: entry?.challengeStart || null,
+    days: entry?.endDayNum || 0,
     stored: Math.max(0, Number(entry?.xpEarned) || 0),
-    gained: 0, lost: 0, discarded: 0, verified: false, reason: null,
+    gained: 0, lost: 0, missedDays: 0, discarded: 0, verified: false, reason: null,
   };
   if (!entry || !entry.days || !entry.endDayNum) {
     return { ...base, reason: 'no day records stored' };
@@ -134,13 +136,22 @@ export function archiveDeficit(entry) {
   }
 
   const discarded = Math.max(0, withPenalties.lost - withPenalties.gained);
+  // Days inside the segment with no activity recorded — what "missed days"
+  // means to a user, as opposed to an XP figure.
+  let missedDays = 0;
+  for (let i = (entry.xpStartDay ?? 1); i <= entry.endDayNum; i++) {
+    const d = (entry.days || {})[i];
+    const any = d && (Object.values(d.tasks || {}).some(Boolean) || (d.notes || '').trim());
+    if (!any) missedDays++;
+  }
   return {
     ...base,
     gained: withPenalties.gained,
     lost: withPenalties.lost,
+    missedDays,
     discarded,
     verified: true,
-    reason: discarded > 0 ? null : 'nothing was clipped — penalties already applied',
+    reason: discarded > 0 ? null : 'already counted',
   };
 }
 
@@ -167,19 +178,48 @@ export function previewReconciliation(archiveList) {
 }
 
 /**
+ * How much of an uncounted total can actually be charged.
+ *
+ * A rank's XP floor is a PROTECTED BALANCE, not a display trick. Charging more
+ * than the XP a profile holds above its floor would leave an invisible debt:
+ * the balance would show the floor, and the next 20 XP earned would silently
+ * go to paying it off instead of moving the number. So the excess is forgiven
+ * outright, here, at the moment the charge is fixed.
+ *
+ * Returns { total, applied, forgiven, headroom }.
+ */
+export function capToFloor(total, lifetimeBefore, floor) {
+  const want = Math.max(0, Number(total) || 0);
+  const headroom = Math.max(0, (Number(lifetimeBefore) || 0) - (Number(floor) || 0));
+  const applied = Math.min(want, headroom);
+  return { total: want, applied, forgiven: want - applied, headroom };
+}
+
+/**
  * The applied ledger entry for a reconciliation, including enough information
  * to show it later and to undo it.
+ *
+ * `amount` is what is actually deducted — already capped to the floor, so the
+ * balance it produces is real and the next XP earned moves it immediately.
+ * `uncounted` keeps the full figure that was found, and `forgiven` the part
+ * written off, so the screen can show both without recomputing.
  */
-export function buildReconciliation(preview, lifetimeBefore) {
+export function buildReconciliation(preview, lifetimeBefore, floor, forgivenBefore = 0) {
+  const cap = capToFloor(preview.amount, lifetimeBefore, floor);
   return {
     at: new Date().toISOString(),
     version: LEDGER_VERSION,
-    amount: preview.amount,
+    amount: cap.applied,
+    uncounted: cap.total,
+    forgiven: cap.forgiven,
+    floor,
     lifetimeBefore,
+    forgivenBefore,
     archiveCount: preview.archiveCount,
     unverifiedCount: preview.unverifiedCount,
     segments: preview.charged.map(s => ({
-      id: s.id, name: s.name, endDate: s.endDate, discarded: s.discarded,
+      id: s.id, name: s.name, endDate: s.endDate, startDate: s.startDate,
+      missedDays: s.missedDays, gained: s.gained, lost: s.lost, discarded: s.discarded,
     })),
   };
 }
@@ -201,6 +241,10 @@ export function computeXPBreakdown({ archives, currentSegment, ledger }) {
   const currentGained = Math.max(0, Number(currentSegment?.gained) || 0);
   const currentLost = Math.max(0, Number(currentSegment?.lost) || 0);
   const historical = ledgerPenalty(ledger);
+  // Penalties already written off because they would have pushed the balance
+  // below a protected floor. Monotonic and persisted, so XP earned afterwards
+  // raises the balance immediately instead of quietly paying down a debt.
+  const forgiven = Math.max(0, Number(ledger?.forgiven) || 0);
 
   const earned = archived + currentGained;
   const penalties = historical + currentLost;
@@ -209,10 +253,34 @@ export function computeXPBreakdown({ archives, currentSegment, ledger }) {
     currentEarned: currentGained,
     currentPenalty: currentLost,
     historicalPenalty: historical,
+    forgiven,
     earned,
-    penalties,
-    net: earned - penalties,
+    // What the user is shown as lost: the gross penalties less anything
+    // forgiven, so this figure always reconciles with the balance.
+    penalties: Math.max(0, penalties - forgiven),
+    grossPenalties: penalties,
+    net: earned - penalties + forgiven,
   };
+}
+
+/**
+ * How much more must be forgiven for the floor to be a real balance.
+ *
+ * Called whenever XP is evaluated. It returns 0 almost always; when a live
+ * deficit has pushed the net below the floor it returns the shortfall, which
+ * the caller persists. Because the credit is stored and only ever grows, the
+ * next XP earned moves the balance rather than disappearing into the gap.
+ */
+export function forgivenessShortfall({ archives, currentSegment, ledger }, floor) {
+  const b = computeXPBreakdown({ archives, currentSegment, ledger });
+  const f = Math.max(0, Number(floor) || 0);
+  if (b.net >= f) return 0;
+  // Only a PENALTY can be forgiven. Without this bound, a profile holding a
+  // rank but little earned XP — a fresh profile, or one whose history was
+  // cleared — would be credited the whole distance to its floor and then earn
+  // XP on top of it. Forgiveness cancels a charge; it never grants XP.
+  const forgivable = Math.max(0, b.grossPenalties - b.forgiven);
+  return Math.min(f - b.net, forgivable);
 }
 
 /**

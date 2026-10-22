@@ -18,6 +18,7 @@
 import {
   makeLedger, isReconciled, ledgerPenalty, archiveDeficit, previewReconciliation,
   buildReconciliation, computeXPBreakdown, rawLifetimeWithLedger, LEDGER_VERSION,
+  capToFloor, forgivenessShortfall,
 } from '../src/utils/xpLedger.js';
 import { computeTotalXP, computeLifetimeXP, RANKS } from '../src/utils/gamification.js';
 import { effectiveLifetimeXP, rankFloorXP, resolveRankState } from '../src/utils/rank.js';
@@ -317,6 +318,137 @@ check('14: a 100-day Forge Daily run archives all 100 days of earned XP',
     const full = computeTotalXP({ p: days }, profiles, 'p', () => 100, 100, 100);
     return full.gained > capped.gained;
   })(), 'uncapped banks more than the old 75-day cut-off');
+
+
+// ══ 15: THE FLOOR IS A REAL BALANCE, NOT A MASK ════════════════════════════
+// If the penalties found exceed the XP held above the floor, the excess is
+// written off at the moment the charge is fixed. Otherwise the balance would
+// read as the floor while the gap quietly swallowed the next XP earned.
+{
+  const FLOOR = 7500;
+  const archivesN = [{ xpEarned: 8285 }];
+  const before = 8260;          // 8,285 earned less 25 already-counted penalties
+  const found = 1136;           // uncounted missed days
+
+  const cap = capToFloor(found, before, FLOOR);
+  check('15: only the XP above the floor can be charged',
+    cap.applied === 760, `applied ${cap.applied}`);
+  check('15: the excess is written off, not deferred',
+    cap.forgiven === found - 760 && cap.total === found, `forgiven ${cap.forgiven}`);
+  check('15: the headroom is the distance to the floor', cap.headroom === 760);
+  check('15: a charge that fits is applied in full',
+    capToFloor(300, before, FLOOR).applied === 300 && capToFloor(300, before, FLOOR).forgiven === 0);
+  check('15: a profile already at its floor is charged nothing at all',
+    capToFloor(500, FLOOR, FLOOR).applied === 0 && capToFloor(500, FLOOR, FLOOR).forgiven === 500);
+  check('15: a profile below its floor is charged nothing',
+    capToFloor(500, 7000, FLOOR).applied === 0);
+
+  const entry = buildReconciliation({ amount: found, archiveCount: 1, unverifiedCount: 0, charged: [] }, before, FLOOR, 0);
+  check('15: the ledger stores the CAPPED amount, so the balance is real',
+    entry.amount === 760 && entry.uncounted === found && entry.forgiven === found - 760);
+
+  const ledgerN = { version: LEDGER_VERSION, reconciled: entry };
+  const at = (gained) => computeXPBreakdown({
+    archives: archivesN, currentSegment: { gained, lost: 25 }, ledger: ledgerN,
+  }).net;
+  check('15: after applying, the balance is exactly the floor', at(0) === FLOOR, `${at(0)}`);
+  check('15: EARNING 20 XP RAISES IT TO 7,520 IMMEDIATELY — no hidden debt',
+    at(20) === FLOOR + 20, `${at(20)}`);
+  check('15: earning 200 XP raises it to 7,700', at(200) === FLOOR + 200, `${at(200)}`);
+  check('15: every subsequent XP earned moves the balance one for one',
+    [1, 5, 50, 500].every(x => at(x) === FLOOR + x));
+  check('15: the displayed figure never dips below the floor',
+    [0, 20, 200].every(x => effectiveLifetimeXP(at(x), TRUE_WARRIOR.rank) >= FLOOR));
+  check('15: and the rank is untouched throughout',
+    [0, 20, 200].every(x =>
+      resolveRankState({ rawLifetimeXP: at(x), highestRank: TRUE_WARRIOR.rank }).current.name === 'True Warrior'));
+
+  // The regression this replaces: storing the UNCAPPED figure left a debt.
+  const buggy = { version: LEDGER_VERSION, reconciled: { amount: found } };
+  const buggyAt = (gained) => effectiveLifetimeXP(computeXPBreakdown({
+    archives: archivesN, currentSegment: { gained, lost: 25 }, ledger: buggy,
+  }).net, TRUE_WARRIOR.rank);
+  check('15: (regression) the uncapped version swallowed 200 XP of earnings',
+    buggyAt(0) === FLOOR && buggyAt(200) === FLOOR,
+    'the behaviour this cap removes');
+}
+
+// ══ 16: a LIVE deficit is forgiven the same way ════════════════════════════
+// Weeks away while Forge Daily was running can push the net below the floor
+// with no reconciliation involved. The shortfall is reported so the caller can
+// persist it, and once credited the balance behaves normally again.
+{
+  const FLOOR = 7500;
+  const archivesN = [{ xpEarned: 7600 }];
+  const inputs = (gained, lost, forgiven = 0) => ({
+    archives: archivesN, currentSegment: { gained, lost },
+    ledger: { version: LEDGER_VERSION, reconciled: null, forgiven },
+  });
+  const short = forgivenessShortfall(inputs(76, 725), FLOOR);
+  check('16: a live deficit below the floor reports a shortfall',
+    short === FLOOR - (7600 + 76 - 725), `${short}`);
+  check('16: crediting it puts the balance exactly on the floor',
+    computeXPBreakdown(inputs(76, 725, short)).net === FLOOR);
+  check('16: and then earning 20 XP raises it to 7,520',
+    computeXPBreakdown(inputs(96, 725, short)).net === FLOOR + 20,
+    `${computeXPBreakdown(inputs(96, 725, short)).net}`);
+  check('16: once credited, no further shortfall is reported — it is idempotent',
+    forgivenessShortfall(inputs(76, 725, short), FLOOR) === 0);
+  check('16: a healthy balance reports no shortfall at all',
+    forgivenessShortfall(inputs(500, 0), FLOOR) === 0);
+  // Zero is a floor too — XP is never displayed below it, so a deficit there
+  // would be the same invisible debt.
+  check('16: zero is protected as well, so XP can never go secretly negative',
+    forgivenessShortfall(inputs(0, 99999), 0) === 99999 - 7600,
+    `${forgivenessShortfall(inputs(0, 99999), 0)}`);
+  check('16: a profile with nothing earned and nothing lost needs no credit',
+    forgivenessShortfall({ archives: [], currentSegment: { gained: 0, lost: 0 }, ledger: makeLedger() }, 0) === 0);
+  // Forgiveness cancels a charge. It must never hand out XP to a profile that
+  // holds a rank but has little or no earned XP behind it.
+  check('16: a profile holding a rank with NO penalties is credited nothing',
+    forgivenessShortfall({ archives: [], currentSegment: { gained: 0, lost: 0 }, ledger: makeLedger() }, 7500) === 0);
+  check('16: the credit never exceeds the penalties actually incurred',
+    forgivenessShortfall({ archives: [], currentSegment: { gained: 0, lost: 40 }, ledger: makeLedger() }, 7500) === 40);
+  check('16: forgiven XP is excluded from the "lost" figure shown to the user',
+    (() => {
+      const b = computeXPBreakdown(inputs(76, 725, short));
+      return b.penalties === b.grossPenalties - short && b.penalties >= 0;
+    })());
+}
+
+// ══ 17: the breakdown reconciles — earned − lost = current ═════════════════
+// The three numbers on the Rank Details card have to add up, or the screen is
+// worse than no screen.
+{
+  const cases = [
+    { archives: [{ xpEarned: 8285 }], seg: { gained: 0, lost: 25 }, ledger: makeLedger() },
+    { archives: [{ xpEarned: 8285 }], seg: { gained: 120, lost: 50 }, ledger: { version: 1, reconciled: { amount: 760 }, forgiven: 0 } },
+    { archives: [], seg: { gained: 40, lost: 0 }, ledger: makeLedger() },
+  ];
+  check('17: Total Earned − XP Lost = Current XP, in every case',
+    cases.every(c => {
+      const b = computeXPBreakdown({ archives: c.archives, currentSegment: c.seg, ledger: c.ledger });
+      return b.earned - b.penalties === b.net;
+    }));
+  check('17: the lost figure is never negative',
+    cases.every(c => computeXPBreakdown({ archives: c.archives, currentSegment: c.seg, ledger: c.ledger }).penalties >= 0));
+}
+
+// ══ 18: per-period detail for "Where did I lose XP?" ═══════════════════════
+check('18: a segment reports its missed days, dates, earned XP and penalties',
+  (() => {
+    const d = archiveDeficit(abandoned.entry);
+    return d.missedDays === 29 && d.gained > 0 && d.lost > 0 &&
+      !!d.startDate && !!d.endDate && d.days === 30;
+  })(),
+  JSON.stringify((({ missedDays, gained, lost, days }) => ({ missedDays, gained, lost, days }))(archiveDeficit(abandoned.entry))));
+check('18: a fully-logged challenge reports zero missed days',
+  archiveDeficit(healthy.entry).missedDays === 0);
+check('18: an excluded segment is marked unverified rather than erroring',
+  (() => {
+    const d = archiveDeficit({ ...abandoned.entry, xpEarned: 123 });
+    return !d.verified && d.discarded === 0;
+  })());
 
 const failed = results.filter(x => !x.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);

@@ -2,23 +2,19 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
 /**
- * The one-time historical XP reconciliation.
+ * "Uncounted Missed Days" — the one-time adjustment, in plain language.
  *
- * Forge has always CALCULATED inactivity penalties and then discarded any that
- * took a challenge below zero, because an archive stores max(0, gained − lost).
- * This recovers those discarded penalties by re-running the same rules over the
- * day records each archive already holds.
+ * Internally this is the historical reconciliation of discarded penalties
+ * against the rank floor (see utils/xpLedger.js). None of that vocabulary
+ * appears here. What the user sees is: we found missed days that were never
+ * counted, here is what you would actually lose, here is where it comes from,
+ * and nothing you have earned is taken away.
  *
- * Three rules this screen exists to honour:
+ * The figure that leads is the REAL loss — capped to the XP held above the
+ * protected rank minimum — not the raw total, which would show a balance the
+ * user can never actually fall to.
  *
- *   • Nothing is charged automatically. The exact figure is shown first, and
- *     the user approves it on their own profile. No other profile is touched.
- *   • Archived challenge records are never rewritten. The deduction lives in a
- *     separate ledger; the history stays exactly as it was recorded.
- *   • It can be undone, restoring the previous balance precisely.
- *
- * The card hides itself when there is nothing to reconcile, so a profile with
- * no discarded penalties never sees it.
+ * The card hides itself when there is nothing to show.
  */
 export default function XPReconciliation() {
   const {
@@ -27,148 +23,127 @@ export default function XPReconciliation() {
   } = useApp();
 
   const [confirming, setConfirming] = useState(false);
-  const [showSegments, setShowSegments] = useState(false);
-  const [done, setDone] = useState(null);
+  const [showWhere, setShowWhere] = useState(false);
 
   const preview = previewXPReconciliation(activeProfile);
   const applied = profile?.xpLedger?.reconciled || null;
+  const n = (x) => Math.round(Math.abs(x)).toLocaleString();
 
-  // Nothing discarded and nothing applied — there is nothing to say.
-  if (!applied && preview.amount <= 0 && preview.unverifiedCount === 0) return null;
+  if (!applied && preview.uncounted <= 0 && preview.unverifiedCount === 0) return null;
 
-  const n = (x) => Math.round(x).toLocaleString();
-
-  // ── Already applied: show what happened, and offer to undo it ──
+  // ── Already applied — kept as a record, with an undo ──
   if (applied) {
     return (
       <div className="xpr-card applied">
         <div className="xpr-head">
-          <span className="xpr-title">✅ Historical XP reconciled</span>
+          <span className="xpr-title">✅ Missed days counted</span>
           <span className="xpr-amount">−{n(applied.amount)} XP</span>
         </div>
         <p className="xpr-body">
-          Applied {new Date(applied.at).toLocaleDateString()} across {applied.segments.length}{' '}
-          {applied.segments.length === 1 ? 'challenge' : 'challenges'}. Your archived records were
-          not changed — the deduction is held separately, and your rank floor still protects you.
+          Applied on {new Date(applied.at).toLocaleDateString()}, covering{' '}
+          {applied.segments.length} previous{' '}
+          {applied.segments.length === 1 ? 'challenge' : 'challenges'}.
+          {applied.forgiven > 0 && (
+            <> A further {n(applied.forgiven)} XP was cancelled because your rank protects you
+            from falling below {n(applied.floor)} XP.</>
+          )}{' '}
+          Your completed challenges and achievements are unchanged.
         </p>
-        {applied.segments.length > 0 && (
-          <>
-            <button className="xpr-link" onClick={() => setShowSegments(v => !v)}>
-              {showSegments ? '▾' : '▸'} What was charged
-            </button>
-            {showSegments && (
-              <div className="xpr-segments">
-                {applied.segments.map(s => (
-                  <div key={s.id} className="xpr-seg">
-                    <span className="xpr-seg-name">{s.name}</span>
-                    <span className="xpr-seg-date">{s.endDate || ''}</span>
-                    <span className="xpr-seg-amount">−{n(s.discarded)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-        <button className="btn btn-ghost btn-full xpr-undo" onClick={() => { undoXPReconciliation(activeProfile); setDone(null); }}>
-          Undo — restore {n(applied.lifetimeBefore)} XP
+
+        <WhereDidILose
+          open={showWhere}
+          onToggle={() => setShowWhere(v => !v)}
+          applied={applied.segments}
+          pending={[]}
+          excluded={0}
+        />
+
+        <button className="btn btn-ghost btn-full xpr-undo" onClick={() => undoXPReconciliation(activeProfile)}>
+          Undo this adjustment
         </button>
       </div>
     );
   }
 
-  if (done) {
-    return (
-      <div className="xpr-card applied">
-        <div className="xpr-head">
-          <span className="xpr-title">✅ Applied</span>
-          <span className="xpr-amount">−{n(done)} XP</span>
-        </div>
-        <p className="xpr-body">Your XP breakdown now shows the deduction.</p>
-      </div>
-    );
-  }
+  // ── Not yet applied ──
+  const floorAbsorbs = preview.forgiven > 0;
 
-  // ── Not yet applied: the exact figure, before anything changes ──
   return (
     <div className="xpr-card">
       <div className="xpr-head">
-        <span className="xpr-title">⚖️ Historical inactivity penalties</span>
-        <span className="xpr-amount pending">−{n(preview.amount)} XP</span>
+        <span className="xpr-title">📋 Uncounted Missed Days</span>
       </div>
 
       <p className="xpr-body">
-        Forge charged these inactivity penalties at the time and then discarded them, because a
-        challenge&apos;s archived total is never allowed below zero. Applying this recovers them.
-        Your archived challenge records are not changed.
+        Forge found missed days from your previous challenges that were never deducted from your
+        XP. You can review them before choosing whether to apply them.
       </p>
 
+      {/* The impact, in the order it makes sense: where you are, what was
+          found, what it actually costs, where you end up. */}
       <div className="xpr-maths">
         <div className="xpr-row">
-          <span>Lifetime XP now</span><span>{n(preview.lifetimeBefore)}</span>
+          <span>Current XP</span><span>{n(preview.currentXP)}</span>
+        </div>
+        <div className="xpr-row muted">
+          <span>Missed days found</span><span>−{n(preview.uncounted)} XP</span>
         </div>
         <div className="xpr-row deduct">
-          <span>Discarded penalties</span><span>−{n(preview.amount)}</span>
+          <span>XP you would actually lose</span><span>−{n(preview.actualLoss)} XP</span>
         </div>
         <div className="xpr-row total">
-          <span>After reconciliation</span><span>{n(preview.lifetimeAfter)}</span>
+          <span>Your XP after applying</span><span>{n(preview.xpAfter)}</span>
         </div>
-        {preview.effectiveAfter !== preview.lifetimeAfter && (
-          <div className="xpr-row floor">
-            <span>Held at your rank floor</span><span>{n(preview.effectiveAfter)}</span>
-          </div>
-        )}
+        <div className="xpr-row rank">
+          <span>Your permanent rank</span><span>{preview.rankName}</span>
+        </div>
       </div>
 
       <p className="xpr-note">
-        Your rank is permanent. Lifetime XP can never fall below {n(preview.floor)} XP while you
-        hold your current rank, so this costs you progress toward the next rank — never the rank
-        you already earned.
+        {floorAbsorbs ? (
+          <>
+            Your rank protects you from falling below {n(preview.floor)} XP, so only{' '}
+            {n(preview.actualLoss)} XP of the {n(preview.uncounted)} found can be taken — the rest
+            is cancelled, not saved up. Your achievements and completed challenges remain
+            permanent.
+          </>
+        ) : (
+          <>
+            Your rank protects you from falling below {n(preview.floor)} XP. Your achievements and
+            completed challenges remain permanent.
+          </>
+        )}
       </p>
 
       {preview.unverifiedCount > 0 && (
-        <p className="xpr-note warn">
-          {preview.unverifiedCount}{' '}
-          {preview.unverifiedCount === 1 ? 'archived challenge could' : 'archived challenges could'}{' '}
-          not be recalculated exactly, so nothing was charged for{' '}
+        <p className="xpr-note">
+          {preview.unverifiedCount} older{' '}
+          {preview.unverifiedCount === 1 ? 'challenge was' : 'challenges were'} left out because
+          Forge could not check {preview.unverifiedCount === 1 ? 'its' : 'their'} records
+          reliably. Nothing was deducted for{' '}
           {preview.unverifiedCount === 1 ? 'it' : 'them'}.
         </p>
       )}
 
-      {preview.charged.length > 0 && (
-        <>
-          <button className="xpr-link" onClick={() => setShowSegments(v => !v)}>
-            {showSegments ? '▾' : '▸'} Where it comes from ({preview.charged.length}{' '}
-            {preview.charged.length === 1 ? 'challenge' : 'challenges'})
-          </button>
-          {showSegments && (
-            <div className="xpr-segments">
-              {preview.charged.map(s => (
-                <div key={s.id} className="xpr-seg">
-                  <span className="xpr-seg-name">{s.name}</span>
-                  <span className="xpr-seg-date">{s.endDate || ''}</span>
-                  <span className="xpr-seg-amount">−{n(s.discarded)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      <WhereDidILose
+        open={showWhere}
+        onToggle={() => setShowWhere(v => !v)}
+        applied={[]}
+        pending={preview.charged}
+        excluded={preview.unverifiedCount}
+      />
 
       {confirming ? (
         <div className="xpr-confirm">
           <p className="xpr-confirm-text">
-            Apply −{n(preview.amount)} XP to <strong>{profile?.name}</strong>? This affects only
-            this profile and can be undone.
+            Apply −{n(preview.actualLoss)} XP to <strong>{profile?.name}</strong>? You can undo
+            this afterwards.
           </p>
           <div className="modal-actions">
             <button className="btn btn-ghost" onClick={() => setConfirming(false)}>Cancel</button>
             <button
               className="btn btn-primary"
-              onClick={() => {
-                const amount = preview.amount;
-                if (applyXPReconciliation(activeProfile)) setDone(amount);
-                setConfirming(false);
-              }}
+              onClick={() => { applyXPReconciliation(activeProfile); setConfirming(false); }}
             >
               Apply
             </button>
@@ -177,12 +152,94 @@ export default function XPReconciliation() {
       ) : (
         <button
           className="btn btn-secondary btn-full xpr-apply"
-          disabled={preview.amount <= 0}
+          disabled={preview.actualLoss <= 0}
           onClick={() => setConfirming(true)}
         >
-          Review and apply
+          {preview.actualLoss > 0 ? 'Review and apply' : 'Nothing to apply'}
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * "Where did I lose XP?" — per challenge or Forge Daily period.
+ *
+ * Shows what a person would want to know about a stretch of time: what it was,
+ * when, how many days were missed, what they earned, what it cost. Already
+ * applied and not yet applied are separate lists so the two are never confused.
+ */
+function WhereDidILose({ open, onToggle, applied, pending, excluded }) {
+  const total = applied.length + pending.length;
+  if (total === 0 && excluded === 0) return null;
+  const fmt = (d) => {
+    if (!d) return '';
+    try { return new Date(d).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }); }
+    catch { return d; }
+  };
+
+  return (
+    <>
+      <button className="xpr-link" onClick={onToggle}>
+        {open ? '▾' : '▸'} Where did I lose XP?
+      </button>
+      {open && (
+        <div className="xpr-segments">
+          {pending.length > 0 && (
+            <>
+              <div className="xpr-group">Not yet counted</div>
+              {pending.map(s => <Period key={s.id} s={s} fmt={fmt} />)}
+            </>
+          )}
+          {applied.length > 0 && (
+            <>
+              <div className="xpr-group">Already counted</div>
+              {applied.map(s => <Period key={s.id} s={s} fmt={fmt} />)}
+            </>
+          )}
+          {excluded > 0 && (
+            <div className="xpr-excluded">
+              {excluded} older {excluded === 1 ? 'challenge' : 'challenges'} left out — Forge could
+              not check {excluded === 1 ? 'its' : 'their'} records reliably, so nothing was
+              deducted.
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+function Period({ s, fmt }) {
+  const n = (x) => Math.round(Math.abs(Number(x) || 0)).toLocaleString();
+  return (
+    <div className="xpr-period">
+      <div className="xpr-period-head">
+        <span className="xpr-period-name">{s.name}</span>
+        <span className="xpr-period-date">
+          {s.startDate ? `${fmt(s.startDate)} – ` : ''}{fmt(s.endDate)}
+        </span>
+      </div>
+      <div className="xpr-period-rows">
+        {s.missedDays != null && (
+          <div className="xpr-period-row">
+            <span>Days missed</span><span>{s.missedDays}</span>
+          </div>
+        )}
+        {s.gained != null && (
+          <div className="xpr-period-row">
+            <span>XP earned</span><span>+{n(s.gained)}</span>
+          </div>
+        )}
+        {s.lost != null && (
+          <div className="xpr-period-row">
+            <span>Missed-day penalties</span><span>−{n(s.lost)}</span>
+          </div>
+        )}
+        <div className="xpr-period-row net">
+          <span>Net adjustment</span><span>−{n(s.discarded)} XP</span>
+        </div>
+      </div>
     </div>
   );
 }

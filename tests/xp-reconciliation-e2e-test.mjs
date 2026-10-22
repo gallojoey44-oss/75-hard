@@ -139,48 +139,76 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(400);
 let details = await page.textContent('.rank-details-card');
-check('2: the breakdown shows Earned', /Earned/i.test(details), details.slice(0, 120));
-check('2: it shows Lifetime XP', /Lifetime XP/i.test(details));
-check('2: with nothing deducted yet, no deduction row is shown',
-  !/Inactivity deductions/i.test(details));
+check('2: Current XP is shown', /Current XP/.test(details), details.replace(/\s+/g, ' ').slice(0, 140));
+check('2: Total XP Earned is shown', /Total XP Earned/.test(details));
+check('2: XP Lost from Missed Days is shown', /XP Lost from Missed Days/.test(details));
+check('2: XP Until Next Rank is shown', /XP Until Next Rank/.test(details));
+check('2: the retired technical labels are gone',
+  !/Lifetime XP/i.test(details) && !/Inactivity deductions/i.test(details) && !/of which/i.test(details),
+  (details.match(/Lifetime XP|Inactivity deductions|of which/i) || []).join(', ') || 'none present');
+check('2: it says ranks and achievements are permanent',
+  /rank and achievements are permanent/i.test(details));
+check('2: Current XP is the visually prominent figure',
+  (await page.locator('.rank-detail-value.big').count()) === 1);
+check('2: the three figures reconcile — earned minus lost equals current',
+  (() => {
+    const flat = details.replace(/\s+/g, ' ');
+    const num = (label) => {
+      const m = flat.match(new RegExp(label + '\\s*(−?[\\d,]+)'));
+      return m ? parseInt(m[1].replace(/[^\d]/g, ''), 10) : null;
+    };
+    const earned = num('Total XP Earned'), lost = num('XP Lost from Missed Days'), cur = num('Current XP');
+    return earned != null && cur != null && earned - (lost || 0) === cur;
+  })(), details.replace(/\s+/g, ' ').slice(0, 220));
 
 // ══ 3: the reconciliation card — the figure BEFORE anything changes ════════
 await openSettings();
 check('3: the reconciliation card is offered', (await page.locator('.xpr-card').count()) === 1);
 const card = await page.textContent('.xpr-card');
-check('3: it states that these penalties were calculated and discarded',
-  /charged these inactivity penalties at the time and then discarded/i.test(card));
-check('3: it promises archived records are not changed',
-  /archived challenge records are not changed/i.test(card));
-const amount = await page.evaluate(() => {
-  const t = document.querySelector('.xpr-amount')?.textContent || '';
-  return parseInt(t.replace(/[^\d]/g, ''), 10);
-});
-// The arithmetic, stated so the expected figure is derived rather than
-// asserted: 29 missed days × 25 = 725 lost, against day 1's 26 XP of tasks
-// plus the 50 XP perfect-day bonus = 76 gained. The clip was 725 − 76.
+check('3: the heading is Uncounted Missed Days', /Uncounted Missed Days/.test(card));
+check('3: the explanation is the plain-language one',
+  /found missed days from your previous challenges that were never deducted/i.test(card));
+check('3: no accounting or software vocabulary appears',
+  !/reconciliation|archived deficit|penalty ledger|segment|recomput|floor clamp|discarded/i.test(card),
+  (card.match(/reconciliation|archived deficit|penalty ledger|segment|recomput|floor clamp|discarded/i) || []).join(', ') || 'clean');
+
+const readRows = async () => Object.fromEntries((await page.evaluate(() =>
+  [...document.querySelectorAll('.xpr-row')].map(r => [...r.children].map(c => c.textContent.trim()))
+)).map(([k, v]) => [k, /^[−\-]?[\d,]+/.test(v) ? parseInt(String(v).replace(/[^\d]/g, ''), 10) : v]));
+const rows = await readRows();
 const MISSED_DAYS = 29, MISS_PENALTY = 25, DAY_ONE_EARNED = 26 + 50;
 const EXPECTED = MISSED_DAYS * MISS_PENALTY - DAY_ONE_EARNED;   // 649
-check('3: the exact figure is shown and matches the discarded deficit',
-  amount === EXPECTED, `−${amount} XP, expected −${EXPECTED}`);
-const maths = await page.evaluate(() => [...document.querySelectorAll('.xpr-row')].map(r => r.innerText.replace(/\s+/g, ' ').trim()));
-check('3: the arithmetic is shown line by line',
-  maths.some(r => /Lifetime XP now 8,245/.test(r)) &&
-  maths.some(r => new RegExp(`Discarded penalties −${EXPECTED}`).test(r)) &&
-  maths.some(r => new RegExp(`After reconciliation ${(8245 - EXPECTED).toLocaleString()}`).test(r)),
-  maths.join(' | '));
-check('3: it explains the rank floor protects the rank itself',
-  /can never fall below 7,500 XP/i.test(card), card.match(/never fall below[^.]*/)?.[0]);
-check('3: the legacy archive it could not reproduce is reported, not charged',
-  /could not be recalculated exactly/i.test(card));
+check('3: the figures are labelled in plain language',
+  ['Current XP', 'Missed days found', 'XP you would actually lose', 'Your XP after applying', 'Your permanent rank']
+    .every(l => card.includes(l)),
+  Object.keys(rows).join(' | '));
+check('3: Current XP is shown first', rows['Current XP'] === 8245);
+check('3: the missed days found matches the uncounted total',
+  rows['Missed days found'] === EXPECTED, String(rows['Missed days found']));
+check('3: the real loss is shown — here it fits under the floor, so the same',
+  rows['XP you would actually lose'] === EXPECTED, String(rows['XP you would actually lose']));
+check('3: the resulting XP is shown', rows['Your XP after applying'] === 8245 - EXPECTED);
+check('3: the permanent rank is named', rows['Your permanent rank'] === 'True Warrior');
+check('3: it explains the floor in plain language',
+  /protects you from falling below 7,500 XP/i.test(card));
+check('3: it says achievements and completed challenges remain permanent',
+  /achievements and completed challenges remain/i.test(card));
+check('3: older challenges it could not check are explained simply, not as an error',
+  /could not check/i.test(card) && /reliably/i.test(card));
 
 await page.locator('.xpr-link').first().click();
 await page.waitForTimeout(250);
-const segs = await page.evaluate(() => [...document.querySelectorAll('.xpr-seg')].map(s => s.innerText.replace(/\s+/g, ' ').trim()));
-check('3: it names the challenge being charged',
-  segs.length === 1 && /Forge Daily/.test(segs[0]) && segs[0].includes(String(EXPECTED)), segs.join(' | '));
+const segs = await page.evaluate(() => [...document.querySelectorAll('.xpr-period')].map(x => x.innerText.replace(/\s+/g, ' ').trim()));
+check('3: the breakdown is headed "Where did I lose XP?"', /Where did I lose XP/i.test(card));
+check('3: it separates not-yet-counted from already-counted',
+  /Not yet counted/i.test(await page.textContent('.xpr-segments')));
+check('3: the period shows name, dates, missed days, earned and penalties',
+  segs.length === 1 && /Forge Daily/.test(segs[0]) && /Days missed 29/.test(segs[0]) &&
+  /XP earned \+76/.test(segs[0]) && /Missed-day penalties −725/.test(segs[0]) &&
+  /Net adjustment −649/.test(segs[0]),
+  segs[0]);
 check('3: the healthy challenge is NOT in the list — no double-charging',
-  !segs.some(s => /Discipline Block/.test(s)));
+  !segs.some(x => /Discipline Block/.test(x)));
 
 // ══ 4: nothing is charged until approval ═══════════════════════════════════
 check('4: Lifetime XP is unchanged while only previewing', (await shownLifetime()) === 8245);
@@ -191,8 +219,8 @@ await openSettings();
 await page.locator('.xpr-apply').click();
 await page.waitForTimeout(300);
 const confirmText = await page.textContent('.xpr-confirm');
-check('5: confirmation names the profile and the amount',
-  confirmText.includes(String(EXPECTED)) && /can be undone/i.test(confirmText),
+check('5: confirmation names the profile and the real amount',
+  confirmText.includes(String(EXPECTED)) && /undo this afterwards/i.test(confirmText),
   confirmText.replace(/\s+/g, ' ').slice(0, 120));
 await page.locator('.xpr-confirm .btn-primary').click();
 await page.waitForTimeout(600);
@@ -232,7 +260,8 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(400);
 details = await page.textContent('.rank-details-card');
-check('8: an inactivity deduction row appears', /Inactivity deductions/i.test(details));
+check('8: the applied amount appears under XP Lost from Missed Days',
+  /XP Lost from Missed Days/.test(details));
 check('8: it shows the historical figure', details.includes(String(EXPECTED)),
   details.replace(/\s+/g, ' ').slice(0, 200));
 check('8: earned XP is still shown in full, undiminished', /8,245/.test(details));
@@ -244,15 +273,18 @@ for (let i = 0; i < 3; i++) {
 }
 check('9: three reloads do not charge again', (await shownLifetime()) === lifetime1);
 await openSettings();
-check('9: the card now reports it as applied rather than offering it again',
-  /Historical XP reconciled/i.test(await page.textContent('.xpr-card')));
+check('9: the pending notice is replaced by a record of what was applied',
+  /Missed days counted/i.test(await page.textContent('.xpr-card')) &&
+  !/Uncounted Missed Days/i.test(await page.textContent('.xpr-card')));
 check('9: there is no apply button left to press',
   (await page.locator('.xpr-apply').count()) === 0);
 check('9: the ledger still holds a single charge',
   (await prof()).xpLedger?.reconciled?.amount === EXPECTED);
 
 // ══ 10: the other profile is untouched ═════════════════════════════════════
-check('10: the second profile has no ledger', (await prof('girlfriend')).xpLedger == null);
+check('10: the second profile is never charged',
+  !(await prof('girlfriend')).xpLedger?.reconciled,
+  JSON.stringify((await prof('girlfriend')).xpLedger || null));
 check('10: and no archives were created for it', (await arch('girlfriend')).length === 0);
 
 // ══ 11: undo restores the previous balance exactly ═════════════════════════
@@ -274,8 +306,13 @@ await page.evaluate(() => {
 await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 });
 check('12: the starting balance is now 7,600', (await shownLifetime()) === 7600);
 await openSettings();
-const floorCard = await page.textContent('.xpr-card');
-check('12: the preview warns the floor will hold it', /Held at your rank floor/i.test(floorCard), floorCard.replace(/\s+/g, ' ').slice(0, 200));
+const floorRows = await readRows();
+check('12: the real loss is capped at the XP above the floor, not the full total',
+  floorRows['XP you would actually lose'] === 100 && floorRows['Missed days found'] === EXPECTED,
+  `found ${floorRows['Missed days found']}, actually lose ${floorRows['XP you would actually lose']}`);
+check('12: the resulting XP is the floor itself', floorRows['Your XP after applying'] === 7500);
+check('12: it explains that the rest is cancelled rather than saved up',
+  /is cancelled, not saved up/i.test(await page.textContent('.xpr-card')));
 await page.locator('.xpr-apply').click();
 await page.waitForTimeout(250);
 await page.locator('.xpr-confirm .btn-primary').click();

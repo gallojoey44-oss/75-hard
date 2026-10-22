@@ -25,7 +25,7 @@ import { clearProfilePhotos } from '../utils/photoStore';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs, migrateAllNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS } from '../utils/gamification';
-import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLedger, isReconciled } from '../utils/xpLedger';
+import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLedger, isReconciled, capToFloor, forgivenessShortfall } from '../utils/xpLedger';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 
 export const MENTAL_OPTIONS = [
@@ -2448,6 +2448,47 @@ export function AppProvider({ children }) {
     });
   }, [activeProfile, profiles, getRawLifetimeXP]);
 
+  // ── The floor is a real balance, not a mask ──────────────────────────────
+  //
+  // A live deficit (weeks away while Forge Daily was running) can push the
+  // calculated total below a protected rank floor. Left alone the balance
+  // would read as the floor while the gap quietly ate the next XP earned.
+  // Instead the shortfall is written off and PERSISTED, so earning 20 XP after
+  // the floor is reached raises the balance to floor + 20 immediately.
+  //
+  // Monotonic and self-limiting: the credit only grows, and once the net sits
+  // at or above the floor this computes 0 and stops writing.
+  useEffect(() => {
+    for (const profId of Object.keys(profiles || {})) {
+      const prof = profiles[profId];
+      if (!prof) continue;
+      // 0 counts as a floor: XP is never shown below zero either, so an
+      // uncredited deficit there is the same invisible debt.
+      const floor = Math.max(0, rankFloorXP(prof.highestRank ?? 0));
+      const dayNum = getDayNumber(profId);
+      const currentSegment = dayNum
+        ? computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum)
+        : { gained: 0, lost: 0 };
+      const short = forgivenessShortfall(
+        { archives: archives[profId] || [], currentSegment, ledger: prof.xpLedger },
+        floor,
+      );
+      if (short > 0) {
+        setProfiles(prev => ({
+          ...prev,
+          [profId]: {
+            ...prev[profId],
+            xpLedger: {
+              ...(prev[profId]?.xpLedger || makeLedger()),
+              forgiven: (prev[profId]?.xpLedger?.forgiven ?? 0) + short,
+            },
+          },
+        }));
+        return;   // one profile per pass; the next render settles the other
+      }
+    }
+  }, [profiles, archives, allDays, getDayNumber, getDayCompletion, setProfiles]);
+
   // ── One-time historical reconciliation ────────────────────────────────────
   //
   // Forge calculated inactivity penalties for archived challenges and then
@@ -2463,18 +2504,22 @@ export function AppProvider({ children }) {
     const preview = previewReconciliation(archives[profId] || []);
     const before = getRawLifetimeXP(profId);
     const floor = rankFloorXP(profiles[profId]?.highestRank ?? 0);
-    const after = before - preview.amount;
+    // The charge can never exceed the XP held above the protected floor. The
+    // rest is written off, not deferred — so the figure shown as "what you
+    // actually lose" is the figure that actually happens.
+    const cap = capToFloor(preview.amount, before, floor);
     return {
       ...preview,
       alreadyApplied: isReconciled(profiles[profId]?.xpLedger),
-      lifetimeBefore: before,
-      lifetimeAfter: after,
+      // The full amount that was found but never counted.
+      uncounted: cap.total,
+      // What will really be deducted, and what is being written off.
+      actualLoss: cap.applied,
+      forgiven: cap.forgiven,
       floor,
-      // What the user will actually see afterwards, floor included.
-      effectiveBefore: Math.max(before, floor),
-      effectiveAfter: Math.max(after, floor),
-      // How much of the charge the floor absorbs — stated rather than hidden.
-      absorbedByFloor: Math.max(0, floor - after) - Math.max(0, floor - before),
+      currentXP: Math.max(before, floor),
+      xpAfter: Math.max(before - cap.applied, floor),
+      rankName: resolveRankState({ rawLifetimeXP: before, highestRank: profiles[profId]?.highestRank ?? null }).current.name,
     };
   }, [activeProfile, archives, profiles, getRawLifetimeXP]);
 
@@ -2486,7 +2531,10 @@ export function AppProvider({ children }) {
     if (isReconciled(profiles[profId]?.xpLedger)) return false;
     const preview = previewReconciliation(archives[profId] || []);
     if (preview.amount <= 0) return false;
-    const entry = buildReconciliation(preview, getRawLifetimeXP(profId));
+    const before = getRawLifetimeXP(profId);
+    const floor = rankFloorXP(profiles[profId]?.highestRank ?? 0);
+    const entry = buildReconciliation(preview, before, floor, profiles[profId]?.xpLedger?.forgiven ?? 0);
+    if (entry.amount <= 0 && entry.forgiven <= 0) return false;
     setProfiles(prev => ({
       ...prev,
       [profId]: {
@@ -2499,10 +2547,16 @@ export function AppProvider({ children }) {
 
   /** Undo the reconciliation, restoring the previous balance exactly. */
   const undoXPReconciliation = useCallback((profId = activeProfile) => {
-    if (!isReconciled(profiles[profId]?.xpLedger)) return false;
+    const applied = profiles[profId]?.xpLedger?.reconciled;
+    if (!applied) return false;
     setProfiles(prev => ({
       ...prev,
-      [profId]: { ...prev[profId], xpLedger: makeLedger() },
+      [profId]: {
+        ...prev[profId],
+        // Restore the forgiveness credit exactly as it was, so undoing returns
+        // the balance to its previous figure rather than an approximation.
+        xpLedger: { ...makeLedger(), forgiven: applied.forgivenBefore ?? 0 },
+      },
     }));
     return true;
   }, [activeProfile, profiles]);

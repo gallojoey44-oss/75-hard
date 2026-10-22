@@ -6266,3 +6266,57 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .xpr-confirm { background: var(--bg2); border-radius: var(--radius-sm); padding: 11px; }
 .xpr-confirm-text { font-size: 12px; color: var(--text2); line-height: 1.6; margin-bottom: 10px; }
 .xpr-apply, .xpr-undo { margin-top: 2px; }
+
+/* ─── v3.56.0: plain-language XP details ────────────────────────────────── */
+
+/* Current XP leads the card — it is the number people mean when they ask how
+   much XP they have. */
+.rank-detail-row.primary {
+  align-items: baseline;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+}
+.rank-detail-value.big {
+  font-size: 1.5rem; font-weight: 800; color: var(--accent2);
+  font-variant-numeric: tabular-nums;
+}
+.rank-details-note {
+  font-size: 11px; color: var(--text3); line-height: 1.55; margin-top: 10px;
+  border-top: 1px solid var(--border); padding-top: 9px;
+}
+
+/* ─── v3.56.0: Uncounted Missed Days ────────────────────────────────────── */
+
+.xpr-row.muted { color: var(--text3); }
+.xpr-row.rank { color: var(--accent2); font-weight: 700; }
+.xpr-row.deduct { font-weight: 700; }
+
+.xpr-group {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text3); margin: 10px 0 6px;
+}
+.xpr-group:first-child { margin-top: 2px; }
+
+.xpr-period {
+  background: var(--bg2); border-radius: var(--radius-sm);
+  padding: 10px 11px; margin-bottom: 7px;
+}
+.xpr-period-head {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;
+}
+.xpr-period-name { font-size: 13px; font-weight: 700; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.xpr-period-date { font-size: 10px; color: var(--text3); flex-shrink: 0; }
+.xpr-period-rows { display: flex; flex-direction: column; gap: 2px; }
+.xpr-period-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 11px; color: var(--text2); font-variant-numeric: tabular-nums;
+}
+.xpr-period-row.net {
+  color: var(--warn); font-weight: 700;
+  border-top: 1px solid var(--border); margin-top: 4px; padding-top: 5px;
+}
+.xpr-excluded {
+  font-size: 11px; color: var(--text3); line-height: 1.55;
+  border-left: 2px solid var(--border); padding-left: 9px; margin-top: 8px;
+}
