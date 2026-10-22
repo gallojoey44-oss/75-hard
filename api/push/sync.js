@@ -51,10 +51,19 @@ export default async function handler(req, res) {
     }
 
     // Keep only well-formed reminder entries.
+    //
+    // `fallback` is persisted alongside `payload`. It was being dropped here,
+    // which silently disabled the stale-day path in evaluateSchedule: with no
+    // fallback stored, a reminder whose snapshot was from an earlier date was
+    // suppressed entirely instead of falling back to date-independent copy.
     const clean = {};
     for (const [type, entry] of Object.entries(reminders || {})) {
       if (!entry || typeof entry.time !== 'string') continue;
-      clean[type] = { time: entry.time, payload: entry.payload || null };
+      clean[type] = {
+        time: entry.time,
+        payload: entry.payload || null,
+        fallback: entry.fallback || null,
+      };
     }
 
     const schedule = {

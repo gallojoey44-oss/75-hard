@@ -10,6 +10,7 @@ import BottomNav from './components/BottomNav';
 import { applyUpdate } from './utils/swUtils.js';
 import { getTodayStr } from './utils/dateUtils';
 import { getDueReminders, getNotificationSupport, showNotification, markFired, syncPushSchedule } from './utils/notificationUtils';
+import { challengeOf, isSharedTask, LANE } from './utils/challengeStack';
 import { getTimezone } from './utils/installId';
 import { computeTotalXP, getMWDComplete } from './utils/gamification';
 import { buildTimeline, entriesInLastNDays } from './utils/archiveUtils';
@@ -94,6 +95,16 @@ function NotificationScheduler() {
         profileId: activeProfile,
         tasks: profile?.tasks || [],
         dayData,
+        dayNumber: dayNum,
+        // A challenge contributes reminders only while it is genuinely
+        // running: not on Forge Daily, not before a scheduled start date, and
+        // not once it has finished. getDayNumber() returning a day is what
+        // "has begun" means here.
+        challengeActive: !!dayNum && !!meta?.templateId && meta.templateId !== 'forge_daily',
+        supportChallengeName: challengeOf(profile, LANE.SUPPORT)?.name || null,
+        // Shared habits appear once in the merged task list, so this only
+        // labels them — it is not what prevents duplicate reminders.
+        isSharedTask,
         isMWD: !!dayData?.isMWD && !getMWDComplete(dayData),
         comebackActive: !!profile?.comebackMode?.active,
         hasSetback: false,
@@ -115,6 +126,10 @@ function NotificationScheduler() {
         tz: getTimezone(),
         date: todayStr,
         done: (profile?.tasks || []).filter(t => dayData?.tasks?.[t.id]).map(t => t.id),
+        // The reminder plan is derived from the task list, so a challenge
+        // change has to re-sync even when the challenge name happens to match.
+        tsig: (profile?.tasks || []).map(t => `${t.id}:${t.name}:${t.keystone || 0}`).join('|'),
+        act: !!dayNum && !!meta?.templateId && meta.templateId !== 'forge_daily',
         mwd: ctx.isMWD,
         cn: ctx.challengeName,
         cb: ctx.comebackActive,

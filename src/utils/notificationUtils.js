@@ -12,88 +12,42 @@
 import { HIGH_VALUE_TASK_IDS, MWD_TASKS, getTaskXP, topIncompleteKeystone } from './gamification';
 import { resolveRankState } from './rank';
 import { getInstallId, getTimezone } from './installId';
+import {
+  buildReminderPlan, UNIVERSAL_REMINDERS, PERSONAL_HABITS, CATEGORY,
+} from '../data/reminderPlan';
+import { reminderPayload, reminderFallbackFor } from '../data/reminderCopy';
 
-// A keystone task's display name without its duration suffix ("Mental
-// Training — 10 min…" → "Mental Training").
-function keystoneName(task) {
-  return task ? task.name.replace(/\s+—.*$/, '') : '';
-}
-
-// ─── Reminder catalog ────────────────────────────────────────────────────────
-
-export const REMINDER_DEFS = [
-  { id: 'morning',     label: 'Morning Daily Mission',          hasTime: true,  defaultTime: '08:00' },
-  { id: 'workout',     label: 'Workout reminder',               hasTime: true,  defaultTime: '16:00' },
-  { id: 'water',       label: 'Water reminder',                 hasTime: true,  defaultTime: '14:00' },
-  { id: 'reading',     label: 'Reading reminder',               hasTime: true,  defaultTime: '19:00' },
-  { id: 'photo',       label: 'Progress photo reminder',        hasTime: true,  defaultTime: '20:30' },
-  { id: 'evening',     label: 'Evening remaining-tasks reminder', hasTime: true, defaultTime: '20:00' },
-  { id: 'sleep',       label: 'Sleep / wind-down reminder',     hasTime: true,  defaultTime: '21:30' },
-  { id: 'streak',      label: 'Streak warning',                 hasTime: true,  defaultTime: '21:00' },
-  { id: 'oneTaskLeft', label: 'One-task-left alert',            hasTime: false },
-  { id: 'comeback',    label: 'Comeback reminder',              hasTime: true,  defaultTime: '10:00' },
-  { id: 'insights',    label: 'Insights recommendation alert',  hasTime: true,  defaultTime: '12:00' },
-  { id: 'milestone',   label: 'Rank / XP milestone alert',      hasTime: false },
-];
-
-// Background-delivery capability.
+// ─── Reminder catalogue ─────────────────────────────────────────────────────
 //
-// Time-based reminders (hasTime) can be delivered by the server while the app
-// is closed: the app pre-renders each one's copy at its current (fresh) state
-// and syncs it, so the server never fabricates values. Event-based reminders
-// fire the instant a live local condition becomes true and have no scheduled
-// time, so they remain app-active-only (the server would have to invent the
-// triggering state). This is the honest line between the two tiers.
-export function isBackgroundReminder(type) {
-  const def = REMINDER_DEFS.find(d => d.id === type);
-  return !!def?.hasTime;
-}
+// There is no fixed catalogue any more. Which reminders exist depends on the
+// user's active challenge and the personal habits they opted into, so the list
+// is derived per user by buildReminderPlan (data/reminderPlan.js) and its copy
+// by reminderPayload / reminderFallbackFor (data/reminderCopy.js).
+//
+// The old twelve-entry REMINDER_DEFS list lived here. It offered Reading,
+// Workout, Water and Progress-photo reminders to everyone and matched them to
+// tasks with name regexes, which meant Forge could remind someone to read when
+// they had no reading task at all. Re-exported below are only the pieces other
+// modules still need.
+export { CATEGORY, CATEGORY_META, UNIVERSAL_REMINDERS, PERSONAL_HABITS, buildReminderPlan } from '../data/reminderPlan';
+export { reminderPayload, reminderFallbackFor, reminderPreview } from '../data/reminderCopy';
 
 /**
- * Date-independent fallback copy for each background-capable reminder.
+ * Default notification preferences.
  *
- * The dynamic copy a reminder normally carries ("3 tasks left today") is
- * rendered by the app for ONE specific local date, and is wrong on any other
- * day. The server used to suppress a whole schedule once its date went stale,
- * which meant background reminders only worked if the app had been opened that
- * same day — i.e. never, in the case that matters.
- *
- * These lines are true on any day, so the server can deliver them on a stale
- * day without inventing a single dynamic value. No counts, no day numbers, no
- * streak lengths — just the nudge.
+ * `reminders` starts EMPTY on purpose. Which reminders exist depends on the
+ * user's challenge, so the catalogue is derived at read time by
+ * buildReminderPlan; this map only records decisions the user has actually
+ * made. An absent entry means "use the default", which is how a new challenge
+ * can bring its own reminders without anything being written first.
  */
-export const REMINDER_FALLBACKS = {
-  morning:   { title: '⚔️ Forge', body: 'Your daily mission is waiting. Open Forge and start the day.' },
-  workout:   { title: '🏋️ Training', body: 'Time to train.' },
-  water:     { title: '💧 Water', body: 'Water check — top up.' },
-  reading:   { title: '📚 Reading', body: 'Time to read.' },
-  photo:     { title: '📸 Progress photo', body: 'Time for today\'s progress photo.' },
-  evening:   { title: '⚔️ Forge', body: 'Evening check-in — see what is still open today.' },
-  sleep:     { title: '😴 Wind down', body: 'Time to start winding down for sleep.' },
-  streak:    { title: '🔥 Your streak', body: 'Do not let today slip — open Forge and close it out.' },
-  comeback:  { title: '💪 Back at it', body: 'One day at a time. Open Forge and log today.' },
-  insights:  { title: '🔍 Forge Insights', body: 'There is something worth reading in your Insights.' },
-};
-
-/** The date-independent fallback for a reminder type, or null. */
-export function reminderFallback(type) {
-  const f = REMINDER_FALLBACKS[type];
-  if (!f) return null;
-  return { ...f, tag: `forge-${type}`, view: 'today' };
-}
-
-export const BACKGROUND_REMINDER_IDS = REMINDER_DEFS.filter(d => d.hasTime).map(d => d.id);
-export const APP_ACTIVE_ONLY_IDS = REMINDER_DEFS.filter(d => !d.hasTime).map(d => d.id);
-
 export function makeDefaultNotifPrefs() {
-  const reminders = {};
-  for (const def of REMINDER_DEFS) {
-    reminders[def.id] = { enabled: false, time: def.defaultTime || null };
-  }
   return {
     masterEnabled: false,               // everything OFF until the user enables
     quietHours: { start: '22:30', end: '07:00' },
-    reminders,
+    reminders: {},
+    customHabits: [],
+    prefsVersion: 2,
   };
 }
 
@@ -243,17 +197,21 @@ export async function syncPushSchedule(profileId, prefs, ctx, todayStr) {
     publishInstallIdentity(profileId);
     const reminders = {};
     if (prefs?.masterEnabled) {
-      for (const def of REMINDER_DEFS) {
-        if (!def.hasTime) continue;                       // background-capable only
-        const setting = prefs.reminders?.[def.id];
-        if (!setting?.enabled) continue;
-        const payload = buildReminder(def.id, ctx);       // null when not applicable
-        reminders[def.id] = {
-          time: setting.time || def.defaultTime,
-          payload,
-          // Used by the server on a stale day instead of suppressing the
-          // reminder entirely. Date-independent, so nothing is fabricated.
-          fallback: reminderFallback(def.id),
+      const plan = buildReminderPlan(prefs, ctx);
+      // `deliverable` is already filtered: disabled reminders are out, and a
+      // personal habit the challenge covers is out, so a shared habit can
+      // never produce two notifications.
+      for (const r of plan.deliverable) {
+        reminders[r.id] = {
+          time: r.time,
+          // Rendered from today's real state. null means "nothing to say" —
+          // the task is done, or the reminder does not apply — and the server
+          // then has only the fallback to work with.
+          payload: reminderPayload(r, ctx),
+          // Date-independent copy the server uses when its snapshot is stale,
+          // so a background reminder never claims something is incomplete on
+          // yesterday's information.
+          fallback: reminderFallbackFor(r),
         };
       }
     }
@@ -437,147 +395,6 @@ export function minutesOf(hhmm) {
   return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN;
 }
 
-// ─── Content builder (mirrors what the future push backend will send) ───────
-
-function taskXP(task) {
-  return HIGH_VALUE_TASK_IDS.has(task.id) ? 15 : 10;
-}
-
-function findTaskByTopic(tasks, topic) {
-  const patterns = {
-    workout: /workout|training|lift|discipline block|movement/i,
-    water:   /water/i,
-    reading: /read/i,
-    photo:   /photo/i,
-  };
-  const re = patterns[topic];
-  return re ? tasks.find(t => re.test(t.name)) : null;
-}
-
-/**
- * Build the notification for a reminder type given today's context, or null
- * when the reminder should NOT fire (task done, day complete, etc.).
- *
- * ctx: { profileId, tasks, dayData, isMWD, comebackActive, hasSetback,
- *        challengeName, lifetimeXP, challengeXP, bottleneckLabel }
- */
-export function buildReminder(type, ctx) {
-  const tasks = ctx.tasks || [];
-  const done = new Set(tasks.filter(t => ctx.dayData?.tasks?.[t.id]).map(t => t.id));
-  const remainingTasks = tasks.filter(t => !done.has(t.id));
-  const mwdRemaining = MWD_TASKS.filter(t => !ctx.dayData?.mwdTasks?.[t.id]);
-  const remaining = ctx.isMWD ? mwdRemaining.length : remainingTasks.length;
-  const dayComplete = ctx.isMWD ? mwdRemaining.length === 0 : (tasks.length > 0 && remainingTasks.length === 0);
-  const tag = (t) => `forge-${ctx.profileId}-${t}`;
-  // Keystone habits are prioritized in reminders when present and unfinished.
-  const keystone = topIncompleteKeystone(tasks, ctx.dayData);
-
-  switch (type) {
-    case 'morning': {
-      if (dayComplete) return null;
-      // Lead with the keystone habit when the challenge has one.
-      if (keystone) {
-        return {
-          title: '⚔️ Your most important task remains unfinished.',
-          body: `${keystoneName(keystone)} — ${getTaskXP(keystone)} XP.`,
-          tag: tag('morning'), view: 'today',
-        };
-      }
-      const availableXP = tasks.reduce((s, t) => s + taskXP(t), 0) + 50 + 15 + 10;
-      return {
-        title: '⚔️ Daily Mission',
-        body: `Complete today's ${ctx.challengeName || 'challenge'} and earn up to ${availableXP} XP.`,
-        tag: tag('morning'), view: 'today',
-      };
-    }
-    case 'workout': case 'water': case 'reading': case 'photo': {
-      const task = findTaskByTopic(tasks, type);
-      if (!task || done.has(task.id)) return null; // never remind about a finished task
-      const titles = {
-        workout: '🏋️ Training Quest',
-        water:   '💧 Hydration check',
-        reading: '📚 Reading time',
-        photo:   '📸 Progress photo',
-      };
-      const bodies = {
-        workout: `Your workout task is still waiting. +${taskXP(task)} XP.`,
-        water:   `"${task.name}" is still open. +${taskXP(task)} XP.`,
-        reading: `"${task.name}" is still open. +${taskXP(task)} XP.`,
-        photo:   `Future you will want this photo. +${taskXP(task)} XP.`,
-      };
-      return { title: titles[type], body: bodies[type], tag: tag(type), view: 'today' };
-    }
-    case 'evening': {
-      if (dayComplete || remaining === 0) return null;
-      // A more urgent keystone push in the evening — still encouraging.
-      if (keystone && !ctx.isMWD) {
-        return {
-          title: '🔥 Your challenge is at risk.',
-          body: `Complete your ${keystoneName(keystone)} today. You've still got time.`,
-          tag: tag('evening'), view: 'today',
-        };
-      }
-      const body = ctx.isMWD
-        ? `Minimum Warrior Day: ${remaining} small ${remaining === 1 ? 'task' : 'tasks'} left. The floor holds.`
-        : `${remaining} ${remaining === 1 ? 'task' : 'tasks'} left today. Still time to close it out.`;
-      return { title: '🌆 Evening check-in', body, tag: tag('evening'), view: 'today' };
-    }
-    case 'sleep': {
-      return {
-        title: '🌙 Begin your wind-down',
-        body: "Protect tomorrow's energy by starting your sleep routine.",
-        tag: tag('sleep'), view: 'today',
-      };
-    }
-    case 'streak': {
-      if (dayComplete) return null; // never warn when the day is already done
-      const body = ctx.isMWD
-        ? `MWD active: ${remaining} ${remaining === 1 ? 'task' : 'tasks'} to keep the chain alive.`
-        : `You still have ${remaining} ${remaining === 1 ? 'task' : 'tasks'} remaining.`;
-      return { title: '🔥 Defend your streak', body, tag: tag('streak'), view: 'today' };
-    }
-    case 'oneTaskLeft': {
-      if (dayComplete || remaining !== 1) return null; // exactly one required task
-      return {
-        title: '🛡️ One task left',
-        body: 'Finish the final task to complete the day.',
-        tag: tag('oneTaskLeft'), view: 'today',
-      };
-    }
-    case 'comeback': {
-      if (!ctx.comebackActive && !ctx.hasSetback) return null;
-      return {
-        title: '⚔️ Return to the path',
-        body: 'A setback is not an identity. Complete one task today.',
-        tag: tag('comeback'), view: 'today',
-      };
-    }
-    case 'insights': {
-      if (!ctx.bottleneckLabel) return null;
-      return {
-        title: '🔎 Forge noticed a pattern',
-        body: `${ctx.bottleneckLabel}. A recommended task is ready.`,
-        tag: tag('insights'), view: 'insights',
-      };
-    }
-    case 'milestone': {
-      // Prefer the caller's resolved rank state (floor-aware); fall back to
-      // deriving from the supplied XP only when it was not passed.
-      const rankInfo = ctx.rankState || resolveRankState({ rawLifetimeXP: ctx.lifetimeXP || 0 });
-      if (!rankInfo.next) return null;
-      const toNext = rankInfo.xpToNext;
-      if (toNext > 150) return null; // only when a rank-up is genuinely close
-      return {
-        title: `🏆 ${toNext.toLocaleString()} XP to ${rankInfo.next.name}`,
-        body: 'Rank is earned through repeated proof.',
-        tag: tag('milestone'), view: 'home',
-      };
-    }
-    default:
-      return null;
-  }
-}
-
 // ─── In-app scheduler bookkeeping (fires only while the app is open) ────────
 
 const LOG_KEY = 'notifLog';
@@ -614,14 +431,77 @@ function timeReached(timeStr, now = new Date()) {
 export function getDueReminders(prefs, ctx, todayStr, now = new Date()) {
   if (!prefs?.masterEnabled) return [];
   if (inQuietHours(prefs.quietHours, now)) return [];
+  const plan = buildReminderPlan(prefs, ctx);
   const due = [];
-  for (const def of REMINDER_DEFS) {
-    const setting = prefs.reminders?.[def.id];
-    if (!setting?.enabled) continue;
-    if (def.hasTime && !timeReached(setting.time || def.defaultTime, now)) continue;
-    if (alreadyFiredToday(ctx.profileId, def.id, todayStr)) continue;
-    const content = buildReminder(def.id, ctx);
-    if (content) due.push({ type: def.id, ...content });
+  for (const r of plan.deliverable) {
+    if (!timeReached(r.time, now)) continue;
+    if (alreadyFiredToday(ctx.profileId, r.id, todayStr)) continue;
+    // Null means the reminder does not apply right now — the task is already
+    // done, or there is nothing to log. Not an error; just nothing to send.
+    const content = reminderPayload(r, ctx);
+    if (content) due.push({ type: r.id, ...content });
   }
   return due;
+}
+
+// ─── Preferences migration ──────────────────────────────────────────────────
+
+/**
+ * Bring v1 notification preferences onto the derived reminder plan.
+ *
+ * v1 stored twelve fixed reminder ids (morning, workout, water, reading,
+ * photo, evening, sleep, streak, oneTaskLeft, comeback, insights, milestone),
+ * each with {enabled, time}. v2 stores decisions only, against plan ids.
+ *
+ * THE RULE: a migration may carry a decision forward, and may turn something
+ * OFF, but must never turn anything ON that the user had not already enabled.
+ * Every v1 default was off, so anything enabled was a deliberate choice and is
+ * honoured; everything else is simply dropped and falls back to the new
+ * defaults — which, with no stored entries at all, is morning + evening + the
+ * single top keystone habit.
+ *
+ * Idempotent: runs once per profile and marks itself with prefsVersion.
+ */
+const V1_TO_V2 = {
+  morning: 'u_morning',
+  evening: 'u_evening',
+  // Topic reminders become the equivalent OPT-IN personal habit. If the user's
+  // challenge covers the same habit, the plan supersedes it automatically and
+  // they still get only one notification.
+  reading: 'p_reading',
+  workout: 'p_workout',
+  water:   'p_hydration',
+};
+
+export function migrateNotifPrefs(prefs) {
+  if (!prefs || typeof prefs !== 'object') return makeDefaultNotifPrefs();
+  if (prefs.prefsVersion >= 2) return prefs;
+
+  const old = prefs.reminders || {};
+  const reminders = {};
+  for (const [v1id, v2id] of Object.entries(V1_TO_V2)) {
+    const entry = old[v1id];
+    if (!entry) continue;
+    // Only an explicitly ENABLED v1 reminder carries over as enabled. A
+    // disabled one carries its time but stays off, so nothing new starts
+    // firing because of an upgrade.
+    reminders[v2id] = { enabled: !!entry.enabled, time: entry.time || undefined };
+    if (!reminders[v2id].time) delete reminders[v2id].time;
+  }
+  return {
+    masterEnabled: !!prefs.masterEnabled,
+    quietHours: prefs.quietHours || { start: '22:30', end: '07:00' },
+    reminders,
+    customHabits: Array.isArray(prefs.customHabits) ? prefs.customHabits : [],
+    prefsVersion: 2,
+  };
+}
+
+/** Migrate every profile's preferences. Safe to call on every load. */
+export function migrateAllNotifPrefs(stored) {
+  const out = { ...(stored || {}) };
+  for (const profId of ['me', 'girlfriend']) {
+    out[profId] = migrateNotifPrefs(out[profId]);
+  }
+  return out;
 }

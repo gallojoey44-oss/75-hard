@@ -18,10 +18,9 @@ import {
   evaluateSchedule, localNow, toMinutes, inQuietHours,
   cadenceMinutes, CATCH_UP_MINUTES, SCHEDULER_STALE_MINUTES,
 } from '../api/_lib/schedule.js';
-import {
-  REMINDER_DEFS, REMINDER_FALLBACKS, reminderFallback, makeDefaultNotifPrefs,
-  BACKGROUND_REMINDER_IDS, isBackgroundReminder, timeInQuietHours, minutesOf,
-} from '../src/utils/notificationUtils.js';
+import { makeDefaultNotifPrefs, timeInQuietHours, minutesOf } from '../src/utils/notificationUtils.js';
+import { buildReminderPlan, UNIVERSAL_REMINDERS, PERSONAL_HABITS } from '../src/data/reminderPlan.js';
+import { reminderFallbackFor } from '../src/data/reminderCopy.js';
 
 const results = [];
 function check(name, cond, extra = '') {
@@ -146,35 +145,55 @@ check('4: an empty reminder set sends nothing', r.due.length === 0);
 r = evaluateSchedule(schedule({ reminders: { water: null } }), atLocal('2026-07-15', 14, 10));
 check('4: a null reminder entry is skipped without throwing', r.due.length === 0);
 
-// ══ 5: every background reminder has fallback copy ══════════════════════════
-// This is what keeps defect 3 fixed. A background-capable reminder with no
-// fallback is silently dead on any day the app was not opened.
-check('5: every time-based reminder has a fallback',
-  BACKGROUND_REMINDER_IDS.every(id => !!reminderFallback(id)),
-  BACKGROUND_REMINDER_IDS.filter(id => !reminderFallback(id)).join(', ') || 'all covered');
+// ══ 5: every reminder the plan can deliver has fallback copy ═══════════════
+// This is what keeps defect 3 fixed. A reminder with no fallback is silently
+// dead on any day the app was not opened. The catalogue is derived now, so the
+// property is checked across a plan built from a real challenge.
+const planTasks = [
+  { id: 't_sleep', name: 'Sleep opportunity: 8+ hours', icon: '😴', xp: 40, keystone: 3, keystoneHabit: true, habitKey: 'sleep_target' },
+  { id: 't_flow', name: 'Flow training: 2 focused sessions', icon: '🌊', xp: 35, keystone: 3, keystoneHabit: true, habitKey: 'flow_session' },
+  { id: 't_log', name: 'Complete Daily Log', icon: '📊', xp: 10, keystone: 0, habitKey: 'daily_log' },
+];
+const planCtx = { tasks: planTasks, challengeName: 'LOCK IN', challengeActive: true };
+const fullPrefs = {
+  reminders: Object.fromEntries(
+    buildReminderPlan({ reminders: {} }, planCtx).all.map(r => [r.id, { enabled: true }]),
+  ),
+};
+const everyReminder = buildReminderPlan(fullPrefs, planCtx).all;
+check('5: the plan produces reminders at all', everyReminder.length >= 6, `${everyReminder.length}`);
+check('5: every deliverable reminder has a fallback',
+  everyReminder.filter(r => !r.superseded).every(r => !!reminderFallbackFor(r)),
+  everyReminder.filter(r => !r.superseded && !reminderFallbackFor(r)).map(r => r.id).join(', ') || 'all covered');
 check('5: fallbacks have both a title and a body',
-  BACKGROUND_REMINDER_IDS.every(id => {
-    const f = reminderFallback(id);
+  everyReminder.filter(r => !r.superseded).every(r => {
+    const f = reminderFallbackFor(r);
     return f && typeof f.title === 'string' && f.title && typeof f.body === 'string' && f.body;
   }));
-check('5: fallback copy contains no date, day number or count — it must be true on any day',
-  Object.values(REMINDER_FALLBACKS).every(f => !/\b\d+\b/.test(`${f.title} ${f.body}`)),
-  Object.entries(REMINDER_FALLBACKS).filter(([, f]) => /\b\d+\b/.test(`${f.title} ${f.body}`)).map(([k]) => k).join(', ') || 'clean');
-check('5: reminderFallback returns null for an unknown type', reminderFallback('nope') === null);
-check('5: the background/in-app split is unchanged',
-  REMINDER_DEFS.filter(d => d.hasTime).every(d => isBackgroundReminder(d.id)) &&
-  REMINDER_DEFS.filter(d => !d.hasTime).every(d => !isBackgroundReminder(d.id)));
+check('5: fallback copy contains no count, date or day number — it must be true on any day',
+  everyReminder.filter(r => !r.superseded).every(r => {
+    const f = reminderFallbackFor(r);
+    return !/\b\d+\b/.test(`${f.title} ${f.body}`);
+  }),
+  everyReminder.filter(r => !r.superseded && /\b\d+\b/.test(
+    `${reminderFallbackFor(r).title} ${reminderFallbackFor(r).body}`)).map(r => r.id).join(', ') || 'clean');
+check('5: a superseded personal habit has no fallback — it is never delivered',
+  everyReminder.filter(r => r.superseded).every(r => reminderFallbackFor(r) === null));
 
 // ══ 5b: no default setting silently blocks delivery ═════════════════════════
 // "Quiet hours are swallowing a reminder you set" looks identical to broken
 // push, so the defaults must not do it and the UI must be able to spot it.
 const defaults = makeDefaultNotifPrefs();
 check('5b: minutesOf parses a reminder time', minutesOf('21:30') === 1290 && Number.isNaN(minutesOf('')));
-check('5b: no default reminder time falls inside the default quiet window',
-  REMINDER_DEFS.filter(d => d.hasTime)
-    .every(d => !timeInQuietHours(defaults.quietHours, minutesOf(d.defaultTime))),
-  REMINDER_DEFS.filter(d => d.hasTime && timeInQuietHours(defaults.quietHours, minutesOf(d.defaultTime)))
-    .map(d => `${d.id}@${d.defaultTime}`).join(', ') || 'none blocked');
+const defaultPlan = buildReminderPlan({ reminders: {} }, planCtx);
+check('5b: no reminder that is ON by default sits inside the default quiet window',
+  defaultPlan.deliverable.every(r => !timeInQuietHours(defaults.quietHours, minutesOf(r.time))),
+  defaultPlan.deliverable.filter(r => timeInQuietHours(defaults.quietHours, minutesOf(r.time)))
+    .map(r => `${r.id}@${r.time}`).join(', ') || 'none blocked');
+check('5b: no OFFERED reminder defaults to a time inside quiet hours either',
+  defaultPlan.all.every(r => !timeInQuietHours(defaults.quietHours, minutesOf(r.time))),
+  defaultPlan.all.filter(r => timeInQuietHours(defaults.quietHours, minutesOf(r.time)))
+    .map(r => `${r.id}@${r.time}`).join(', ') || 'none blocked');
 check('5b: a reminder moved inside quiet hours IS detected',
   timeInQuietHours(defaults.quietHours, minutesOf('23:15')) &&
   timeInQuietHours(defaults.quietHours, minutesOf('03:00')));
@@ -184,9 +203,8 @@ check('5b: the quiet-hours boundary is inclusive at the start and exclusive at t
 check('5b: the client and server agree on the quiet-hours rule',
   [0, 300, 420, 720, 1290, 1350, 1439].every(m =>
     timeInQuietHours(defaults.quietHours, m) === inQuietHours(defaults.quietHours, m)));
-check('5b: everything starts switched off, so nothing is sent unasked',
-  defaults.masterEnabled === false &&
-  Object.values(defaults.reminders).every(r => r.enabled === false));
+check('5b: notifications start switched off entirely',
+  defaults.masterEnabled === false && Object.keys(defaults.reminders).length === 0);
 
 // ══ 6: scheduler cadence — proving the dispatcher actually runs ═════════════
 const mins = n => new Date(Date.now() - n * 60000).toISOString();

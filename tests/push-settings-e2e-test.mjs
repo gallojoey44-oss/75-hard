@@ -92,19 +92,47 @@ check('2: in a desktop browser tab, installation reads as not installed',
 check('2: with no subscription it says None rather than implying one exists',
   deviceRows?.some(r => /Push subscription on device/.test(r) && /None/.test(r)));
 
-// ══ 3: existing notification preferences are untouched ═════════════════════
+// ══ 3: the sectioned reminder UI ═══════════════════════════════════════════
+// The fixture seeds v1 preferences (morning + water enabled), so this also
+// exercises the migration: morning carries over, water becomes the opt-in
+// Hydration personal habit, and nothing new is switched on.
 check('3: the master switch is still present', /Master switch for all/i.test(body));
-check('3: reminder rows still render', /Morning|Water/i.test(body));
 check('3: quiet hours still render', /Quiet hours/i.test(body));
-// The in-app-only reminders are below the fold; expand to see both labels.
-await page.evaluate(() => {
-  const b = [...document.querySelectorAll('button')].find(x => /Show all reminders/i.test(x.textContent));
-  if (b) b.click();
-});
-await page.waitForTimeout(250);
-const expanded = await text();
-check('3: the background / in-app labelling is preserved',
-  /Background/.test(expanded) && /In-app only/.test(expanded));
+check('3: reminders are grouped into named sections',
+  /General Reminders/i.test(body) && /Your Active Challenge/i.test(body) && /Personal Habits/i.test(body),
+  ['General Reminders', 'Your Active Challenge', 'Personal Habits']
+    .filter(t => !new RegExp(t, 'i').test(body)).join(', ') || 'all present');
+check('3: Advanced Notification Settings is its own section',
+  /Advanced Notification Settings/i.test(body));
+check('3: the daily volume is shown as a number',
+  (await page.locator('.nr-volume-count').count()) === 1);
+check('3: with no challenge running, the challenge section says so',
+  /No challenge running/i.test(body));
+check('3: and it offers the Forge Daily alternative instead of challenge rows',
+  /General Reminders above still work on Forge Daily/i.test(body));
+check('3: no challenge reminder rows exist without a challenge',
+  (await page.evaluate(() => [...document.querySelectorAll('.nr-row')]
+    .filter(r => /keystone/i.test(r.textContent)).length)) === 0);
+// The migration runs in memory on load (the same way profile and day
+// migrations do), so what matters is the rendered plan, not the stored blob —
+// localStorage only rewrites on the next save.
+const rows = await page.evaluate(() => [...document.querySelectorAll('.nr-row')].map(r => ({
+  label: r.querySelector('.nr-row-label')?.innerText.trim(),
+  on: /^On$/i.test(r.querySelector('.toggle-btn')?.innerText.trim() || ''),
+  supports: r.querySelector('.nr-row-supports')?.innerText.trim(),
+})));
+const row = (label) => rows.find(r => new RegExp(`^${label}`, 'i').test(r.label || ''));
+check('3: a v1 reminder that was ENABLED carries over as enabled',
+  row('Morning Daily Mission')?.on === true, JSON.stringify(row('Morning Daily Mission')));
+check('3: a v1 topic reminder becomes the matching personal habit, still on',
+  row('Hydration')?.on === true, JSON.stringify(row('Hydration')));
+check('3: a v1 reminder that was OFF did not become ON',
+  row('Workout')?.on === false, JSON.stringify(row('Workout')));
+check('3: nothing new was switched on by the upgrade — no spam',
+  rows.filter(r => r.on).length <= 4, `${rows.filter(r => r.on).length} on: ${rows.filter(r => r.on).map(r => r.label).join(', ')}`);
+check('3: every row says what it supports',
+  rows.every(r => (r.supports || '').length > 3));
+
 const times = await page.evaluate(() =>
   [...document.querySelectorAll('.notif-time-input')].map(i => i.value));
 check('3: the saved reminder times are shown, not reset',

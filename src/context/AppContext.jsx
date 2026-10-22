@@ -23,7 +23,7 @@ import { ENERGY_RESET_TEMPLATE_ID, LAGGED_HABIT_KEYS, windowForDuration, insight
 import { buildEnergySummary } from '../utils/energyTracking';
 import { clearProfilePhotos } from '../utils/photoStore';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
-import { makeDefaultNotifPrefs } from '../utils/notificationUtils';
+import { makeDefaultNotifPrefs, migrateAllNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS, computeLifetimeXP } from '../utils/gamification';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 
@@ -686,8 +686,12 @@ export function AppProvider({ children }) {
   // starting a new challenge; feeds lifetime XP and long-term Insights trends.
   const [archives, setArchivesState] = useState(() => loadLS('archives', { me: [], girlfriend: [] }));
   // Notification preferences, per profile — all reminders default OFF
+  // Migrated on load: v1 stored twelve fixed reminder ids, v2 stores decisions
+  // against the derived plan. The migration never turns anything ON that the
+  // user had not already enabled, so an upgrade cannot start sending
+  // notifications nobody asked for.
   const [notifPrefs, setNotifPrefsState] = useState(() =>
-    loadLS('notifPrefs', { me: makeDefaultNotifPrefs(), girlfriend: makeDefaultNotifPrefs() })
+    migrateAllNotifPrefs(loadLS('notifPrefs', { me: makeDefaultNotifPrefs(), girlfriend: makeDefaultNotifPrefs() }))
   );
   // Weekly reflections, per profile: { me: { [weekNumber]: {helped, avoided, tooHard, date} } }
   const [weeklyReflections, setWeeklyReflectionsState] = useState(() =>

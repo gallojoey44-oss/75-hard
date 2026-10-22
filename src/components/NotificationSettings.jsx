@@ -1,12 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { challengeOf, isSharedTask, LANE } from '../utils/challengeStack';
 import {
-  REMINDER_DEFS, makeDefaultNotifPrefs,
+  makeDefaultNotifPrefs,
   getNotificationSupport, permissionLabel,
   requestNotificationPermission, subscribeToPush, unsubscribeFromPush,
-  showTestNotification, backgroundTestPush, getPushStatus, isBackgroundReminder,
+  showTestNotification, backgroundTestPush, getPushStatus,
   scheduledTestPush, localSubscriptionState, timeInQuietHours, minutesOf,
 } from '../utils/notificationUtils';
+import {
+  buildReminderPlan, CATEGORY, CATEGORY_META, PERSONAL_HABITS,
+  BUSY_DAILY_THRESHOLD, TARGET_DAILY_MIN, TARGET_DAILY_MAX, CUSTOM_PREFIX,
+} from '../data/reminderPlan';
+import { reminderPreview } from '../data/reminderCopy';
 
 // VITE_VAPID_PUBLIC_KEY is inlined at BUILD time. If it was missing when the
 // production bundle was built, this is false and no push subscription can ever
@@ -33,14 +39,16 @@ function fmtRelative(iso) {
 }
 
 export default function NotificationSettings() {
-  const { activeProfile, profile, notifPrefs, updateNotifPrefs } = useApp();
+  const {
+    activeProfile, profile, notifPrefs, updateNotifPrefs,
+    getChallengeMeta, getRawDayNumber, getDayData,
+  } = useApp();
   const prefs = notifPrefs[activeProfile] || makeDefaultNotifPrefs();
 
   const [support, setSupport] = useState(() => getNotificationSupport());
   const [testStatus, setTestStatus] = useState(null); // 'sent' | 'failed' | null
   const [bgStatus, setBgStatus] = useState(null);      // { kind, msg }
   const [schedStatus, setSchedStatus] = useState(null); // { kind, msg }
-  const [showAll, setShowAll] = useState(false);
   const [diag, setDiag] = useState(null);
   const [diagLoading, setDiagLoading] = useState(false);
   // Read from the browser itself rather than from our server records — this is
@@ -154,7 +162,28 @@ export default function NotificationSettings() {
   }
 
   const canUse = support.supported && support.permission === 'granted';
-  const visibleReminders = showAll ? REMINDER_DEFS : REMINDER_DEFS.slice(0, 4);
+
+  // The reminder catalogue is derived, not fixed: what exists depends on the
+  // challenge this profile is actually running right now.
+  const ctx = useMemo(() => {
+    const meta = getChallengeMeta();
+    const dayNum = getRawDayNumber?.() ?? null;
+    return {
+      profileId: activeProfile,
+      tasks: profile?.tasks || [],
+      dayData: dayNum ? (getDayData?.(dayNum) || null) : null,
+      dayNumber: dayNum,
+      challengeName: meta?.name || null,
+      // A challenge contributes reminders only while it is genuinely running:
+      // not on Forge Daily, not before a scheduled start date, not after it
+      // has finished.
+      challengeActive: !!dayNum && !!meta?.templateId && meta.templateId !== 'forge_daily',
+      supportChallengeName: challengeOf(profile, LANE.SUPPORT)?.name || null,
+      isSharedTask,
+    };
+  }, [activeProfile, profile, getChallengeMeta, getRawDayNumber, getDayData]);
+
+  const plan = useMemo(() => buildReminderPlan(prefs, ctx), [prefs, ctx]);
 
   return (
     <div>
@@ -264,59 +293,13 @@ export default function NotificationSettings() {
 
       {prefs.masterEnabled && (
         <>
-          {/* Reminder list */}
-          <div className="notif-reminder-list">
-            {visibleReminders.map(def => {
-              const setting = prefs.reminders?.[def.id] || { enabled: false, time: def.defaultTime };
-              const bg = isBackgroundReminder(def.id);
-              // A reminder whose own time sits inside quiet hours can never be
-              // delivered. Unflagged, that is indistinguishable from broken push.
-              const mutedByQuiet = bg && setting.enabled &&
-                timeInQuietHours(prefs.quietHours, minutesOf(setting.time || def.defaultTime));
-              return (
-                <div key={def.id} className="notif-reminder-row">
-                  <span className="notif-reminder-label">
-                    {def.label}
-                    {mutedByQuiet && (
-                      <span className="notif-quiet-warn" title="This time is inside your quiet hours, so it will never be sent.">
-                        😴 inside quiet hours — won&apos;t send
-                      </span>
-                    )}
-                    <span
-                      className="notif-delivery-tag"
-                      style={{
-                        marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px',
-                        borderRadius: 10, whiteSpace: 'nowrap',
-                        color: bg ? '#10B981' : '#F59E0B',
-                        background: bg ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
-                      }}
-                    >
-                      {bg ? 'Background' : 'In-app only'}
-                    </span>
-                  </span>
-                  <div className="notif-reminder-controls">
-                    {def.hasTime && setting.enabled && (
-                      <input
-                        type="time"
-                        className="inline-input notif-time-input"
-                        value={setting.time || def.defaultTime}
-                        onChange={e => updateNotifPrefs({ reminders: { [def.id]: { time: e.target.value } } })}
-                      />
-                    )}
-                    <button
-                      className={`toggle-btn${setting.enabled ? ' on' : ''}`}
-                      onClick={() => updateNotifPrefs({ reminders: { [def.id]: { enabled: !setting.enabled } } })}
-                    >
-                      {setting.enabled ? 'On' : 'Off'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <button className="btn btn-ghost btn-full" style={{ marginTop: 8 }} onClick={() => setShowAll(v => !v)}>
-            {showAll ? '▲ Show fewer reminders' : `▼ Show all reminders (${REMINDER_DEFS.length})`}
-          </button>
+          {/* ── Reminders, organised by where they come from ── */}
+          <ReminderSections
+            plan={plan}
+            prefs={prefs}
+            ctx={ctx}
+            onChange={updateNotifPrefs}
+          />
 
           {/* Quiet hours */}
           <div className="notif-quiet-row">
@@ -498,6 +481,223 @@ export default function NotificationSettings() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+
+/**
+ * The four-section reminder list.
+ *
+ * Replaces one long generic list with sections that say where each reminder
+ * comes from: general ones that work with or without a challenge, ones derived
+ * from the challenge actually running, and opt-in personal habits. Every row
+ * shows the habit, the time, the toggle, and what requirement it supports.
+ */
+function ReminderSections({ plan, prefs, ctx, onChange }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  const setReminder = (id, patch) => onChange({ reminders: { [id]: patch } });
+  const busy = plan.enabledCount > BUSY_DAILY_THRESHOLD;
+
+  return (
+    <div className="nr">
+      {/* Live volume, so "roughly two or three a day" is visible rather than
+          an invisible design intention. */}
+      <div className={`nr-volume${busy ? ' busy' : ''}`}>
+        <span className="nr-volume-count">{plan.enabledCount}</span>
+        <span className="nr-volume-text">
+          {plan.enabledCount === 1 ? 'reminder a day' : 'reminders a day'}
+          {busy
+            ? ' — more than most people want. Turn a few off below.'
+            : ` · Forge aims for ${TARGET_DAILY_MIN}–${TARGET_DAILY_MAX}.`}
+        </span>
+      </div>
+
+      <Section meta={CATEGORY_META[CATEGORY.UNIVERSAL]}>
+        {plan.universal.map(r => (
+          <ReminderRow key={r.id} r={r} prefs={prefs} ctx={ctx} onChange={setReminder} />
+        ))}
+      </Section>
+
+      <Section
+        meta={CATEGORY_META[CATEGORY.CHALLENGE]}
+        subtitle={plan.hasChallenge ? plan.challengeName : null}
+      >
+        {plan.hasChallenge ? (
+          plan.challenge.length > 0 ? (
+            plan.challenge.map(r => (
+              <ReminderRow key={r.id} r={r} prefs={prefs} ctx={ctx} onChange={setReminder} />
+            ))
+          ) : (
+            <div className="nr-empty">
+              This challenge has no daily habits to remind you about.
+            </div>
+          )
+        ) : (
+          /* No challenge: say so, and point at what still works rather than
+             showing reminders for habits the user does not have. */
+          <div className="nr-empty">
+            <strong>No challenge running.</strong> Challenge reminders appear here automatically
+            when you start one, built from its actual habits.
+            <div className="nr-empty-alt">
+              In the meantime, the General Reminders above still work on Forge Daily — and you can
+              add any habit you like under Personal Habits.
+            </div>
+          </div>
+        )}
+      </Section>
+
+      <Section meta={CATEGORY_META[CATEGORY.PERSONAL]}>
+        {plan.personal.map(r => (
+          <ReminderRow key={r.id} r={r} prefs={prefs} ctx={ctx} onChange={setReminder} />
+        ))}
+        {adding ? (
+          <CustomHabitForm
+            onCancel={() => setAdding(false)}
+            onAdd={(habit) => {
+              onChange({ customHabits: [...(prefs.customHabits || []), habit] });
+              setAdding(false);
+            }}
+          />
+        ) : (
+          <button className="btn btn-ghost btn-full nr-add" onClick={() => setAdding(true)}>
+            ➕ Add your own habit
+          </button>
+        )}
+      </Section>
+
+      {/* ── 4. Advanced ── */}
+      <div className="nr-section">
+        <button className="nr-head" onClick={() => setShowAdvanced(v => !v)}>
+          <span className="nr-head-title">⚙️ Advanced Notification Settings</span>
+          <span className="nr-caret">{showAdvanced ? '▾' : '▸'}</span>
+        </button>
+        {showAdvanced && (
+          <div className="nr-advanced">
+            <p className="nr-note">
+              Reminders are sent by Forge&apos;s server from a schedule your device syncs. The
+              server is told the reminder times and the wording — never your Daily Log notes and
+              never your mood, energy or other ratings.
+            </p>
+            <p className="nr-note">
+              When the server&apos;s copy of your day is from an earlier date, it sends a general
+              version of the reminder instead of one that claims something is unfinished. It can
+              only know what your device last synced.
+            </p>
+            <DiagRow label="Reminders enabled" value={String(plan.enabledCount)} />
+            <DiagRow label="Challenge reminders" value={plan.hasChallenge ? String(plan.challenge.length) : 'none — no challenge running'} />
+            <DiagRow
+              label="Personal habits on"
+              value={String(plan.personal.filter(r => r.enabled && !r.superseded).length)}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Section({ meta, subtitle, children }) {
+  return (
+    <div className="nr-section">
+      <div className="nr-head static">
+        <span className="nr-head-title">{meta.icon} {meta.title}</span>
+        {subtitle && <span className="nr-head-sub">{subtitle}</span>}
+      </div>
+      <p className="nr-blurb">{meta.blurb}</p>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One reminder. Shows the habit, what requirement it supports, a preview of
+ * the actual wording, its time and its toggle.
+ */
+function ReminderRow({ r, prefs, ctx, onChange }) {
+  const superseded = !!r.superseded;
+  // A reminder whose own time sits inside quiet hours can never be delivered.
+  // Unflagged, that is indistinguishable from broken push.
+  const mutedByQuiet = r.enabled && !superseded &&
+    timeInQuietHours(prefs.quietHours, minutesOf(r.time));
+  const preview = r.enabled && !superseded ? reminderPreview(r, ctx) : null;
+
+  return (
+    <div className={`nr-row${superseded ? ' superseded' : ''}`}>
+      <span className="nr-row-icon">{r.icon}</span>
+      <span className="nr-row-text">
+        <span className="nr-row-label">
+          {r.label}
+          {r.keystone >= 3 && <span className="nr-key">keystone</span>}
+        </span>
+        <span className="nr-row-supports">{r.supports}</span>
+        {preview && <span className="nr-row-preview">“{preview}”</span>}
+        {mutedByQuiet && (
+          <span className="notif-quiet-warn">😴 inside quiet hours — won&apos;t send</span>
+        )}
+      </span>
+      <div className="nr-row-controls">
+        {r.enabled && !superseded && (
+          <input
+            type="time"
+            className="inline-input notif-time-input"
+            value={r.time}
+            onChange={e => onChange(r.id, { time: e.target.value })}
+            aria-label={`${r.label} reminder time`}
+          />
+        )}
+        <button
+          className={`toggle-btn${r.enabled && !superseded ? ' on' : ''}`}
+          disabled={superseded}
+          title={superseded ? 'Your challenge already covers this habit' : undefined}
+          onClick={() => onChange(r.id, { enabled: !r.enabled })}
+        >
+          {superseded ? 'Covered' : r.enabled ? 'On' : 'Off'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CustomHabitForm({ onAdd, onCancel }) {
+  const [label, setLabel] = useState('');
+  const [time, setTime] = useState('18:00');
+  const valid = label.trim().length > 1;
+  return (
+    <div className="nr-custom">
+      <input
+        className="inline-input nr-custom-input"
+        placeholder="Habit name (e.g. Stretch)"
+        value={label}
+        maxLength={40}
+        onChange={e => setLabel(e.target.value)}
+      />
+      <input
+        type="time"
+        className="inline-input notif-time-input"
+        value={time}
+        onChange={e => setTime(e.target.value)}
+      />
+      <button className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }} onClick={onCancel}>
+        Cancel
+      </button>
+      <button
+        className="btn btn-primary"
+        style={{ padding: '6px 12px', fontSize: 12 }}
+        disabled={!valid}
+        onClick={() => onAdd({
+          id: `${CUSTOM_PREFIX}${Date.now().toString(36)}`,
+          label: label.trim(),
+          icon: '✨',
+          time,
+          enabled: true,
+          body: `Time for ${label.trim()}.`,
+        })}
+      >
+        Add
+      </button>
     </div>
   );
 }
