@@ -379,6 +379,112 @@ function TaskList({ tasks, profile, renderTask, hasKeystones, keystoneExplainer 
   );
 }
 
+/**
+ * 📊 The Daily Log — notes and the day's metric ratings.
+ *
+ * Extracted so it can sit directly under the daily tasks instead of below the
+ * performance analytics: logging how the day went belongs with doing the day,
+ * not after the scorecard.
+ *
+ * Completion is NOT a checkbox. Saving any one metric marks the shared
+ * `daily_log` task complete exactly once (see handleUpdate), and the task row
+ * in the list scrolls here rather than toggling — so the 20 XP can be earned
+ * once, by actually logging, and never independently of this card.
+ */
+function DailyLog({ dayData, onUpdate, profile, activeProfile, logRef }) {
+  return (
+    <div className="section-card daily-log-card" ref={logRef}>
+      <div className="section-title" style={{ justifyContent: 'space-between' }}>
+        <span>📊 Daily Log</span>
+        {dayData?.tasks?.daily_log ? (
+          <span className="daily-log-done" style={{ fontSize: 13, color: '#6BCB77', fontWeight: 600 }}>
+            ✓ Logged · +20 XP
+          </span>
+        ) : (
+          <span className="daily-log-hint" style={{ fontSize: 12, opacity: 0.6 }}>
+            Save one metric to complete · 20 XP
+          </span>
+        )}
+      </div>
+      <textarea
+        className="log-textarea"
+        rows={3}
+        placeholder="How did today go? Any notes…"
+        value={dayData?.notes || ''}
+        onChange={e => onUpdate({ notes: e.target.value })}
+      />
+
+      <RatingSlider
+        label="Mood" emoji="😊"
+        value={dayData?.mood || 0}
+        onChange={v => onUpdate({ mood: v })}
+      />
+      <RatingSlider
+        label="Confidence" emoji="💪"
+        value={dayData?.confidence || 0}
+        onChange={v => onUpdate({ confidence: v })}
+      />
+      <div className="sleep-hours-row">
+        <div style={{ flex: 1 }}>
+          <div className="sleep-hours-label">😴 Hours Slept</div>
+          {profile?.sleepAutoComplete !== false && (
+            <div className="sleep-target-hint">≥ {profile?.sleepTarget ?? 8}h auto-completes sleep task</div>
+          )}
+        </div>
+        <input
+          type="number"
+          className="sleep-hours-input"
+          value={dayData?.hoursSlept || ''}
+          min={0}
+          max={16}
+          step={0.5}
+          placeholder="0"
+          onChange={e => {
+            const hrs = parseFloat(e.target.value) || 0;
+            const updates = { hoursSlept: hrs };
+            const target = profile?.sleepTarget ?? 8;
+            const autoComplete = profile?.sleepAutoComplete !== false;
+            const sleepTaskId = activeProfile === 'me' ? 'sleep_target' : 'gf_sleep_target';
+            if (autoComplete) {
+              updates.tasks = { ...dayData?.tasks, [sleepTaskId]: hrs >= target };
+            }
+            onUpdate(updates);
+          }}
+        />
+        <span className="sleep-hours-unit">hrs</span>
+      </div>
+      <RatingSlider
+        label="Sleep Quality" emoji="⭐"
+        value={dayData?.sleep || 0}
+        onChange={v => onUpdate({ sleep: v })}
+      />
+      <RatingSlider
+        label="Energy" emoji="⚡"
+        value={dayData?.energy || 0}
+        onChange={v => onUpdate({ energy: v })}
+      />
+      <RatingSlider
+        label="Recovery / Soreness" emoji="🔋"
+        value={dayData?.recovery || 0}
+        onChange={v => onUpdate({ recovery: v })}
+        hint="1 = very sore · 10 = fully recovered"
+      />
+      <RatingSlider
+        label="Workout Effort" emoji="🏋️"
+        value={dayData?.workoutEffort || 0}
+        onChange={v => onUpdate({ workoutEffort: v })}
+        hint="1 = very easy · 10 = extremely hard"
+      />
+      <RatingSlider
+        label="Stress" emoji="🌡️"
+        value={dayData?.stress || 0}
+        onChange={v => onUpdate({ stress: v })}
+        hint="1 = very calm · 10 = very stressed"
+      />
+    </div>
+  );
+}
+
 export default function DailyView({ editDayNum, setView }) {
   const {
     activeProfile, profile, allDays, todayStr,
@@ -917,16 +1023,28 @@ export default function DailyView({ editDayNum, setView }) {
         </>
       )}
 
+      {/* Daily Log — directly under the daily tasks, and above every analytics
+          section, so the day can be logged without scrolling past the
+          scorecard. Both profiles. */}
+      <DailyLog
+        dayData={dayData}
+        onUpdate={handleUpdate}
+        profile={profile}
+        activeProfile={activeProfile}
+        logRef={logRef}
+      />
+
       {/* Weekly Requirements — real per-challenge-week tracking (Fat Loss).
-          Sits below the daily tasks and above Challenge Performance. */}
+          Sits below the Daily Log and above Challenge Performance. */}
       {isCurrentDay && <WeeklyRequirements />}
 
-      {/* Bonus Missions — optional, below required tasks, above the Daily Log */}
+      {/* Bonus Missions — optional, below the required tasks and the Daily Log */}
       <BonusMissions dayNumber={selectedDayNum} isEditable />
 
-      {/* Challenge Performance — placed after the daily actions so the user
-          first sees what to do, then how it affects their overall score.
-          (Bonus Missions never affect the required challenge score.) */}
+      {/* Challenge Performance — placed after the daily actions AND the Daily
+          Log, so the user first sees what to do and records how it went, then
+          how it affects their overall score. (Bonus Missions never affect the
+          required challenge score.) */}
       <MuscleBuildingPanel />
       <HormoneHealthPanel />
       <EnergyResetPanel />
@@ -935,96 +1053,6 @@ export default function DailyView({ editDayNum, setView }) {
       <ChallengePerformance />
       <SupportProgress />
 
-      {/* Daily Log — both profiles */}
-      <div className="section-card" ref={logRef}>
-        <div className="section-title" style={{ justifyContent: 'space-between' }}>
-          <span>📊 Daily Log</span>
-          {dayData?.tasks?.daily_log ? (
-            <span className="daily-log-done" style={{ fontSize: 13, color: '#6BCB77', fontWeight: 600 }}>
-              ✓ Logged · +20 XP
-            </span>
-          ) : (
-            <span className="daily-log-hint" style={{ fontSize: 12, opacity: 0.6 }}>
-              Save one metric to complete · 20 XP
-            </span>
-          )}
-        </div>
-        <textarea
-          className="log-textarea"
-          rows={3}
-          placeholder="How did today go? Any notes…"
-          value={dayData?.notes || ''}
-          onChange={e => handleUpdate({ notes: e.target.value })}
-        />
-
-        <RatingSlider
-          label="Mood" emoji="😊"
-          value={dayData?.mood || 0}
-          onChange={v => handleUpdate({ mood: v })}
-        />
-        <RatingSlider
-          label="Confidence" emoji="💪"
-          value={dayData?.confidence || 0}
-          onChange={v => handleUpdate({ confidence: v })}
-        />
-        <div className="sleep-hours-row">
-          <div style={{ flex: 1 }}>
-            <div className="sleep-hours-label">😴 Hours Slept</div>
-            {profile?.sleepAutoComplete !== false && (
-              <div className="sleep-target-hint">≥ {profile?.sleepTarget ?? 8}h auto-completes sleep task</div>
-            )}
-          </div>
-          <input
-            type="number"
-            className="sleep-hours-input"
-            value={dayData?.hoursSlept || ''}
-            min={0}
-            max={16}
-            step={0.5}
-            placeholder="0"
-            onChange={e => {
-              const hrs = parseFloat(e.target.value) || 0;
-              const updates = { hoursSlept: hrs };
-              const target = profile?.sleepTarget ?? 8;
-              const autoComplete = profile?.sleepAutoComplete !== false;
-              const sleepTaskId = activeProfile === 'me' ? 'sleep_target' : 'gf_sleep_target';
-              if (autoComplete) {
-                updates.tasks = { ...dayData?.tasks, [sleepTaskId]: hrs >= target };
-              }
-              handleUpdate(updates);
-            }}
-          />
-          <span className="sleep-hours-unit">hrs</span>
-        </div>
-        <RatingSlider
-          label="Sleep Quality" emoji="⭐"
-          value={dayData?.sleep || 0}
-          onChange={v => handleUpdate({ sleep: v })}
-        />
-        <RatingSlider
-          label="Energy" emoji="⚡"
-          value={dayData?.energy || 0}
-          onChange={v => handleUpdate({ energy: v })}
-        />
-        <RatingSlider
-          label="Recovery / Soreness" emoji="🔋"
-          value={dayData?.recovery || 0}
-          onChange={v => handleUpdate({ recovery: v })}
-          hint="1 = very sore · 10 = fully recovered"
-        />
-        <RatingSlider
-          label="Workout Effort" emoji="🏋️"
-          value={dayData?.workoutEffort || 0}
-          onChange={v => handleUpdate({ workoutEffort: v })}
-          hint="1 = very easy · 10 = extremely hard"
-        />
-        <RatingSlider
-          label="Stress" emoji="🌡️"
-          value={dayData?.stress || 0}
-          onChange={v => handleUpdate({ stress: v })}
-          hint="1 = very calm · 10 = very stressed"
-        />
-      </div>
 
       {/* Celebration modal */}
       {showCelebration && (

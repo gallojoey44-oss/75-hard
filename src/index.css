@@ -6104,3 +6104,15 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
     padding-right: 10px;
   }
 }
+
+/* ─── v3.53.0: Daily Log sits directly under the daily tasks ─────────────── */
+
+/*
+ * 18px above the Daily Log, a little more air than the 14px that separates the
+ * rest of the stack, so it reads as the second beat of the day — do the
+ * habits, then record how it went — rather than as just the next card.
+ *
+ * .daily-view is a plain block container, so this collapses with the preceding
+ * card's 14px bottom margin to give exactly 18px rather than 32px.
+ */
+.daily-log-card { margin-top: 18px; }
