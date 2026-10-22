@@ -1,6 +1,6 @@
-export const BUILD_VERSION   = 'v3.51.0';
+export const BUILD_VERSION   = 'v3.52.0';
 export const BUILD_LABEL     = 'LIVE BUILD TEST';
-export const BUILD_DATE      = '2026-10-21';
+export const BUILD_DATE      = '2026-10-22';
 export const PRODUCTION_URL  = 'https://75-hard-v2.vercel.app';
 
 export default function BuildBanner() {

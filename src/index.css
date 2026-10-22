@@ -111,6 +111,18 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   border: 1px solid var(--border);
 }
 
+/* Secondary — a real second option beside a primary action.
+   This was used in nine places with no rule defining it, so it fell through to
+   the browser's default button background: a bright white block in a dark app.
+   A muted surface is what every one of those call sites actually wants. */
+.btn-secondary {
+  background: var(--card2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { filter: brightness(1.15); }
+.btn-secondary:disabled { opacity: 0.45; }
+
 .btn-danger {
   background: rgba(239,68,68,0.15);
   color: var(--danger);
@@ -3277,9 +3289,14 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 
 .acc-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  /* Clear of whatever ends up above it — the Add Support button, the support
+     card, a template-update box, or the cold-exposure card. */
+  margin-top: 16px;
 }
-.acc-actions .btn { flex: 1; padding: 10px; font-size: 14px; }
+/* flex-basis 0 so two labels of different lengths still produce equal widths,
+   and min-width 0 so a long label can never push the row wider than the card. */
+.acc-actions .btn { flex: 1 1 0; min-width: 0; }
 
 /* No active challenge */
 .no-active-challenge {
@@ -6015,3 +6032,75 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 /* The ramp preview wraps once a longer duration adds hold phases. */
 .li-ramp { flex-wrap: wrap; }
 .li-ramp-step { min-width: 62px; }
+
+/* ─── v3.52.0: Active Challenge card button group ────────────────────────── */
+
+/*
+ * The three actions in the Active Challenge card are one group, so they share
+ * one spec: same radius, same type, same internal padding, same height. Only
+ * COLOUR expresses the hierarchy —
+ *
+ *   Log Today            primary    filled purple (.btn-primary)
+ *   Dashboard            secondary  transparent, outlined (.btn-ghost)
+ *   Add Support          tertiary   subtle filled surface, quietest of the three
+ *
+ * Scoped to this card so no button anywhere else changes. Selectors are
+ * two-class deep deliberately: .btn-full also sets padding, font-size and
+ * border-radius, and these have to win regardless of source order.
+ */
+.active-challenge-card .acc-add-support,
+.active-challenge-card .acc-actions .btn {
+  min-height: 52px;          /* 52–56px: tall enough to tap, not a slab */
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  /* Every button in the group carries a border, transparent where the design
+     does not show one. Without this the outlined Dashboard button ends up 2px
+     narrower than the unbordered primary beside it: flex splits the free space
+     over content boxes, so a border on one side only makes the pair unequal. */
+  border: 1px solid transparent;
+}
+
+/* Secondary. The app-wide --border (7% white) all but disappears against this
+   card's purple tint, so the outline is strengthened here and the label takes
+   full-strength text: an outline you cannot see is not an outline, and without
+   this the tertiary button below reads as the more prominent of the two. */
+.active-challenge-card .acc-actions .btn-ghost {
+  border-color: rgba(255,255,255,0.22);
+  color: var(--text);
+}
+
+/* Tertiary. A faint surface rather than an outline, which keeps it distinct
+   from the outlined Dashboard button, with muted text so it stays the quietest
+   of the three — and nothing like the bright white block it used to render as. */
+.active-challenge-card .acc-add-support {
+  margin-top: 16px;
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.12);
+  color: var(--text2);
+  box-shadow: none;
+}
+.active-challenge-card .acc-add-support:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+}
+
+/* 22px at the bottom so the buttons are not crowding the card's border. */
+.active-challenge-card { padding: 18px 18px 22px; }
+
+/* A long challenge title wraps instead of stretching the card. */
+.acc-name { overflow-wrap: anywhere; }
+
+/* Narrow phones (320px-class). The row stays two-up with its 12px gap — only
+   the horizontal padding tightens, so "Log Today →" still fits on one line in
+   a ~119px button. Applied to all three together, so they stay consistent with
+   each other at every width. */
+@media (max-width: 360px) {
+  .active-challenge-card .acc-add-support,
+  .active-challenge-card .acc-actions .btn {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
