@@ -195,8 +195,11 @@ check('its daily habits are identical to the 12-week version',
   JSON.stringify(p8.tasks.map(t => ({ id: t.id, name: t.name, xp: t.xp, keystone: t.keystone }))) === twelveTasks);
 check('its weekly requirements are identical',
   JSON.stringify(p8.activeChallenge.weeklyRequirementDefs) === twelveWeekly);
-check('sleep is still the keystone at the same XP',
-  p8.tasks.find(t => t.keystoneHabit)?.id === 'hh_sleep' && p8.tasks.find(t => t.id === 'hh_sleep').xp === 40);
+// Absolute XP comes from the attempt's difficulty budget (XP economy v2), so
+// the keystone identity and the ladder's shape are what is asserted.
+check('sleep is still the keystone and still the top-valued task',
+  p8.tasks.find(t => t.keystoneHabit)?.id === 'hh_sleep' &&
+  p8.tasks.find(t => t.id === 'hh_sleep').xp === Math.max(...p8.tasks.map(t => t.xp)));
 await gotoTab('Today');
 check('the 8-week attempt shows "of 56"', /of 56/.test(await page.textContent('.day-selector')));
 check('it renders the same six daily tasks', (await page.locator('.gf-task-card').count()) === 6);
@@ -220,7 +223,9 @@ await gotoTab('Today');
 const names = p.tasks.map(t => t.name);
 check('there are five daily habits plus the daily log', p.tasks.length === 6, `${p.tasks.length}: ${names.join(' | ')}`);
 check('sleep is the keystone', p.tasks.filter(t => t.keystoneHabit).map(t => t.id).join() === 'hh_sleep');
-check('sleep carries the highest XP', p.tasks.find(t => t.id === 'hh_sleep').xp === 40);
+check('sleep carries the highest XP',
+  p.tasks.find(t => t.id === 'hh_sleep').xp === Math.max(...p.tasks.map(t => t.xp)) &&
+  p.tasks.filter(t => t.xp === p.tasks.find(x => x.id === 'hh_sleep').xp).length === 1);
 check('the daily list is sleep, whole food, steps, down-regulation, hydration, log',
   names.some(n => /Sleep 7\.5–9 hours/.test(n)) && names.includes('Eat mostly whole foods') &&
   names.some(n => /8,000\+ steps/.test(n)) && names.some(n => /minutes of down-regulation/.test(n)) &&
@@ -233,8 +238,12 @@ check('canonical habitKeys are attached', (() => {
 })());
 check('the XP ladder holds in the running app', (() => {
   const xp = Object.fromEntries(p.tasks.map(t => [t.id, t.xp]));
-  return xp.hh_sleep === 40 && xp.hh_whole_food === 35 && xp.hh_movement === 25 &&
-    xp.hh_stress === 25 && xp.hh_hydration === 10 && xp.hh_sleep >= xp.hh_hydration * 4;
+  // The ORDER is the design; the absolute values are budget-derived.
+  return xp.hh_sleep > xp.hh_whole_food && xp.hh_whole_food > xp.hh_movement &&
+    xp.hh_movement >= xp.hh_stress && xp.hh_stress > xp.hh_hydration &&
+    xp.hh_sleep >= xp.hh_hydration * 4 &&
+    p.tasks.filter(t => t.source === 'template').reduce((a, t) => a + t.xp, 0) ===
+      p.activeChallenge.dailyBudget;
 })());
 check('no supplement, sauna, cold or special-salt task exists',
   !/magnesium|ginger|supplement|sauna|cold|sea salt|electrolyte/i.test(names.join(' ')));

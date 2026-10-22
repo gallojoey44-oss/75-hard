@@ -93,7 +93,10 @@ for (const days of [14, 30, 60]) {
   await startFatLoss(days);
   let m = await meta();
   check(`${days}d: stored on the attempt (durationDays=${days})`, m.durationDays === days, `got ${m.durationDays}`);
-  const expectedBonus = { 14: 200, 30: 500, 60: 1100 }[days];
+  // XP economy v2: completion bonus = completionRate (0.20) x the attempt's
+  // daily budget x its duration, so it is worth the same per day at every
+  // length and no duration can be farmed for a better rate.
+  const expectedBonus = Math.round(0.20 * m.dailyBudget * days);
   check(`${days}d: completion bonus ${expectedBonus} stored on the attempt`, m.completionBonusXP === expectedBonus, `got ${m.completionBonusXP}`);
   check(`${days}d: passing score is the standard 70%`, m.passingScore === 70);
   // 6: survives reload
@@ -139,7 +142,9 @@ await page.locator('.challenge-complete-screen button', { hasText: 'Return to Fo
 await page.waitForTimeout(300);
 await startFatLoss(14);
 check('7: next Fat Loss attempt can pick a different duration (14)', (await meta()).durationDays === 14);
-check('7: and its bonus follows the new choice (200)', (await meta()).completionBonusXP === 200);
+check('7: and its bonus follows the new choice',
+  (await meta()).completionBonusXP === Math.round(0.20 * (await meta()).dailyBudget * 14),
+  String((await meta()).completionBonusXP));
 
 // ══ 8/9/20: legacy fixed 30-day attempts are preserved untouched ════════════
 await init();
@@ -187,6 +192,9 @@ check('20: only the additive weekly fields differ', await page.evaluate(({ befor
   const strip = (o) => { const c = { ...o, activeChallenge: { ...o.activeChallenge } };
     delete c.weeklySessions; delete c.activeChallenge.weeklyRequirementsStartDate;
     delete c.supportChallenge; delete c.supportChallengeStart;
+    // XP economy v2 stamps a finite in-progress attempt as era 1 so it keeps
+    // its original rates to the end. Additive, and it changes no XP.
+    delete c.activeChallenge.xpEconomyVersion;
     c.tasks = (c.tasks || []).map(t => { const { challenges, ...rest } = t; return rest; });
     return JSON.stringify(c); };
   return strip(b) === strip(a);
@@ -208,7 +216,9 @@ await page.evaluate((data) => { for (const k of Object.keys(data)) localStorage.
 await page.reload(); await page.waitForSelector('.dashboard', { timeout: 5000 });
 const restored = await meta();
 check('21: export/import preserves durationDays=60', restored.durationDays === 60);
-check('21: export/import preserves the 1100 bonus', restored.completionBonusXP === 1100);
+check('21: export/import preserves the completion bonus',
+  restored.completionBonusXP === Math.round(0.20 * restored.dailyBudget * 60),
+  String(restored.completionBonusXP));
 
 // ══ 15: current-day fairness still holds on a 60-day attempt ════════════════
 await gotoTab('Home'); await page.waitForTimeout(300);

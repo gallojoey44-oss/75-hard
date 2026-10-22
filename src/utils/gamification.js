@@ -4,7 +4,7 @@ import { readDayMetric, dayHasAnyMetric } from './insightsUtils';
 import { computeWeeklyRequirements } from './weeklyRequirements';
 import { isScheduled } from './challengeSchedule';
 import { LANE, challengeOf, startOf, tasksForLane, recordKeyForLaneDay } from './challengeStack';
-import { dayRules, bonusCapForAttempt, RANKS as ECONOMY_RANKS } from '../data/xpEconomy';
+import { dayRules, bonusCapForAttempt, RANKS as ECONOMY_RANKS, HIGH_VALUE_TASK_IDS as ECONOMY_HIGH_VALUE_IDS } from '../data/xpEconomy';
 
 /**
  * The effective required-task list for a specific challenge day. The only
@@ -222,13 +222,11 @@ export const ERA1_RULES = dayRules({ xpEconomyVersion: 1 });
 
 // ─── High-value task IDs ─────────────────────────────────────────────────────
 
-export const HIGH_VALUE_TASK_IDS = new Set([
-  'workout', 'gf_workout',
-  'sleep_target', 'gf_sleep_target',
-  'diet', 'gf_diet',
-  'mental', 'gf_mental',
-  'mt_mind', 'mt_body', // Mental Training Phase core tasks
-]);
+/**
+ * The task ids era 1 priced above the rest. Defined in `src/data/xpEconomy.js`
+ * and re-exported here so existing imports keep working.
+ */
+export const HIGH_VALUE_TASK_IDS = ECONOMY_HIGH_VALUE_IDS;
 
 // ─── Keystone habits & per-task XP ───────────────────────────────────────────
 // Newer challenge templates weight tasks unequally: each task can carry an

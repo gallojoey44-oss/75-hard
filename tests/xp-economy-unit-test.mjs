@@ -576,6 +576,71 @@ const dstr = (off) => {
     dayFor(a) === dayFor(b) && dayFor(a) === 230, `${dayFor(a)} vs ${dayFor(b)}`);
 }
 
+// ══ 17: stars and XP must always agree ═════════════════════════════════════
+// Within a tier, a challenge's own priority ladder is preserved — Energy Reset
+// values sleep above morning light though both are keystones. Across tiers,
+// the keystone tier governs, so no single inflated value can dominate: Mental
+// Training priced its 5-minute meditation at 100, more than 75 Hard's whole
+// day, and that must not survive as 37% of its budget.
+{
+  const ladders = {
+    'Energy Reset': [
+      { id: 'sleep', xp: 40, keystone: 3 }, { id: 'light', xp: 30, keystone: 3 },
+      { id: 'nutrition', xp: 30, keystone: 2 }, { id: 'steps', xp: 20, keystone: 2 },
+      { id: 'caffeine', xp: 15, keystone: 2 }, { id: 'hydration', xp: 15, keystone: 1 },
+      { id: 'stress', xp: 12, keystone: 1 }, { id: 'winddown', xp: 10, keystone: 1 },
+      { id: 'log', xp: 10, keystone: 1 },
+    ],
+    'Mental Training': [
+      { id: 'mind', xp: 100, keystone: 3 }, { id: 'reading', xp: 40, keystone: 2 },
+      { id: 'prayer', xp: 40, keystone: 2 }, { id: 'gratitude', xp: 20, keystone: 1 },
+      { id: 'focus', xp: 20, keystone: 1 }, { id: 'physical', xp: 30, keystone: 0 },
+      { id: 'log', xp: 20, keystone: 0 },
+    ],
+    'Forge Daily': [
+      { id: 'mind', xp: 12, keystone: 1 }, { id: 'sleep', xp: 8, keystone: 0 },
+      { id: 'move', xp: 8, keystone: 0 }, { id: 'read', xp: 6, keystone: 0 },
+      { id: 'pray', xp: 6, keystone: 0 }, { id: 'grat', xp: 5, keystone: 0 },
+      { id: 'water', xp: 5, keystone: 0 }, { id: 'log', xp: 20, keystone: 0 },
+    ],
+    'LOCK IN': [
+      { id: 'sleep', xp: 40, keystone: 3 }, { id: 'flow', xp: 35, keystone: 3 },
+      { id: 'exec', xp: 30, keystone: 3 }, { id: 'mission', xp: 25, keystone: 2 },
+      { id: 'energy', xp: 25, keystone: 2 }, { id: 'attn', xp: 20, keystone: 2 },
+      { id: 'rec', xp: 15, keystone: 1 }, { id: 'stress', xp: 12, keystone: 1 },
+      { id: 'log', xp: 10, keystone: 0 },
+    ],
+  };
+  for (const [name, tasks] of Object.entries(ladders)) {
+    const priced = allocateTaskXP(tasks, 160);
+    const by = Object.fromEntries(priced.map(t => [t.id, t.xp]));
+    // No tier inversion: every task outranks every task in a lower tier.
+    let inverted = null;
+    for (const hi of priced) {
+      for (const lo of priced) {
+        if ((hi.keystone ?? 0) > (lo.keystone ?? 0) && hi.xp <= lo.xp) {
+          inverted = `${hi.id}(k${hi.keystone}):${hi.xp} <= ${lo.id}(k${lo.keystone}):${lo.xp}`;
+        }
+      }
+    }
+    check(`17: ${name} — more stars is always worth more`, !inverted, inverted || 'ordered');
+    check(`17: ${name} — sums exactly to the budget`,
+      priced.reduce((s, t) => s + t.xp, 0) === 160);
+  }
+  // Within-tier ladders survive.
+  const er = Object.fromEntries(allocateTaskXP(ladders['Energy Reset'], 160).map(t => [t.id, t.xp]));
+  check('17: within a tier the challenge\'s own ladder is kept',
+    er.sleep > er.light, `sleep ${er.sleep} > light ${er.light}`);
+  // And an inflated single value does not dominate.
+  const mt = Object.fromEntries(allocateTaskXP(ladders['Mental Training'], 160).map(t => [t.id, t.xp]));
+  check('17: a task priced at 100 under era 1 does not take over the budget',
+    mt.mind / 160 < 0.30, `${mt.mind} of 160 = ${Math.round((mt.mind / 160) * 100)}%`);
+  // The outlier case that forced the clamp.
+  const fd = Object.fromEntries(allocateTaskXP(ladders['Forge Daily'], 120).map(t => [t.id, t.xp]));
+  check('17: an outlier in a low tier cannot overtake a keystone',
+    fd.mind > fd.log, `Mental Training ${fd.mind} > Daily Log ${fd.log}`);
+}
+
 const failed = results.filter(x => !x.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
 process.exit(failed.length ? 1 : 0);

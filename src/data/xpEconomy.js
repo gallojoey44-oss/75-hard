@@ -94,6 +94,22 @@ export const RANKS = [
 export const EFFORT_TIERS = ['easy', 'medium', 'medium_hard', 'hard', 'elite'];
 
 /**
+ * The task ids era 1 priced above the rest.
+ *
+ * Economy data, so it lives here; `gamification` re-exports it for the call
+ * sites that already import it from there. It still matters under era 2 as a
+ * WEIGHT source for legacy task lists, which carry neither explicit XP nor
+ * keystone tiers.
+ */
+export const HIGH_VALUE_TASK_IDS = new Set([
+  'workout', 'gf_workout',
+  'sleep_target', 'gf_sleep_target',
+  'diet', 'gf_diet',
+  'mental', 'gf_mental',
+  'mt_mind', 'mt_body',
+]);
+
+/**
  * Effort tiers for attempts whose descriptor is not a registry template, keyed
  * by templateId.
  *
@@ -231,10 +247,81 @@ export function tierBudget(tier, mode = 'standard', economy = ECONOMY_V2) {
 }
 
 /**
- * Split a budget across tasks by keystone weight, in whole numbers that sum to
- * EXACTLY the budget (largest-remainder). Exactness matters: the budget is the
- * guarantee that two challenges of the same tier are worth the same per day, so
- * a rounding drift would quietly reintroduce the task-count problem.
+ * What share of the budget each task should get.
+ *
+ * When a template has priced EVERY task itself, those values are the weights.
+ * Challenge configs encode a deliberate priority ladder within a tier — Energy
+ * Reset puts sleep at 40 and morning light at 30, both keystones — and
+ * weighting by keystone tier alone would flatten them to the same number,
+ * throwing away a design decision the challenge author made. Scaling the
+ * author's own ladder to the budget keeps the internal ordering exactly
+ * proportional while the DAILY TOTAL is what difficulty governs.
+ *
+ * A list where only some tasks carry `xp` is a legacy list (75 Hard, where only
+ * the Daily Log constant has one), and its numbers are not a ladder — treating
+ * them as weights would make the Daily Log the most valuable habit of the day.
+ * Those fall back to keystone tiers.
+ */
+function taskWeights(list, economy) {
+  const allPriced = list.every(t => typeof t?.xp === 'number' && t.xp > 0);
+  const anyKeystone = list.some(t => (t?.keystone ?? 0) > 0);
+
+  if (allPriced && anyKeystone) {
+    // Keystone tiers govern ACROSS tiers; the author's own XP only orders tasks
+    // WITHIN a tier.
+    //
+    // Using the author's XP as the weight outright preserves distortions as
+    // readily as designs: Mental Training priced its 5-minute meditation at
+    // 100, more than 75 Hard's entire daily slate, and carrying that forward
+    // handed one task 37% of the day while a 60-minute phone-free block got
+    // 7%. Using keystone tiers alone goes too far the other way and flattens
+    // deliberate distinctions, like Energy Reset's sleep (40) above morning
+    // light (30) when both are keystones.
+    //
+    // So each task starts at its tier's weight and is nudged by how it compares
+    // with its OWN tier's average.
+    //
+    // The nudge is CLAMPED so it can never reorder two tiers. For adjacent
+    // weights a and b, no inversion requires a(1+m) < b(1−m), i.e.
+    // m < (b−a)/(b+a). Across 1.0/1.3/2.0/3.0 the tightest pair is 1.0 and 1.3,
+    // giving m < 0.130 — so 0.12. Without the clamp an outlier does invert the
+    // tiers: Forge Daily's Daily Log, priced at 20 among tasks averaging 8,
+    // overtook the keystone Mental Training habit.
+    const NUDGE = 0.3;
+    const MAX_SHIFT = 0.12;
+    const clamp = (m) => Math.min(1 + MAX_SHIFT, Math.max(1 - MAX_SHIFT, m));
+    const sums = new Map();
+    const counts = new Map();
+    for (const t of list) {
+      const k = t?.keystone ?? 0;
+      sums.set(k, (sums.get(k) || 0) + t.xp);
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+    return list.map(t => {
+      const k = t?.keystone ?? 0;
+      const base = economy.weights?.[k] ?? 1;
+      const mean = sums.get(k) / counts.get(k);
+      const ratio = mean > 0 ? t.xp / mean : 1;
+      return base * clamp(1 + NUDGE * (ratio - 1));
+    });
+  }
+
+  if (allPriced) return list.map(t => t.xp);
+  if (anyKeystone) return list.map(t => economy.weights?.[t?.keystone ?? 0] ?? 1);
+  // A legacy list: no explicit XP and no keystone tiers, which is every
+  // 75-Day Discipline task. Era 1 distinguished them only through
+  // HIGH_VALUE_TASK_IDS, so that shape is the weighting — otherwise the whole
+  // list would flatten to one value and a 45-minute workout would be worth the
+  // same as taking a photo. Adding keystone tiers to those tasks instead would
+  // change the challenge's keystone-adherence grading, which is out of scope.
+  return list.map(t => (HIGH_VALUE_TASK_IDS.has(t?.id) ? 15 : 10));
+}
+
+/**
+ * Split a budget across tasks, in whole numbers that sum to EXACTLY the budget
+ * (largest-remainder). Exactness matters: the budget is the guarantee that two
+ * challenges of the same tier are worth the same per day, so a rounding drift
+ * would quietly reintroduce the task-count problem.
  *
  * Every task gets at least 1 XP, so a long task list cannot price a habit at
  * zero and make it look optional.
@@ -242,7 +329,7 @@ export function tierBudget(tier, mode = 'standard', economy = ECONOMY_V2) {
 export function allocateTaskXP(tasks, budget, economy = ECONOMY_V2) {
   const list = tasks || [];
   if (!list.length) return [];
-  const weights = list.map(t => economy.weights?.[t?.keystone ?? 0] ?? 1);
+  const weights = taskWeights(list, economy);
   const total = weights.reduce((s, x) => s + x, 0) || 1;
   const raw = weights.map(w => (budget * w) / total);
   const out = raw.map(x => Math.max(1, Math.floor(x)));

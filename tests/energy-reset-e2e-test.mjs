@@ -244,8 +244,19 @@ await page.reload(); await page.waitForSelector('.dashboard', { timeout: 6000 })
 const afterSleep = await page.evaluate(() => document.body.textContent);
 check('completing the keystone awards XP', /XP/.test(afterSleep));
 const sleepTask = (await prof()).tasks.find(t => t.id === 'er_sleep');
+// Absolute XP is set by the attempt's difficulty budget (XP economy v2), so
+// these assert the RELATIVE ladder and the budget total rather than the old
+// hardcoded values — a future rebalance moves the numbers, not the design.
+const profSync = await prof();
 check('sleep is worth the most XP of any daily task',
-  sleepTask.xp === Math.max(...(await prof()).tasks.map(t => t.xp)) && sleepTask.xp === 40);
+  sleepTask.xp === Math.max(...(await prof()).tasks.map(t => t.xp)) &&
+  (await prof()).tasks.filter(t => t.xp === sleepTask.xp).length === 1);
+check('the daily tasks sum to the attempt\'s own XP budget',
+  (() => {
+    const pr = profSync;
+    return pr.tasks.filter(t => t.source === 'template')
+      .reduce((a, t) => a + t.xp, 0) === pr.activeChallenge.dailyBudget;
+  })());
 check('the tasks carry the full XP ladder, not a flat value',
   new Set((await prof()).tasks.map(t => t.xp)).size >= 5);
 
@@ -361,14 +372,24 @@ for (const d of [7, 10, 14, 30]) {
   await startEnergyReset({ duration: d });
   const p = await prof();
   check(`starting a ${d}-day run stores ${d} days`, p.activeChallenge?.durationDays === d, String(p.activeChallenge?.durationDays));
+  // Completion bonus = completionRate (0.20) x daily budget x duration, so it
+  // is worth the same per day at every length.
   check(`the ${d}-day attempt gets the right completion bonus`,
-    p.activeChallenge?.completionBonusXP === { 7: 250, 10: 400, 14: 600, 30: 1400 }[d],
-    String(p.activeChallenge?.completionBonusXP));
+    p.activeChallenge?.completionBonusXP === Math.round(0.20 * p.activeChallenge.dailyBudget * d),
+    `${p.activeChallenge?.completionBonusXP} for ${d}d at budget ${p.activeChallenge?.dailyBudget}`);
   check(`the ${d}-day attempt has the SAME nine daily habits`, p.tasks.length === 9);
   check(`the ${d}-day attempt has the SAME two weekly requirements`,
     (p.activeChallenge?.weeklyRequirementDefs || []).length === 2);
   check(`the ${d}-day attempt keeps the same XP weighting`,
-    p.tasks.find(t => t.id === 'er_sleep').xp === 40 && p.tasks.find(t => t.id === 'er_winddown').xp === 10);
+    (() => {
+      const xp = Object.fromEntries(p.tasks.map(t => [t.id, t.xp]));
+      // The ladder's shape is what must hold at every duration: sleep on top,
+      // wind-down at the bottom, and the day summing to the budget.
+      return xp.er_sleep === Math.max(...Object.values(xp)) &&
+        xp.er_winddown <= xp.er_stress && xp.er_stress <= xp.er_steps &&
+        p.tasks.filter(t => t.source === 'template').reduce((a, t) => a + t.xp, 0) ===
+          p.activeChallenge.dailyBudget;
+    })());
   await gotoTab('Today');
   await page.waitForTimeout(400);
   check(`the ${d}-day panel shows Day 1 of ${d}`,

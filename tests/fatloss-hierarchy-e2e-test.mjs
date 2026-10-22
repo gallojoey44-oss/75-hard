@@ -61,24 +61,44 @@ await page.waitForSelector('.daily-view', { timeout: 5000 });
 
 // ── 1–8: displayed stars + XP ───────────────────────────────────────────────
 const shown = await rows();
+// The attempt's own stamped daily budget — the figure the task list must sum to.
+const budget = await page.evaluate(() =>
+  JSON.parse(localStorage.getItem('profiles')).me.activeChallenge.dailyBudget);
 const byName = (frag) => shown.find(r => r.name.includes(frag));
+// XP economy v2 prices each task as a share of the attempt's daily budget, so
+// the absolute values move with difficulty. What must hold is the HIERARCHY
+// the stars promise: a three-star habit is worth more than a two-star, which is
+// worth more than a one-star. The XP read from the UI is used directly, so this
+// cannot drift out of date on the next rebalance.
 const EXPECT = [
-  ['protein', 3, 40], ['whole foods', 3, 40],
-  ['8,000+ steps', 2, 25], ['Sleep 7.5', 2, 25],
-  ['water', 1, 15], ['progress photo', 1, 10], ['Daily Log', 1, 10],
+  ['protein', 3], ['whole foods', 3],
+  ['8,000+ steps', 2], ['Sleep 7.5', 2],
+  ['water', 1], ['progress photo', 1], ['Daily Log', 1],
 ];
-for (const [frag, stars, xp] of EXPECT) {
+for (const [frag, stars] of EXPECT) {
   const r = byName(frag);
-  check(`UI: "${frag}" shows ${'⭐'.repeat(stars)} and ${xp} XP`, r && r.stars === stars && r.xp === xp,
+  check(`UI: "${frag}" shows ${'⭐'.repeat(stars)} and an XP value`,
+    r && r.stars === stars && r.xp > 0,
     r ? `stars=${r.stars} xp=${r.xp}` : 'row missing');
 }
+check('UI: the stars and the XP agree — more stars is always worth more', (() => {
+  const by = (n) => byName(n).xp;
+  const three = Math.min(by('protein'), by('whole foods'));
+  const two = Math.max(by('8,000+ steps'), by('Sleep 7.5'));
+  const one = Math.max(by('water'), by('progress photo'), by('Daily Log'));
+  return three > two && two > one;
+})(), EXPECT.map(([f]) => `${f}:${byName(f).xp}`).join(' '));
 check('UI: keystone visual treatment applied to the ⭐⭐⭐ habits',
   byName('protein').cls.includes('keystone-3') && byName('whole foods').cls.includes('keystone-3'));
 check('UI: exactly 7 required tasks on Standard', shown.length === 7, `${shown.length}`);
-check('9: displayed XP sums to 165', shown.reduce((s, r) => s + r.xp, 0) === 165, `${shown.reduce((s, r) => s + r.xp, 0)}`);
+check('9: displayed XP sums to the attempt\'s own daily budget',
+  shown.reduce((s, r) => s + r.xp, 0) === budget, `${shown.reduce((s, r) => s + r.xp, 0)} vs ${budget}`);
 
 // ── 20: XP shown == XP awarded ──────────────────────────────────────────────
-for (const [frag, , xp] of EXPECT) {
+// The invariant, unchanged by the rebalance: whatever the row says a habit is
+// worth is exactly what completing it awards.
+for (const [frag] of EXPECT) {
+  const xp = byName(frag)?.xp;
   if (frag === 'Daily Log') continue; // opens the log form instead of toggling
   await gotoTab('Home'); const before = await challengeXP();
   await gotoTab('Today');
@@ -150,6 +170,10 @@ check('19: task definitions and challenge rules untouched (ignoring additive wee
     const strip = (o) => { const c = { ...o, activeChallenge: { ...o.activeChallenge } };
       delete c.weeklySessions; delete c.activeChallenge.weeklyRequirementsStartDate;
       delete c.supportChallenge; delete c.supportChallengeStart;
+      // XP economy v2 stamps a finite in-progress attempt as era 1, which is
+      // what PINS it to its original rates — the assertions above confirm its
+      // task values are unchanged. Additive, so stripped like the others.
+      delete c.activeChallenge.xpEconomyVersion;
       c.tasks = (c.tasks || []).map(t => { const { challenges, ...rest } = t; return rest; });
       return JSON.stringify(c); };
     return strip(b) === strip(a);
