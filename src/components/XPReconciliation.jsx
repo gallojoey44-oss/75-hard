@@ -231,9 +231,17 @@ function Period({ s, fmt }) {
             <span>XP earned</span><span>+{n(s.gained)}</span>
           </div>
         )}
-        {s.lost != null && (
+        {s.missedPenalty != null && (
           <div className="xpr-period-row">
-            <span>Missed-day penalties</span><span>−{n(s.lost)}</span>
+            <span>Missed-day penalties</span><span>−{n(s.missedPenalty)}</span>
+          </div>
+        )}
+        {/* Days that were logged but left incomplete cost XP too. Kept on a
+            separate line so "N days missed" always equals N × 25 and the
+            arithmetic can be checked by hand. */}
+        {s.lost - s.missedPenalty > 0 && (
+          <div className="xpr-period-row">
+            <span>Unfinished days</span><span>−{n(s.lost - s.missedPenalty)}</span>
           </div>
         )}
         <div className="xpr-period-row net">

@@ -1,5 +1,6 @@
 import { computeTotalXP, computeLifetimeXP } from './gamification';
-import { dayNumberForDate } from './dateUtils';
+import { missedDayDetail } from './missedDays';
+import { dayNumberForDate, getDayNumberFromStart } from './dateUtils';
 
 /**
  * The XP penalty ledger.
@@ -102,7 +103,7 @@ export function archiveDeficit(entry) {
     startDate: entry?.challengeStart || null,
     days: entry?.endDayNum || 0,
     stored: Math.max(0, Number(entry?.xpEarned) || 0),
-    gained: 0, lost: 0, missedDays: 0, discarded: 0, verified: false, reason: null,
+    gained: 0, lost: 0, missedDays: 0, missedPenalty: 0, discarded: 0, verified: false, reason: null,
   };
   if (!entry || !entry.days || !entry.endDayNum) {
     return { ...base, reason: 'no day records stored' };
@@ -120,12 +121,38 @@ export function archiveDeficit(entry) {
   const matchesOn = Math.max(0, withPenalties.rawTotal) === base.stored;
   const matchesOff = Math.max(0, withoutPenalties.rawTotal) === base.stored;
 
+  // Which days were missed, and what those days alone cost. Delegated to the
+  // same helper the live challenge uses, over the archive's own records, so a
+  // period's count and its charge are produced by one engine and cannot
+  // disagree — an archive once reported one more missed day than it had
+  // charged for, because this was a second hand-rolled loop.
+  const detailFor = (penaltiesEnabled) => missedDayDetail({
+    days: entry.days,
+    tasks: entry.tasks || [],
+    meta: entry.challenge,
+    challengeStart: entry.challengeStart,
+    // Both bounds come from the same place computeTotalXP gets them, or the
+    // count disagrees with the charge: the penalty boundary is derived from
+    // challengeStart (so a segment whose start is far enough back has no
+    // unfinished day left in it), and the segment ends at endDayNum.
+    rawDay: getDayNumberFromStart(entry.challengeStart) ?? entry.endDayNum,
+    dayNum: entry.endDayNum,
+    penaltiesEnabled,
+    xpStartDay: entry.xpStartDay ?? 1,
+  });
+
   // The profile's penalty setting is not stored on the archive, so it is
   // inferred from which variant reproduces the stored figure. When only the
   // penalties-OFF variant matches, this profile had penalties disabled for
   // that challenge and nothing was ever charged — so nothing was discarded.
   if (matchesOff && !matchesOn) {
-    return { ...base, gained: withoutPenalties.gained, lost: 0, discarded: 0, verified: true, reason: 'penalties were off' };
+    // The days were still missed; they simply were not charged for.
+    const off = detailFor(false);
+    return {
+      ...base, gained: withoutPenalties.gained, lost: 0,
+      missedDays: off.missedDays, missedPenalty: 0,
+      discarded: 0, verified: true, reason: 'penalties were off',
+    };
   }
   if (!matchesOn) {
     return {
@@ -136,19 +163,17 @@ export function archiveDeficit(entry) {
   }
 
   const discarded = Math.max(0, withPenalties.lost - withPenalties.gained);
-  // Days inside the segment with no activity recorded — what "missed days"
-  // means to a user, as opposed to an XP figure.
-  let missedDays = 0;
-  for (let i = (entry.xpStartDay ?? 1); i <= entry.endDayNum; i++) {
-    const d = (entry.days || {})[i];
-    const any = d && (Object.values(d.tasks || {}).some(Boolean) || (d.notes || '').trim());
-    if (!any) missedDays++;
-  }
+  const detail = detailFor(true);
   return {
     ...base,
     gained: withPenalties.gained,
     lost: withPenalties.lost,
-    missedDays,
+    missedDays: detail.missedDays,
+    // The part of `lost` attributable to days with no activity at all. The
+    // remainder comes from days that were logged but left incomplete, and the
+    // two are reported separately rather than summed under one misleading
+    // "missed days" label.
+    missedPenalty: detail.totalPenalty,
     discarded,
     verified: true,
     reason: discarded > 0 ? null : 'already counted',

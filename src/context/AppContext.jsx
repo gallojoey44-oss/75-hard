@@ -25,7 +25,8 @@ import { clearProfilePhotos } from '../utils/photoStore';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs, migrateAllNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS } from '../utils/gamification';
-import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLedger, isReconciled, capToFloor, forgivenessShortfall } from '../utils/xpLedger';
+import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLedger, isReconciled, capToFloor, forgivenessShortfall, archiveDeficit } from '../utils/xpLedger';
+import { recentGap, shouldShowComeback, missedDayDetail, buildXPHistory } from '../utils/missedDays';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 
 export const MENTAL_OPTIONS = [
@@ -2489,6 +2490,92 @@ export function AppProvider({ children }) {
     }
   }, [profiles, archives, allDays, getDayNumber, getDayCompletion, setProfiles]);
 
+  // ── Missed days: recent notice vs permanent record ───────────────────────
+
+  /** Inputs the missed-day helpers need for a profile's CURRENT segment. */
+  const missedDayInputs = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    return {
+      days: allDays[profId] || {},
+      tasks: prof?.tasks || [],
+      meta: prof?.activeChallenge,
+      challengeStart: prof?.challengeStart,
+      rawDay: getRawDayNumber(profId),
+      // The capped day, so a challenge that has run past its duration does not
+      // report missed days beyond its final day — those were never charged.
+      dayNum: getDayNumber(profId),
+      penaltiesEnabled: prof?.xpPenalties !== false,
+      xpStartDay: prof?.xpStartDay ?? 1,
+    };
+  }, [activeProfile, profiles, allDays, getRawDayNumber, getDayNumber]);
+
+  /**
+   * The stretch of inactivity this profile has just come back from, or null.
+   *
+   * Carries its own stable key, so the same gap is never announced twice, and
+   * `show` already accounts for dismissal and for the notice ageing out.
+   */
+  const getComeback = useCallback((profId = activeProfile) => {
+    const inputs = missedDayInputs(profId);
+    if (!inputs.rawDay) return null;                 // scheduled or no challenge
+    const gap = recentGap(inputs);
+    if (!gap) return null;
+    return { ...gap, show: shouldShowComeback(gap, profiles[profId]?.xpLedger?.seenComeback) };
+  }, [activeProfile, profiles, missedDayInputs]);
+
+  /** Record that this gap has been seen, so it is not announced again. */
+  const dismissComebackNotice = useCallback((profId = activeProfile) => {
+    const gap = getComeback(profId);
+    if (!gap) return false;
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: {
+        ...prev[profId],
+        xpLedger: { ...(prev[profId]?.xpLedger || makeLedger()), seenComeback: gap.key },
+      },
+    }));
+    return true;
+  }, [activeProfile, getComeback, setProfiles]);
+
+  /** Every missed day in the CURRENT challenge, for its optional breakdown. */
+  const getCurrentMissedDays = useCallback((profId = activeProfile) => {
+    const inputs = missedDayInputs(profId);
+    if (!inputs.rawDay) return { missed: [], missedDays: 0, totalPenalty: 0 };
+    return missedDayDetail(inputs);
+  }, [activeProfile, missedDayInputs]);
+
+  /**
+   * The permanent XP History: every archived challenge plus the live one.
+   *
+   * Archived rows keep their own figures forever; the live row moves with the
+   * current challenge and leaves the main card entirely once it is archived.
+   */
+  const getXPHistory = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    const dayNum = getDayNumber(profId);
+    const seg = dayNum
+      ? computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum)
+      : { gained: 0, lost: 0 };
+    const missed = getCurrentMissedDays(profId);
+    const live = prof?.activeChallenge && prof?.challengeStart && dayNum ? {
+      id: 'current',
+      name: prof.activeChallenge.name || 'Current challenge',
+      startDate: prof.challengeStart,
+      endDate: null,
+      banked: Math.max(0, seg.gained - seg.lost),
+      earned: seg.gained,
+      penalties: missed.totalPenalty,
+      partialPenalties: Math.max(0, seg.lost - missed.totalPenalty),
+      missedDays: missed.missedDays,
+      detailAvailable: true,
+    } : null;
+    return {
+      rows: buildXPHistory({ archives: archives[profId] || [], archiveDetail: archiveDeficit, current: live }),
+      breakdown: getXPBreakdown(profId),
+      floor: rankFloorXP(prof?.highestRank ?? 0),
+    };
+  }, [activeProfile, profiles, archives, allDays, getDayNumber, getDayCompletion, getCurrentMissedDays, getXPBreakdown]);
+
   // ── One-time historical reconciliation ────────────────────────────────────
   //
   // Forge calculated inactivity penalties for archived challenges and then
@@ -2555,7 +2642,13 @@ export function AppProvider({ children }) {
         ...prev[profId],
         // Restore the forgiveness credit exactly as it was, so undoing returns
         // the balance to its previous figure rather than an approximation.
-        xpLedger: { ...makeLedger(), forgiven: applied.forgivenBefore ?? 0 },
+        // Everything else the ledger holds is left alone — undoing a charge
+        // should not, for instance, revive a comeback notice already dismissed.
+        xpLedger: {
+          ...(prev[profId]?.xpLedger || makeLedger()),
+          ...makeLedger(),                 // resets the reconciliation only
+          forgiven: applied.forgivenBefore ?? 0,
+        },
       },
     }));
     return true;
@@ -2753,6 +2846,7 @@ export function AppProvider({ children }) {
       // Lifetime rank + permanent floor (single source of truth)
       getRankState, getRawLifetimeXP, getRankFloorXP, clearPendingRankUp,
       getXPBreakdown, previewXPReconciliation, applyXPReconciliation, undoXPReconciliation,
+      getComeback, dismissComebackNotice, getCurrentMissedDays, getXPHistory,
       MENTAL_OPTIONS,
       // Quote
       quoteData,

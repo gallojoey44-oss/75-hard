@@ -435,13 +435,21 @@ check('14: a 100-day Forge Daily run archives all 100 days of earned XP',
 }
 
 // ══ 18: per-period detail for "Where did I lose XP?" ═══════════════════════
+// Of the 30 days, day 1 was logged and the final day is the segment's own
+// current day, which is never penalised — so 28 days were missed and charged.
 check('18: a segment reports its missed days, dates, earned XP and penalties',
   (() => {
     const d = archiveDeficit(abandoned.entry);
-    return d.missedDays === 29 && d.gained > 0 && d.lost > 0 &&
+    return d.missedDays === 28 && d.gained > 0 && d.lost > 0 &&
       !!d.startDate && !!d.endDate && d.days === 30;
   })(),
   JSON.stringify((({ missedDays, gained, lost, days }) => ({ missedDays, gained, lost, days }))(archiveDeficit(abandoned.entry))));
+check('18: the missed-day count agrees with what those days were charged',
+  (() => {
+    const d = archiveDeficit(abandoned.entry);
+    return d.missedPenalty === d.missedDays * 25 && d.missedPenalty === d.lost;
+  })(),
+  JSON.stringify((({ missedDays, missedPenalty, lost }) => ({ missedDays, missedPenalty, lost }))(archiveDeficit(abandoned.entry))));
 check('18: a fully-logged challenge reports zero missed days',
   archiveDeficit(healthy.entry).missedDays === 0);
 check('18: an excluded segment is marked unverified rather than erroring',

@@ -292,7 +292,7 @@ export function topIncompleteKeystone(tasks, dayData) {
 
 // ─── Per-day XP computation ──────────────────────────────────────────────────
 
-function hasAnyActivity(dayData) {
+export function hasAnyActivity(dayData) {
   if (!dayData) return false;
   const hasTasksDone = Object.values(dayData.tasks || {}).some(Boolean);
   const hasRatings   = (dayData.mood || 0) > 0 || (dayData.energy || 0) > 0 ||

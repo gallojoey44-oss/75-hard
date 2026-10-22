@@ -140,8 +140,11 @@ await page.evaluate(() => {
 await page.waitForTimeout(400);
 let details = await page.textContent('.rank-details-card');
 check('2: Current XP is shown', /Current XP/.test(details), details.replace(/\s+/g, ' ').slice(0, 140));
-check('2: Total XP Earned is shown', /Total XP Earned/.test(details));
-check('2: XP Lost from Missed Days is shown', /XP Lost from Missed Days/.test(details));
+// The main card carries no standing deduction line. A charge from weeks ago
+// read as an ongoing penalty there, so the accounting lives in XP History.
+check('2: the main card carries no standing deduction line',
+  !/Total XP Earned/.test(details) && !/XP Lost from Missed Days/.test(details));
+check('2: XP History is offered instead', /XP History/.test(details));
 check('2: XP Until Next Rank is shown', /XP Until Next Rank/.test(details));
 check('2: the retired technical labels are gone',
   !/Lifetime XP/i.test(details) && !/Inactivity deductions/i.test(details) && !/of which/i.test(details),
@@ -150,16 +153,20 @@ check('2: it says ranks and achievements are permanent',
   /rank and achievements are permanent/i.test(details));
 check('2: Current XP is the visually prominent figure',
   (await page.locator('.rank-detail-value.big').count()) === 1);
-check('2: the three figures reconcile — earned minus lost equals current',
+// The figures still have to reconcile — they have just moved to XP History.
+await page.locator('.xph-toggle').click();
+await page.waitForTimeout(400);
+const totals2 = await page.evaluate(() => Object.fromEntries(
+  [...document.querySelectorAll('.xph-total-row')].map(r => [...r.children].map(c => c.textContent.trim()))
+));
+check('2: the figures reconcile — earned minus lost equals current',
   (() => {
-    const flat = details.replace(/\s+/g, ' ');
-    const num = (label) => {
-      const m = flat.match(new RegExp(label + '\\s*(−?[\\d,]+)'));
-      return m ? parseInt(m[1].replace(/[^\d]/g, ''), 10) : null;
-    };
-    const earned = num('Total XP Earned'), lost = num('XP Lost from Missed Days'), cur = num('Current XP');
-    return earned != null && cur != null && earned - (lost || 0) === cur;
-  })(), details.replace(/\s+/g, ' ').slice(0, 220));
+    const num = (k) => parseInt(String(totals2[k] || '0').replace(/[^\d]/g, ''), 10) || 0;
+    return num('Total XP earned') - num('Missed-day penalties')
+      + num('Cancelled by your rank protection') === num('Current XP');
+  })(), JSON.stringify(totals2));
+await page.locator('.xph-toggle').click();
+await page.waitForTimeout(200);
 
 // ══ 3: the reconciliation card — the figure BEFORE anything changes ════════
 await openSettings();
@@ -251,7 +258,10 @@ check('7: and the profile still holds the permanent unlock',
 check('7: Lifetime XP is above the floor, so the full charge applied',
   lifetime1 > 7500, `${lifetime1} vs floor 7500`);
 
-// ══ 8: the breakdown now shows the deduction ═══════════════════════════════
+// ══ 8: the deduction is recorded in XP History, not on the main card ═══════
+// The main card deliberately carries no standing deduction line: a charge
+// from weeks ago read as an ongoing penalty there. The permanent accounting
+// moved into XP History, which still has to reconcile.
 await gotoTab('Home');
 await page.waitForTimeout(400);
 await page.evaluate(() => {
@@ -260,11 +270,24 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(400);
 details = await page.textContent('.rank-details-card');
-check('8: the applied amount appears under XP Lost from Missed Days',
-  /XP Lost from Missed Days/.test(details));
-check('8: it shows the historical figure', details.includes(String(EXPECTED)),
-  details.replace(/\s+/g, ' ').slice(0, 200));
-check('8: earned XP is still shown in full, undiminished', /8,245/.test(details));
+check('8: the main card carries no standing deduction line',
+  !/XP Lost from Missed Days/.test(details) && !/Total XP Earned/.test(details),
+  details.replace(/\s+/g, ' ').slice(0, 160));
+
+await page.locator('.xph-toggle').click();
+await page.waitForTimeout(400);
+const totals8 = await page.evaluate(() => Object.fromEntries(
+  [...document.querySelectorAll('.xph-total-row')].map(r => [...r.children].map(c => c.textContent.trim()))
+));
+const num8 = (k) => parseInt(String(totals8[k] || '0').replace(/[^\d]/g, ''), 10) || 0;
+check('8: XP History shows the historical figure', num8('Missed-day penalties') === EXPECTED,
+  JSON.stringify(totals8));
+check('8: earned XP is still shown in full, undiminished', num8('Total XP earned') === 8245,
+  JSON.stringify(totals8));
+check('8: and the history reconciles with the balance',
+  num8('Total XP earned') - num8('Missed-day penalties')
+    + num8('Cancelled by your rank protection') === num8('Current XP'),
+  JSON.stringify(totals8));
 
 // ══ 9: exactly once, across reloads and repeat visits ══════════════════════
 for (let i = 0; i < 3; i++) {
@@ -288,11 +311,22 @@ check('10: the second profile is never charged',
 check('10: and no archives were created for it', (await arch('girlfriend')).length === 0);
 
 // ══ 11: undo restores the previous balance exactly ═════════════════════════
+// Undo resets the reconciliation and nothing else: a dismissed comeback
+// notice must not come back to life with it.
+await page.evaluate(() => {
+  const p = JSON.parse(localStorage.getItem('profiles'));
+  p.me.xpLedger = { ...(p.me.xpLedger || {}), seenComeback: 'sentinel-gap' };
+  localStorage.setItem('profiles', JSON.stringify(p));
+});
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 });
 await openSettings();
 await page.locator('.xpr-undo').click();
 await page.waitForTimeout(600);
 check('11: undo restores 8,245 exactly', (await shownLifetime()) === 8245);
 check('11: the ledger is cleared', !(await prof()).xpLedger?.reconciled);
+check('11: and it leaves an unrelated dismissal alone',
+  (await prof()).xpLedger?.seenComeback === 'sentinel-gap',
+  String((await prof()).xpLedger?.seenComeback));
 await openSettings();
 check('11: the offer comes back', (await page.locator('.xpr-apply').count()) === 1);
 

@@ -10,6 +10,8 @@ import HormoneHealthPanel from './HormoneHealthPanel';
 import EnergyResetPanel from './EnergyResetPanel';
 import FatLossHardPanel from './FatLossHardPanel';
 import TransformationPhotos from './TransformationPhotos';
+import XPHistory from './XPHistory';
+import WelcomeBack from './WelcomeBack';
 import * as FLH from '../data/fatLossHardConfig';
 import { completionMessage as energyCompletionMessage } from '../data/energyResetConfig';
 import {
@@ -550,7 +552,7 @@ function RankLadderCard({ rankInfo, rankHistory = [], highestRank = 0 }) {
   );
 }
 
-function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, totalDone, comebackCompletions, breakdown }) {
+function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, totalDone, comebackCompletions, missed }) {
   return (
     <div className="rank-details-card">
       <div className="rank-details-title">Rank Details</div>
@@ -572,20 +574,6 @@ function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, t
           <span className="rank-detail-label">Current XP</span>
           <span className="rank-detail-value big">{rankInfo.xp.toLocaleString()}</span>
         </div>
-        {breakdown && (
-          <>
-            <div className="rank-detail-row">
-              <span className="rank-detail-label">Total XP Earned</span>
-              <span className="rank-detail-value earned">{breakdown.earned.toLocaleString()}</span>
-            </div>
-            <div className="rank-detail-row">
-              <span className="rank-detail-label">XP Lost from Missed Days</span>
-              <span className="rank-detail-value deducted">
-                {breakdown.penalties > 0 ? `−${breakdown.penalties.toLocaleString()}` : '0'}
-              </span>
-            </div>
-          </>
-        )}
         <div className="rank-detail-row">
           <span className="rank-detail-label">Challenge XP</span>
           <span className="rank-detail-value">{challengeXP.toLocaleString()}</span>
@@ -617,10 +605,49 @@ function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, t
           </div>
         )}
       </div>
+
+      {/* The CURRENT challenge's missed days, on request. Tied to the live
+          challenge, so it disappears when that challenge is archived — the
+          permanent record then lives in XP History below. */}
+      {missed?.missedDays > 0 && (
+        <CurrentMissedDays missed={missed} />
+      )}
+
+      <XPHistory />
+
       <p className="rank-details-note">
         Your rank and achievements are permanent. If your Current XP goes down, you keep
         everything you have already unlocked.
       </p>
+    </div>
+  );
+}
+
+/** Missed days in the challenge that is running now. Collapsed by default. */
+function CurrentMissedDays({ missed }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="cmd">
+      <button className="cmd-toggle" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+        <span className="cmd-label">This challenge: {missed.missedDays} missed{' '}
+          {missed.missedDays === 1 ? 'day' : 'days'}</span>
+        <span className="cmd-amount">−{missed.totalPenalty.toLocaleString()} XP</span>
+        <span className="cmd-caret">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div className="cmd-list">
+          {missed.missed.map(m => (
+            <div key={m.dayNum} className="cmd-row">
+              <span>Day {m.dayNum}</span>
+              <span className="cmd-date">{formatDateShort(m.date)}</span>
+              <span className="cmd-row-amount">−{m.penalty} XP</span>
+            </div>
+          ))}
+          <p className="cmd-note">
+            Today isn&apos;t counted — the day isn&apos;t over yet.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -851,7 +878,7 @@ export default function Dashboard({ setView }) {
     setActiveProfile,
     startComeback, dismissComeback, completeComeback,
     getLaneInfo, promoteSupportToPrimary, clearPrimaryChoice, LANE,
-    getRankState, clearPendingRankUp, getXPBreakdown,
+    getRankState, clearPendingRankUp, getCurrentMissedDays,
   } = useApp();
 
   const [showSwitch, setShowSwitch] = useState(false);
@@ -1168,6 +1195,9 @@ export default function Dashboard({ setView }) {
         </div>
       )}
 
+      {/* Returning after a gap — temporary, once per gap. */}
+      <WelcomeBack />
+
       {/* XP / Rank widget with animation */}
       <div style={{ position: 'relative' }}>
         <XPWidget
@@ -1197,7 +1227,7 @@ export default function Dashboard({ setView }) {
       {showRankDetails && (
         <RankDetailsCard
           rankInfo={rankInfo}
-          breakdown={getXPBreakdown()}
+          missed={getCurrentMissedDays()}
           challengeXP={xpData.total}
           archivedChallenges={profileArchives.length}
           longest={longest}
