@@ -550,7 +550,7 @@ function RankLadderCard({ rankInfo, rankHistory = [], highestRank = 0 }) {
   );
 }
 
-function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, totalDone, comebackCompletions }) {
+function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, totalDone, comebackCompletions, breakdown }) {
   return (
     <div className="rank-details-card">
       <div className="rank-details-title">Rank Details</div>
@@ -569,6 +569,46 @@ function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, t
           <span className="rank-detail-label">Lifetime XP</span>
           <span className="rank-detail-value">{rankInfo.xp.toLocaleString()}</span>
         </div>
+
+        {/* Earned and deducted, shown separately. XP represents ongoing
+            discipline, so a deduction is not a correction to hide — it is the
+            rule working, and it has to be legible. */}
+        {breakdown && (
+          <>
+            <div className="rank-detail-row sub">
+              <span className="rank-detail-label">— Earned</span>
+              <span className="rank-detail-value earned">+{breakdown.earned.toLocaleString()}</span>
+            </div>
+            {breakdown.penalties > 0 && (
+              <div className="rank-detail-row sub">
+                <span className="rank-detail-label">— Inactivity deductions</span>
+                <span className="rank-detail-value deducted">−{breakdown.penalties.toLocaleString()}</span>
+              </div>
+            )}
+            {breakdown.historicalPenalty > 0 && (
+              <div className="rank-detail-row sub2">
+                <span className="rank-detail-label">of which historical</span>
+                <span className="rank-detail-value">−{breakdown.historicalPenalty.toLocaleString()}</span>
+              </div>
+            )}
+            {breakdown.currentPenalty > 0 && (
+              <div className="rank-detail-row sub2">
+                <span className="rank-detail-label">of which this challenge</span>
+                <span className="rank-detail-value">−{breakdown.currentPenalty.toLocaleString()}</span>
+              </div>
+            )}
+            {/* When the floor is holding the displayed figure up, say so —
+                otherwise the arithmetic above looks wrong. */}
+            {breakdown.net < rankInfo.xp && (
+              <div className="rank-detail-row sub2">
+                <span className="rank-detail-label">held at your {rankInfo.current.name} floor</span>
+                <span className="rank-detail-value floored">
+                  {breakdown.net.toLocaleString()} → {rankInfo.xp.toLocaleString()}
+                </span>
+              </div>
+            )}
+          </>
+        )}
         <div className="rank-detail-row">
           <span className="rank-detail-label">Challenge XP</span>
           <span className="rank-detail-value">{challengeXP.toLocaleString()}</span>
@@ -830,7 +870,7 @@ export default function Dashboard({ setView }) {
     setActiveProfile,
     startComeback, dismissComeback, completeComeback,
     getLaneInfo, promoteSupportToPrimary, clearPrimaryChoice, LANE,
-    getRankState, clearPendingRankUp,
+    getRankState, clearPendingRankUp, getXPBreakdown,
   } = useApp();
 
   const [showSwitch, setShowSwitch] = useState(false);
@@ -1176,6 +1216,7 @@ export default function Dashboard({ setView }) {
       {showRankDetails && (
         <RankDetailsCard
           rankInfo={rankInfo}
+          breakdown={getXPBreakdown()}
           challengeXP={xpData.total}
           archivedChallenges={profileArchives.length}
           longest={longest}

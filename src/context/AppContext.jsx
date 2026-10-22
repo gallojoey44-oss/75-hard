@@ -24,7 +24,8 @@ import { buildEnergySummary } from '../utils/energyTracking';
 import { clearProfilePhotos } from '../utils/photoStore';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { makeDefaultNotifPrefs, migrateAllNotifPrefs } from '../utils/notificationUtils';
-import { keystoneHabitsOf, RANKS, computeLifetimeXP } from '../utils/gamification';
+import { keystoneHabitsOf, RANKS } from '../utils/gamification';
+import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLedger, isReconciled } from '../utils/xpLedger';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 
 export const MENTAL_OPTIONS = [
@@ -1033,7 +1034,14 @@ export function AppProvider({ children }) {
     if (isScheduled(prof)) return null;
 
     const meta = prof.activeChallenge || DISCIPLINE_75_META;   // legacy attempt (has a start date, no descriptor)
-    const dayNum = Math.min(getDayNumberFromStart(prof.challengeStart) || 1, meta.durationDays || 75);
+    // An open-ended run (Forge Daily, durationDays null) has no duration to cap
+    // against. The old `meta.durationDays || 75` fell back to 75, so a Forge
+    // Daily period longer than 75 days banked only its first 75 days and the
+    // rest of its earned XP was silently dropped.
+    const elapsedDays = getDayNumberFromStart(prof.challengeStart) || 1;
+    const dayNum = meta.durationDays != null
+      ? Math.min(elapsedDays, meta.durationDays)
+      : elapsedDays;
     const xpData = computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum);
     const badges = computeBadges(allDays, profiles, profId, getDayCompletion, dayNum).map(b => b.id);
 
@@ -2405,13 +2413,29 @@ export function AppProvider({ children }) {
   // threshold of the highest rank ever unlocked.
 
   /** The calculated (unfloored) Lifetime XP for a profile. */
-  const getRawLifetimeXP = useCallback((profId = activeProfile) => {
+  const getXPBreakdown = useCallback((profId = activeProfile) => {
     const dayNum = getDayNumber(profId);
-    const xpData = dayNum
+    const currentSegment = dayNum
       ? computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum)
-      : { rawTotal: 0 };
-    return computeLifetimeXP(archives[profId] || [], xpData.rawTotal || 0);
+      : { gained: 0, lost: 0, rawTotal: 0 };
+    return computeXPBreakdown({
+      archives: archives[profId] || [],
+      currentSegment,
+      ledger: profiles[profId]?.xpLedger,
+    });
   }, [activeProfile, allDays, profiles, archives, getDayCompletion, getDayNumber]);
+
+  /**
+   * The calculated (unfloored) Lifetime XP for a profile.
+   *
+   * Earned XP minus applicable penalties. The current segment counts RAW, so a
+   * stretch of inactivity reduces this directly; the one-time historical
+   * figure, once the user has approved it, comes from the profile's ledger.
+   * Archived records are read, never rewritten.
+   */
+  const getRawLifetimeXP = useCallback((profId = activeProfile) => {
+    return getXPBreakdown(profId).net;
+  }, [activeProfile, getXPBreakdown]);
 
   /**
    * The normalized rank state: effective XP (never below the permanent floor),
@@ -2423,6 +2447,65 @@ export function AppProvider({ children }) {
       highestRank: profiles[profId]?.highestRank ?? null,
     });
   }, [activeProfile, profiles, getRawLifetimeXP]);
+
+  // ── One-time historical reconciliation ────────────────────────────────────
+  //
+  // Forge calculated inactivity penalties for archived challenges and then
+  // discarded them, because an archive stores max(0, gained - lost). This
+  // recovers the discarded amount by re-running the same rules over the day
+  // records each archive already holds, and records it in a separate ledger.
+  //
+  // It is NEVER automatic. Nothing is charged until the user approves it on
+  // their own profile, having seen the exact figure, and it can be undone.
+
+  /** What the reconciliation WOULD charge. Pure — changes nothing. */
+  const previewXPReconciliation = useCallback((profId = activeProfile) => {
+    const preview = previewReconciliation(archives[profId] || []);
+    const before = getRawLifetimeXP(profId);
+    const floor = rankFloorXP(profiles[profId]?.highestRank ?? 0);
+    const after = before - preview.amount;
+    return {
+      ...preview,
+      alreadyApplied: isReconciled(profiles[profId]?.xpLedger),
+      lifetimeBefore: before,
+      lifetimeAfter: after,
+      floor,
+      // What the user will actually see afterwards, floor included.
+      effectiveBefore: Math.max(before, floor),
+      effectiveAfter: Math.max(after, floor),
+      // How much of the charge the floor absorbs — stated rather than hidden.
+      absorbedByFloor: Math.max(0, floor - after) - Math.max(0, floor - before),
+    };
+  }, [activeProfile, archives, profiles, getRawLifetimeXP]);
+
+  /**
+   * Apply the reconciliation. Idempotent: a profile that already has one keeps
+   * it, so a reload, a repeat visit or a second tap can never charge twice.
+   */
+  const applyXPReconciliation = useCallback((profId = activeProfile) => {
+    if (isReconciled(profiles[profId]?.xpLedger)) return false;
+    const preview = previewReconciliation(archives[profId] || []);
+    if (preview.amount <= 0) return false;
+    const entry = buildReconciliation(preview, getRawLifetimeXP(profId));
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: {
+        ...prev[profId],
+        xpLedger: { ...(prev[profId]?.xpLedger || makeLedger()), reconciled: entry },
+      },
+    }));
+    return true;
+  }, [activeProfile, archives, profiles, getRawLifetimeXP]);
+
+  /** Undo the reconciliation, restoring the previous balance exactly. */
+  const undoXPReconciliation = useCallback((profId = activeProfile) => {
+    if (!isReconciled(profiles[profId]?.xpLedger)) return false;
+    setProfiles(prev => ({
+      ...prev,
+      [profId]: { ...prev[profId], xpLedger: makeLedger() },
+    }));
+    return true;
+  }, [activeProfile, profiles]);
 
   /** The permanent XP floor for a profile. */
   const getRankFloorXP = useCallback((profId = activeProfile) => {
@@ -2615,6 +2698,7 @@ export function AppProvider({ children }) {
       // Rank ceremony / Hall of Legends
       // Lifetime rank + permanent floor (single source of truth)
       getRankState, getRawLifetimeXP, getRankFloorXP, clearPendingRankUp,
+      getXPBreakdown, previewXPReconciliation, applyXPReconciliation, undoXPReconciliation,
       MENTAL_OPTIONS,
       // Quote
       quoteData,

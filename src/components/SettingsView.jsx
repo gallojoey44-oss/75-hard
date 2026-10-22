@@ -4,6 +4,7 @@ import { formatDateShort, getTodayStr, dayNumberForDate } from '../utils/dateUti
 import TaskManager from './TaskManager';
 import QuoteLibrary from './QuoteLibrary';
 import NotificationSettings from './NotificationSettings';
+import XPReconciliation from './XPReconciliation';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 import BuildBanner, { BUILD_VERSION } from './BuildBanner';
 import { computeTotalXP, BADGE_DEFS, LEGACY_PASSING_SCORE } from '../utils/gamification';
@@ -284,6 +285,12 @@ export default function SettingsView({ setView }) {
             {profile?.sleepAutoComplete !== false ? 'On' : 'Off'}
           </button>
         </div>
+      </div>
+
+      {/* One-time historical XP reconciliation. Hides itself when there is
+          nothing discarded to recover. */}
+      <div className="settings-section">
+        <XPReconciliation />
       </div>
 
       {/* Notifications */}

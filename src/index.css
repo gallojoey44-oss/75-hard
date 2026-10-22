@@ -6201,3 +6201,68 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   .nr-row { flex-wrap: wrap; }
   .nr-row-controls { margin-left: auto; }
 }
+
+/* ─── v3.55.0: XP breakdown — earned vs inactivity deductions ────────────── */
+
+.rank-detail-row.sub .rank-detail-label,
+.rank-detail-row.sub2 .rank-detail-label { color: var(--text3); }
+.rank-detail-row.sub2 { padding-left: 12px; }
+.rank-detail-row.sub2 .rank-detail-label,
+.rank-detail-row.sub2 .rank-detail-value { font-size: 11px; }
+.rank-detail-value.earned { color: var(--success); }
+.rank-detail-value.deducted { color: var(--warn); }
+.rank-detail-value.floored { color: var(--accent2); font-variant-numeric: tabular-nums; }
+
+/* ─── v3.55.0: XP reconciliation card ───────────────────────────────────── */
+
+.xpr-card {
+  background: var(--card2); border: 1px solid rgba(245,158,11,0.35);
+  border-left: 4px solid var(--warn); border-radius: var(--radius);
+  padding: 14px;
+}
+.xpr-card.applied { border-color: rgba(16,185,129,0.3); border-left-color: var(--success); }
+.xpr-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.xpr-title { font-size: 14px; font-weight: 800; flex: 1; min-width: 0; }
+.xpr-amount {
+  font-size: 1.1rem; font-weight: 800; color: var(--success);
+  font-variant-numeric: tabular-nums; flex-shrink: 0;
+}
+.xpr-amount.pending { color: var(--warn); }
+.xpr-body { font-size: 12px; color: var(--text2); line-height: 1.6; margin-bottom: 10px; }
+
+.xpr-maths { background: var(--bg2); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 10px; }
+.xpr-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 12px; color: var(--text2); padding: 3px 0;
+  font-variant-numeric: tabular-nums;
+}
+.xpr-row.deduct { color: var(--warn); }
+.xpr-row.total {
+  color: var(--text); font-weight: 800;
+  border-top: 1px solid var(--border); margin-top: 4px; padding-top: 7px;
+}
+.xpr-row.floor { color: var(--accent2); font-weight: 700; }
+
+.xpr-note {
+  font-size: 11px; color: var(--text3); line-height: 1.55;
+  border-left: 2px solid var(--border); padding-left: 9px; margin-bottom: 10px;
+}
+.xpr-note.warn { color: var(--warn); border-left-color: rgba(245,158,11,0.4); }
+
+.xpr-link {
+  background: none; border: none; padding: 0; margin-bottom: 8px;
+  color: var(--accent2); font-size: 12px; font-weight: 700; cursor: pointer; text-align: left;
+}
+.xpr-segments { margin-bottom: 10px; }
+.xpr-seg {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12px; padding: 5px 0; border-bottom: 1px solid var(--border);
+}
+.xpr-seg:last-child { border-bottom: none; }
+.xpr-seg-name { font-weight: 700; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.xpr-seg-date { font-size: 10px; color: var(--text3); flex-shrink: 0; }
+.xpr-seg-amount { color: var(--warn); font-weight: 700; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+.xpr-confirm { background: var(--bg2); border-radius: var(--radius-sm); padding: 11px; }
+.xpr-confirm-text { font-size: 12px; color: var(--text2); line-height: 1.6; margin-bottom: 10px; }
+.xpr-apply, .xpr-undo { margin-top: 2px; }
