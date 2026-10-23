@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { getTemplateById, isColdExposureRequiredForDate, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { getDateForDayNumber } from '../utils/dateUtils';
+import { dayRules } from '../data/xpEconomy';
 
 // 🎯 Bonus Missions — an optional, interactive section shown below the required
 // daily tasks. Bonus Missions award bonus XP but never count toward required
@@ -36,7 +37,13 @@ export default function BonusMissions({ dayNumber, isEditable = true }) {
   const missions = [...recurring, ...oneTime].filter(m => !hideColdBonus(m.id));
 
   const completedCount = missions.filter(m => bonusDone[m.id] != null).length;
-  const bonusXP = missions.reduce((s, m) => s + (Number(bonusDone[m.id]) || 0), 0);
+  // Optional XP is capped per day by this attempt's own rate card, so the
+  // summary reports what the day will actually be credited rather than the sum
+  // of the missions' nominal values.
+  const dailyCap = dayRules(meta).bonusPerDayCap ?? Infinity;
+  const nominalXP = missions.reduce((s, m) => s + (Number(bonusDone[m.id]) || 0), 0);
+  const bonusXP = Math.min(nominalXP, dailyCap);
+  const atCap = Number.isFinite(dailyCap) && nominalXP > dailyCap;
 
   // Challenge-specific suggestions not already in the list.
   const template = getTemplateById(meta.templateId);
@@ -60,7 +67,16 @@ export default function BonusMissions({ dayNumber, isEditable = true }) {
           {completedCount} completed · <span className="bonus-xp-label">+{bonusXP} Bonus XP</span>
         </span>
       </div>
-      <p className="bonus-subtitle">Optional ways to go beyond today&apos;s mission.</p>
+      <p className="bonus-subtitle">
+        Optional ways to go beyond today&apos;s mission.
+        {Number.isFinite(dailyCap) && ` Bonus XP is capped at ${dailyCap} a day.`}
+      </p>
+      {atCap && (
+        <p className="bonus-subtitle">
+          You have reached today&apos;s {dailyCap} XP bonus cap — further missions still count as
+          done, but add no more XP today.
+        </p>
+      )}
 
       {missions.length === 0 && (
         <p className="bonus-empty">No bonus missions yet. Add one to earn extra XP — never required.</p>

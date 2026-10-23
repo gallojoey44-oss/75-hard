@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as HH from '../data/hormoneHealthConfig';
+import { previewConfigured } from '../data/challengeAttempt';
+import { XPSummaryCard } from './XPPreview';
 
 /**
  * Women's Hormone Health setup.
@@ -18,6 +20,10 @@ export default function HormoneHealthSetup({ onCancel, onSubmit }) {
   const [showSupplements, setShowSupplements] = useState(false);
 
   const set = (patch) => setS(prev => ({ ...prev, ...patch }));
+  // Priced from the attempt these choices would start, so every figure on this
+  // screen is the figure the challenge will award.
+  const preview = useMemo(() => previewConfigured(HH.HORMONE_HEALTH_TEMPLATE_ID, s), [s]);
+  const weeklyNotes = Object.fromEntries(HH.weeklyRequirementDefs(s).map(d => [d.id, d.note]));
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -75,7 +81,7 @@ export default function HormoneHealthSetup({ onCancel, onSubmit }) {
         <div className="hh-field">
           <div className="hh-label">Daily habits</div>
           <ul className="tpl-task-list">
-            {HH.buildStartTasks(s).map(t => (
+            {preview.tasks.map(t => (
               <li key={t.id}>
                 {t.icon} {t.name} ({t.xp} XP){t.keystoneHabit ? ' ⭐⭐⭐ Keystone' : ''}
               </li>
@@ -87,14 +93,16 @@ export default function HormoneHealthSetup({ onCancel, onSubmit }) {
         <div className="hh-field">
           <div className="hh-label">Weekly habits</div>
           <ul className="tpl-task-list weekly">
-            {HH.weeklyRequirementDefs(s).map(d => (
+            {preview.weekly.map(d => (
               <li key={d.id}>
                 {d.icon} {d.label} — {d.perWeek}× per week ({d.xp} XP each)
-                <span className="hh-req-note">{d.note}</span>
+                <span className="hh-req-note">{weeklyNotes[d.id]}</span>
               </li>
             ))}
           </ul>
         </div>
+
+        <XPSummaryCard preview={preview} />
 
         {/* ── The exercise rule — the most important guidance here ── */}
         <div className="hh-exercise-rule">

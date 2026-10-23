@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as LI from '../data/lockInConfig';
+import { previewConfigured } from '../data/challengeAttempt';
+import { XPSummaryCard } from './XPPreview';
 
 /**
  * 🎯 LOCK IN setup.
@@ -16,7 +18,16 @@ export default function LockInSetup({ onCancel, onSubmit }) {
   const [showHabits, setShowHabits] = useState(false);
 
   const set = (patch) => setS(prev => ({ ...prev, ...patch }));
-  const tasks = LI.buildStartTasks(s);
+  // Priced from the attempt these choices would start, so every figure on this
+  // screen is the figure the challenge will award.
+  const preview = useMemo(() => previewConfigured(LI.LOCK_IN_TEMPLATE_ID, s), [s]);
+  const bonusByDuration = useMemo(() => Object.fromEntries(
+    LI.DURATION_OPTIONS.map(o => [
+      o.days,
+      previewConfigured(LI.LOCK_IN_TEMPLATE_ID, { ...s, durationDays: o.days }).completionBonus,
+    ]),
+  ), [s]);
+  const tasks = preview.tasks;
   const option = LI.durationOption(s.durationDays);
   const ramp = LI.rampFor(s.durationDays);
   const lighterDays = LI.lighterDaysFor(s.durationDays);
@@ -50,7 +61,7 @@ export default function LockInSetup({ onCancel, onSubmit }) {
                 </span>
                 <span className="li-duration-blurb">{o.blurb}</span>
                 <span className="li-duration-reward">
-                  {LI.completionBonusFor(o.days)} XP on completion
+                  {bonusByDuration[o.days]} XP on completion
                 </span>
               </button>
             ))}
@@ -68,14 +79,16 @@ export default function LockInSetup({ onCancel, onSubmit }) {
             <span className="li-fact-label">daily habits</span>
           </div>
           <div className="li-fact">
-            <span className="li-fact-value">{LI.dailyXPTotal(s)}</span>
+            <span className="li-fact-value">{preview.dailyTaskXP}</span>
             <span className="li-fact-label">XP per day</span>
           </div>
           <div className="li-fact">
-            <span className="li-fact-value">{LI.completionBonusFor(s.durationDays)}</span>
+            <span className="li-fact-value">{preview.completionBonus}</span>
             <span className="li-fact-label">on completion</span>
           </div>
         </div>
+
+        <XPSummaryCard preview={preview} />
 
         {/* The flow ramp is the structural thing to understand before starting. */}
         <div className="li-field">

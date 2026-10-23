@@ -183,8 +183,22 @@ check('Standard keeps its original 7 tasks', pStd.tasks.length === 7, JSON.strin
 check('Standard has no fullness habit', !pStd.tasks.some(t => t.id === 'fl_fullness'));
 check('Standard keeps its 8,000-step target',
   pStd.tasks.find(t => t.id === 'fl_steps').target.value === 8000);
-check('Standard gets NO per-attempt weekly defs — it uses the legacy ones',
-  !pStd.activeChallenge?.weeklyRequirementDefs);
+// Standard keeps the LEGACY requirements — 3 lifts + 2 Zone 2, never Hard's
+// five. They are now materialised onto the attempt and priced from its own
+// weekly budget: resolving them from the module constant at read time was how
+// an era-2 attempt went on paying era-1 weekly XP (115 a week against the 80
+// its budget allows).
+const stdWeekly = pStd.activeChallenge?.weeklyRequirementDefs || [];
+check('Standard keeps the legacy weekly requirements, not Hard\'s five',
+  stdWeekly.length === 2 &&
+  stdWeekly.map(d => d.id).sort().join(',') === 'lifting,zone2' &&
+  stdWeekly.find(d => d.id === 'lifting').perWeek === 3 &&
+  stdWeekly.find(d => d.id === 'zone2').perWeek === 2,
+  stdWeekly.map(d => `${d.id} ${d.perWeek}x${d.xp}`).join(' '));
+check('and they are priced from its own weekly budget, not the era-1 constant',
+  stdWeekly.reduce((sum, d) => sum + d.xp * d.perWeek, 0)
+    === Math.round(0.50 * pStd.activeChallenge.dailyBudget),
+  `${stdWeekly.reduce((sum, d) => sum + d.xp * d.perWeek, 0)} vs ${Math.round(0.50 * pStd.activeChallenge.dailyBudget)}`);
 check('Standard has no Hard Mode config block', !pStd.activeChallenge?.fatLossHard);
 await gotoTab('Today');
 await page.waitForTimeout(400);

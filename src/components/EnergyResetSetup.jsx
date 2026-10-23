@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as ER from '../data/energyResetConfig';
+import { previewConfigured } from '../data/challengeAttempt';
+import { XPSummaryCard } from './XPPreview';
 
 /**
  * ⚡ 10-Day Energy Reset setup.
@@ -23,8 +25,18 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
     baseline: { ...(prev.baseline || {}), [key]: prev.baseline?.[key] === value ? null : value },
   }));
 
-  const tasks = ER.buildStartTasks(s);
-  const weekly = ER.weeklyRequirementDefs(s);
+  // Priced from the attempt these choices would start, so every figure on this
+  // screen is the figure the challenge will award.
+  const preview = useMemo(() => previewConfigured(ER.ENERGY_RESET_TEMPLATE_ID, s), [s]);
+  const bonusByDuration = useMemo(() => Object.fromEntries(
+    ER.DURATION_OPTIONS.map(o => [
+      o.days,
+      previewConfigured(ER.ENERGY_RESET_TEMPLATE_ID, { ...s, durationDays: o.days }).completionBonus,
+    ]),
+  ), [s]);
+  const tasks = preview.tasks;
+  const weeklyPriced = preview.weekly;
+  const weeklyNotes = Object.fromEntries(ER.weeklyRequirementDefs(s).map(d => [d.id, d.note]));
   const option = ER.durationOption(s.durationDays);
 
   return (
@@ -56,7 +68,7 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
                 </span>
                 <span className="er-duration-blurb">{o.blurb}</span>
                 <span className="er-duration-reward">
-                  {ER.COMPLETION_BONUS_BY_DURATION[o.days]} XP on completion
+                  {bonusByDuration[o.days]} XP on completion
                 </span>
               </button>
             ))}
@@ -143,16 +155,18 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
         <div className="er-field">
           <div className="er-label">Weekly exercise</div>
           <ul className="tpl-task-list weekly">
-            {weekly.map(d => (
+            {weeklyPriced.map(d => (
               <li key={d.id}>
                 {d.icon} {d.label} — {d.perWeek}× per week ({d.xp} XP each)
-                <span className="er-req-note">{d.note}</span>
+                <span className="er-req-note">{weeklyNotes[d.id]}</span>
               </li>
             ))}
           </ul>
           <div className="er-hint">{ER.EXERCISE_GUIDE.blurb}</div>
           <div className="er-hint">{ER.EXERCISE_GUIDE.notice}</div>
         </div>
+
+        <XPSummaryCard preview={preview} />
 
         {/* ── Nutrient education (never a tracking requirement) ── */}
         <div className="er-field">

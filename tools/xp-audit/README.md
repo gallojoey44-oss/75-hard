@@ -26,3 +26,10 @@ nothing from the app, so they can be run with plain `node`.
 
 Re-run these after any XP change: if a figure in the proposal no longer
 matches, the proposal is stale, not the code.
+
+Two more, added with the Challenge Library XP fix:
+
+| script | what it reports |
+|---|---|
+| `ui-preview-audit.mjs` | the figure each template/config AUTHORS against the figure the attempt allocates. It began as the advertised-vs-actual audit (262 of 336 displayed figures were stale); the library now renders only `previewAttempt`, so it reads as a view of how the allocator treats each challenge's own ladder |
+| `challenge-xp-tables.mjs` | `CHALLENGE-XP-TABLES.md` — every challenge's budget, per-task allocation, weekly XP, bonuses, ceilings and perfect-completion total, generated from the shipped engine |

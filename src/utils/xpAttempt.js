@@ -3,6 +3,7 @@ import {
   allocateTaskXP, completionBonusFor, repriceWeeklyDefs, displayScaleFor,
   TEMPLATE_TIER_FALLBACK,
 } from '../data/xpEconomy';
+import { getWeeklyRequirementDefs } from './weeklyRequirements';
 
 /**
  * Stamping an attempt with its economy.
@@ -94,8 +95,20 @@ export function stampAttempt({ meta, tasks, template, version = CURRENT_ECONOMY_
   // so a stale legacy figure cannot be preferred over the stamped one.
   if ('rewardXP' in stamped) delete stamped.rewardXP;
 
-  if (Array.isArray(meta.weeklyRequirementDefs) && meta.weeklyRequirementDefs.length) {
-    stamped.weeklyRequirementDefs = repriceWeeklyDefs(meta.weeklyRequirementDefs, stamped, economy);
+  // Weekly requirements are repriced from the RESOLVED definitions, not only
+  // from defs the descriptor happens to carry.
+  //
+  // That distinction was a live leak rather than a nicety. Fat Loss beginner
+  // and standard have no `weeklyRequirementDefs` of their own — they resolve to
+  // the legacy module constant through `getWeeklyRequirementDefs` — so a
+  // descriptor-only check skipped them and an attempt started under era 2 still
+  // paid era-1 weekly XP: 3x25 + 2x20 = 115 a week against the 80 its budget
+  // allows. Materialising the resolved defs onto the attempt also makes it
+  // self-describing, which is what lets an archive recompute under its own
+  // rules forever.
+  const resolvedWeekly = getWeeklyRequirementDefs(stamped);
+  if (resolvedWeekly.length) {
+    stamped.weeklyRequirementDefs = repriceWeeklyDefs(resolvedWeekly, stamped, economy);
   }
 
   return { meta: stamped, tasks: allocateTaskXP(tasks || [], budget, economy) };

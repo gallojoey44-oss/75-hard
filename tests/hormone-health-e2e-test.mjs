@@ -144,8 +144,12 @@ await page.waitForTimeout(200);
 check('setup explains the three stages',
   /Cycle 1 — Baseline/.test(setupText) && /Cycle 2 — Improvement/.test(setupText) && /Cycle 3 — Consolidation/.test(setupText));
 check('setup lists the daily habits with XP and marks the keystone',
-  /Sleep 7\.5–9 hours \(40 XP\)/.test(setupText) && /⭐⭐⭐ Keystone/.test(setupText));
-check('setup lists the weekly habits', /Exercise — 3× per week \(35 XP each\)/.test(setupText));
+  /Sleep 7\.5–9 hours \(45 XP\)/.test(setupText) && /⭐⭐⭐ Keystone/.test(setupText));
+// Priced by the XP engine from the challenge's own budget: a medium challenge
+// has 160 XP a day and 80 a week, so three weekly sessions are 14 XP each
+// rather than the 35 the config module authors as its within-tier ladder.
+check('setup lists the weekly habits', /Exercise — 3× per week \(14 XP each\)/.test(setupText),
+  (/Exercise[^|]{0,40}/.exec(setupText) || [''])[0]);
 check('setup states fish oil and iron supplements are not required',
   /supplements are never required/i.test(setupText) && /no iron or liver supplements required/i.test(setupText));
 check('setup carries the exercise rule with both directions',

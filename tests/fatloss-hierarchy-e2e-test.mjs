@@ -49,7 +49,14 @@ await page.waitForSelector('.challenges-view', { timeout: 5000 });
 await page.evaluate(() => { const h = [...document.querySelectorAll('.challenge-card-header')].find(x => /Fat Loss Challenge/.test(x.textContent)); if (h) h.click(); });
 await page.waitForTimeout(300);
 const flCard = page.locator('.challenge-card', { hasText: 'Fat Loss Challenge' });
-check('Library preview shows the star hierarchy', /⭐⭐⭐ Hit protein goal/.test(await flCard.textContent()));
+// The library previews the real requirement list, priced by the XP engine and
+// laid out like the daily checklist — name, then its keystone stars, then the
+// XP it is worth. (It used to render a hand-written string that put the stars
+// first and carried its own, by then stale, XP figure.)
+const flCardText = await flCard.textContent();
+check('Library preview shows the star hierarchy',
+  /Hit protein goal[\s\S]{0,60}?⭐⭐⭐ \(\d+ XP\)/.test(flCardText),
+  (/Hit protein goal[\s\S]{0,60}?\(\d+ XP\)/.exec(flCardText) || [''])[0]);
 await flCard.locator('.challenge-card-action', { hasText: 'Start Fat Loss Challenge' }).click();
 await page.waitForSelector('.letter-modal', { timeout: 5000 });
 await page.locator('.letter-modal .letter-textarea').first().fill('Lean out.');

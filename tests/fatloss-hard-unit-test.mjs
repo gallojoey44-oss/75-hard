@@ -78,9 +78,11 @@ check('no weekly requirement asks for a calorie target',
 check('nothing in Hard Mode asks the user to count or track calories',
   ![...tasks.map(t => `${t.name} ${t.desc || ''}`), ...weekly.map(d => `${d.label} ${d.note || ''}`)]
     .some(txt => /(count|track|log|hit)\s+(your\s+)?(calorie|kcal)/i.test(txt)));
+// The library previews the real requirement list (priced by the XP engine)
+// rather than a hand-written copy of it, so that list is what is checked.
 check('the challenge preview lists no calorie requirement',
-  !hard.required_daily_tasks.some(t => /calorie|deficit/i.test(t)),
-  JSON.stringify(hard.required_daily_tasks.filter(t => /calorie/i.test(t))));
+  !tasks.some(t => /calorie|deficit/i.test(t.name)),
+  JSON.stringify(tasks.filter(t => /calorie|deficit/i.test(t.name)).map(t => t.name)));
 check('the fullness habit replaces it', !!taskById('fl_fullness'));
 check('the fullness task uses the specified wording',
   taskById('fl_fullness').name === 'Stop eating at ~90% full — satisfied, not stuffed.');

@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp, DISCIPLINE_75_META, discipline75Tasks } from '../context/AppContext';
+import { previewAttempt, buildAttemptPayload } from '../data/challengeAttempt';
+import { PricedRequirements, PricedWeekly, XPSummaryCard } from './XPPreview';
 import BuildBanner from './BuildBanner';
 import {
   METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK,
-  applyColdExposureUpgrade, isColdExposureEnabled,
+  isColdExposureEnabled,
   getDefaultDuration, getDurationLabel, isRecommendedDuration,
-  getCompletionBonusForDuration, getProgramForDuration, getTemplateById, difficultyLabel,
+  getProgramForDuration, getTemplateById, difficultyLabel,
+  difficultyRange,
 } from '../data/challengeTemplates';
+import { TIER_LABELS } from '../data/xpEconomy';
 import { formatDateLong, getTodayStr } from '../utils/dateUtils';
 import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
 import { FutureSelfLetterForm } from './FutureSelfLetter';
@@ -27,8 +31,6 @@ import * as HH from '../data/hormoneHealthConfig';
 import * as ER from '../data/energyResetConfig';
 import * as LI from '../data/lockInConfig';
 import { CONFIGURED_BUILDERS } from '../data/configuredChallenges';
-
-import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
 
 /**
  * Challenges with a `start_flow: 'configured'` bring their own setup screen and
@@ -77,24 +79,43 @@ function durationText(days) {
   return `${days.slice(0, -1).join(', ')}, or ${days[days.length - 1]} days`;
 }
 
-function VariantPanel({ variant, template }) {
+/** Strip an XP figure out of descriptive copy — the priced lists own the numbers. */
+function withoutXP(s) {
+  return String(s).replace(/\s*[(—-]?\s*\(?\d+\s*XP(\s*each)?\)?\.?/gi, '').replace(/\s+—\s*$/, '').trim();
+}
+
+function VariantPanel({ variant, template, preview, onGuide }) {
   if (!variant) return null;
+  // A startable mode is described by the attempt it would create. A designed
+  // but unbuilt one has no attempt to price, so its prose is shown with no XP
+  // figures rather than figures nothing will honour.
+  const priced = !!preview?.tasks?.length;
   return (
     <div className="tpl-variant-panel">
-      <div className="tpl-variant-section-label">Daily tasks</div>
-      <ul className="tpl-task-list">
-        {variant.required_daily_tasks.map((t, i) => (
-          <li key={i}>{t}</li>
-        ))}
-      </ul>
-      {variant.weekly_requirements?.length > 0 && (
-        <>
-          <div className="tpl-variant-section-label">Weekly requirements</div>
-          <ul className="tpl-task-list weekly">
-            {variant.weekly_requirements.map((t, i) => (
-              <li key={i}>{t}</li>
+      <div className="tpl-variant-section-label">Daily requirements</div>
+      {priced
+        ? <PricedRequirements tasks={preview.tasks} onGuide={onGuide} />
+        : (
+          <ul className="tpl-task-list">
+            {(variant.required_daily_tasks || []).map((t, i) => (
+              <li key={i}>{withoutXP(t)}</li>
             ))}
           </ul>
+        )}
+      {priced && variant.required_daily_tasks?.length > 0 && (
+        <ul className="tpl-task-list program">
+          {variant.required_daily_tasks.map((t, i) => <li key={i}>{withoutXP(t)}</li>)}
+        </ul>
+      )}
+      {(preview?.weekly?.length > 0 || variant.weekly_requirements?.length > 0) && (
+        <>
+          <div className="tpl-variant-section-label">Weekly requirements</div>
+          {preview?.weekly?.length > 0 && <PricedWeekly weekly={preview.weekly} />}
+          {variant.weekly_requirements?.length > 0 && (
+            <ul className="tpl-task-list weekly">
+              {variant.weekly_requirements.map((t, i) => <li key={i}>{withoutXP(t)}</li>)}
+            </ul>
+          )}
         </>
       )}
       {variant.optional_tasks?.length > 0 && (
@@ -123,14 +144,23 @@ function VariantPanel({ variant, template }) {
           <div className="tpl-variant-section-label">🎯 Bonus Missions (optional)</div>
           <ul className="tpl-task-list optional">
             {template.bonus_missions.map(bm => (
-              <li key={bm.id}>{bm.icon} {bm.name} — +{bm.xp} bonus XP</li>
+              <li key={bm.id}>
+                {bm.icon} {bm.name} — +{bm.xp} bonus XP
+                {preview && Number.isFinite(preview.bonusPerDayCap) && bm.xp > preview.bonusPerDayCap
+                  ? ` (capped at ${preview.bonusPerDayCap} a day)`
+                  : ''}
+              </li>
             ))}
           </ul>
           <div className="tpl-panel-note">
-            Bonus Missions are optional. They add bonus XP but are never required to complete the day.
+            Bonus Missions are optional. They add bonus XP but are never required to complete the day
+            {preview && Number.isFinite(preview.bonusPerDayCap)
+              ? `, and optional XP is capped at ${preview.bonusPerDayCap} a day`
+              : ''}.
           </div>
         </>
       )}
+      <XPSummaryCard preview={preview} />
     </div>
   );
 }
@@ -207,19 +237,14 @@ function ProgramSections({ program, category, durationDays }) {
 }
 
 function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) {
+  const { activeProfile } = useApp();
   const [expanded, setExpanded] = useState(false);
   const [variantTab, setVariantTab] = useState(isActive && activeVariant ? activeVariant : 'standard');
   const isVariantStart = template.start_flow === 'variant';
+  const isLegacy75 = template.id === DISCIPLINE_75_META.templateId;
   // A 'configured' challenge (Muscle Building) opens its own setup screen
   // instead of the generic variant + duration chips.
   const isConfiguredStart = template.start_flow === 'configured';
-  // The exact requirements this challenge's own config would generate.
-  const configuredPreview = (() => {
-    const cfg = CONFIGURED_SETUPS[template.id];
-    if (!cfg) return null;
-    const meta = cfg.buildMeta();
-    return { daily: cfg.buildTasks(), weekly: meta.weeklyRequirementDefs || [] };
-  })();
   const isCustom = template.id === 'custom_challenge_framework';
   const isMT = template.id === MENTAL_TRAINING_TEMPLATE_ID;
   const defaultDuration = getDefaultDuration(template);
@@ -231,6 +256,35 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
   // The strategy guide opened from a daily-requirement row. Available whether
   // or not this challenge is active — the guides are education, not progress.
   const [guideTask, setGuideTask] = useState(null);
+
+  // The attempt this card's current selections would create, stamped with the
+  // XP economy exactly as starting it would be. Every figure shown below is
+  // read from here, so changing mode, duration or the Cold Exposure Upgrade
+  // re-prices the whole panel — and what is advertised is what gets installed.
+  const preview = useMemo(() => previewAttempt({
+    template,
+    variant: variantTab,
+    durationDays: durationSel,
+    coldExposureUpgradeEnabled: coldUpgrade,
+    // The 75-Day challenge's task list is a per-profile default rather than
+    // template data, so it is handed in. Its descriptor carries no variant, so
+    // the mode tabs cannot change what it is worth — and the panel shows the
+    // one list it actually installs.
+    legacy: isLegacy75
+      ? { meta: DISCIPLINE_75_META, tasks: discipline75Tasks(activeProfile) }
+      : null,
+  }), [template, variantTab, durationSel, coldUpgrade, isLegacy75, activeProfile]);
+
+  // The difficulty RATING, which follows the chosen mode when a template rates
+  // its modes separately (Mental Training's beginner mode is an easy challenge
+  // and its standard mode a medium one, and they are priced that way).
+  const ratingMode = template.effort_tier_by_variant && !isConfiguredStart && !isLegacy75
+    ? variantTab
+    : null;
+  const rating = difficultyLabel(template, ratingMode);
+  // The collapsed card has no mode selected yet, so a template that rates its
+  // modes separately states the range rather than one mode's rating.
+  const range = difficultyRange(template);
 
   return (
     <div className={`challenge-card${isActive ? ' active' : ''}`}>
@@ -251,14 +305,14 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
           <div className="challenge-card-meta">
             {isCustom ? (
               <>
-                Custom · <span style={{ color: DIFFICULTY_COLOR[difficultyLabel(template)] }}>Difficulty: {difficultyLabel(template)}</span>
+                Custom · <span style={{ color: DIFFICULTY_COLOR[TIER_LABELS[range.tier]] }}>Difficulty: {range.label}</span>
               </>
             ) : (
               <>
                 {durationText(template.duration_options_days)}
                 {' • '}
-                <span style={{ color: DIFFICULTY_COLOR[difficultyLabel(template)] }}>
-                  {difficultyLabel(template)} Challenge
+                <span style={{ color: DIFFICULTY_COLOR[TIER_LABELS[range.tier]] }}>
+                  {range.label} Challenge
                 </span>
               </>
             )}
@@ -336,9 +390,14 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
 
           <div className="tpl-detail-row">
             <span className="tpl-detail-label">Difficulty</span>
-            <span className="tpl-level-value" style={{ color: DIFFICULTY_COLOR[difficultyLabel(template)] }}>
-              {difficultyLabel(template)}
+            <span className="tpl-level-value" style={{ color: DIFFICULTY_COLOR[rating] }}>
+              {rating}
             </span>
+            {ratingMode && (
+              <span className="tpl-detail-label" style={{ marginLeft: 8 }}>
+                for {capitalize(variantTab)} mode
+              </span>
+            )}
             {isActive && activeVariant && (
               <>
                 <span className="tpl-detail-label" style={{ marginLeft: 14 }}>Your mode</span>
@@ -352,7 +411,7 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
               what the challenge actually creates. */}
           {/* A configured challenge previews the exact daily and weekly
               requirements its own config module would create. */}
-          {isConfiguredStart && configuredPreview && (
+          {isConfiguredStart && preview && (
             <div className="mb-preview">
               {template.pillars?.length > 0 && (
                 <div className="mb-pillars">
@@ -362,37 +421,17 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
                 </div>
               )}
               <div className="tpl-variant-section-label">Daily requirements</div>
-              <ul className="tpl-task-list">
-                {configuredPreview.daily.map(t => {
-                  const label = `${t.icon} ${t.name} (${t.xp} XP)${t.keystoneHabit ? ' \u2b50\u2b50\u2b50 Keystone' : ''}`;
-                  // A requirement with a strategy guide is tappable here, with
-                  // the challenge inactive, never started, or long finished.
-                  return guideForTask(t) ? (
-                    <li key={t.id} className="tpl-task-guided">
-                      <button className="tpl-task-link" onClick={() => setGuideTask(t)}>
-                        {label}
-                        <span className="tpl-task-link-hint">Guide</span>
-                      </button>
-                    </li>
-                  ) : (
-                    <li key={t.id}>{label}</li>
-                  );
-                })}
-              </ul>
-              {configuredPreview.daily.some(t => guideForTask(t)) && (
+              <PricedRequirements tasks={preview.tasks} onGuide={setGuideTask} />
+              {preview.tasks.some(t => guideForTask(t)) && (
                 <p className="tpl-task-guide-note">
                   Tap any requirement above to read its full strategy guide. Reading one never
                   completes a habit or awards XP.
                 </p>
               )}
-              {configuredPreview.weekly.length > 0 && (
+              {preview.weekly.length > 0 && (
                 <>
                   <div className="tpl-variant-section-label">Weekly requirements</div>
-                  <ul className="tpl-task-list weekly">
-                    {configuredPreview.weekly.map(d => (
-                      <li key={d.id}>{d.icon} {d.label} — {d.perWeek}× per week ({d.xp} XP each)</li>
-                    ))}
-                  </ul>
+                  <PricedWeekly weekly={preview.weekly} />
                 </>
               )}
               {template.id === MB.MUSCLE_BUILDING_TEMPLATE_ID && (
@@ -400,9 +439,14 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
                   <div className="tpl-variant-section-label">Optional optimization</div>
                   <ul className="tpl-task-list optional">
                     {MB.OPTIMIZATION_HABITS.map(h => (
-                      <li key={h.id}>{h.icon} {h.setupLabel} — {h.xp} XP</li>
+                      <li key={h.id}>{h.icon} {h.setupLabel}</li>
                     ))}
                   </ul>
+                  <div className="tpl-panel-note">
+                    Turning an optimization on adds it to the daily list and re-divides the same
+                    daily budget, so it earns its share instead of inflating the day. The setup
+                    screen prices every requirement once you have chosen.
+                  </div>
                 </>
               )}
               {template.training_quality && (
@@ -415,6 +459,7 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
                   <strong>{template.exercise_guidance.principle}</strong> {template.exercise_guidance.notice}
                 </div>
               )}
+              <XPSummaryCard preview={preview} />
             </div>
           )}
 
@@ -452,7 +497,12 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
           <div className="tpl-philosophy">
             <strong>{PHILOSOPHY.headline}.</strong> {PHILOSOPHY.body}
           </div>
-          <VariantPanel variant={template.variants[variantTab]} template={template} />
+          <VariantPanel
+            variant={template.variants[variantTab]}
+            template={template}
+            preview={preview}
+            onGuide={setGuideTask}
+          />
           </>)}
 
           {/* Cold Exposure Upgrade — Mental Training only. Optional, disabled by
@@ -483,13 +533,17 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
                 <li>Optional — off unless you turn it on.</li>
                 <li>Enabling it increases your daily requirements.</li>
                 <li>It affects both your challenge grade and XP.</li>
+                <li>It joins the same daily budget, so every requirement is repriced — the list above updates.</li>
                 <li>Once the challenge starts, it can&apos;t be casually removed from that attempt.</li>
               </ul>
               {coldUpgrade && (
                 <div className="cold-upgrade-preview">
                   <div className="cold-upgrade-preview-label">Required because Cold Exposure Upgrade is enabled:</div>
                   <div className="cold-upgrade-preview-task">
-                    {COLD_SHOWER_TASK.icon} Cold Shower — 30–60 second cold finish <span className="cold-upgrade-xp">{COLD_SHOWER_TASK.xp} XP</span>
+                    {COLD_SHOWER_TASK.icon} Cold Shower — 30–60 second cold finish
+                    <span className="cold-upgrade-xp">
+                      {preview?.tasks.find(t => t.id === COLD_SHOWER_TASK.id)?.xp ?? 0} XP
+                    </span>
                   </div>
                 </div>
               )}
@@ -636,89 +690,28 @@ export default function ChallengesView({ setView }) {
     : 0;
 
   // Begin a challenge once difficulty is confirmed and the Future Self Letter
-  // is written. Handles both the variant flow and the legacy 75-day flow.
+  // is written.
+  //
+  // The attempt is built by `buildAttemptPayload` — the same function the
+  // library preview runs through `stampAttempt`. That is deliberately the only
+  // construction path: when the preview and the start assembled the attempt
+  // separately, the library advertised XP the attempt did not honour.
   function beginChallenge(letter, startDate) {
     const ps = pendingStart;
     if (!ps) return;
-    // A configured challenge builds its whole attempt — meta, weekly
-    // requirements and daily task list — from its own config module. Nothing
-    // about it is assembled here.
-    const configured = CONFIGURED_SETUPS[ps.template?.id];
-    if (ps.configuredSetup && configured) {
-      startChallenge(undefined, {
-        challenge: {
-          ...configured.buildMeta(ps.configuredSetup),
-          passingScore: ps.template.passing_score ?? DEFAULT_PASSING_SCORE,
-          keystoneRequirement: ps.template.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
-          rewardXP: ps.template.rewards?.xp || 0,
-          badgeId: ps.template.rewards?.badge_id || null,
-        },
-        tasks: configured.buildTasks(ps.configuredSetup),
-        bonusMissions: [],
-        futureSelfLetter: letter,
-        startDate,
-      });
-      setPendingStart(null);
-      setView('today');
-      return;
-    }
-    if (ps.legacy75) {
-      // 75-Day Discipline is one library challenge like any other: it passes its
-      // own descriptor and its own task set explicitly. Nothing is implied by
-      // being "the default" — there is no default.
-      startChallenge(undefined, {
-        challenge: { ...DISCIPLINE_75_META },
-        tasks: discipline75Tasks(activeProfile),
-        bonusMissions: ps.template?.bonus_missions || [],
-        futureSelfLetter: letter,
-        startDate,
-      });
-    } else {
-      const variantDef = ps.template.variants[ps.variant];
-      // Cold Exposure Upgrade applies only to Mental Training. The choice is
-      // locked onto THIS attempt's challenge rules, and the required Cold Shower
-      // task is generated into the daily task list only when enabled.
-      const coldEnabled = ps.template.id === MENTAL_TRAINING_TEMPLATE_ID && ps.coldExposureUpgradeEnabled === true;
-      // Fat Loss HARD MODE builds its own daily tasks, weekly requirements and
-      // config from fatLossHardConfig. Beginner and Standard fall through to the
-      // template's own start_tasks and the legacy weekly requirements exactly as
-      // before — nothing about them changes.
-      const hardFatLoss = ps.template.id === FLH.FAT_LOSS_TEMPLATE_ID && ps.variant === FLH.HARD_VARIANT;
-      const hardSetup = hardFatLoss ? (ps.hardSetup || FLH.defaultSetup()) : null;
-      startChallenge(undefined, {
-        challenge: {
-          templateId: ps.template.id,
-          name: ps.template.challenge_name,
-          emoji: ps.template.emoji,
-          variant: ps.variant,
-          durationDays: ps.durationDays,
-          templateVersion: ps.template.template_version || 1,
-          rewardXP: ps.template.rewards?.xp || 0,
-          // Challenge Performance config (percentage score system). The
-          // completion bonus follows the CHOSEN duration for templates that
-          // define a per-duration table; others keep their flat reward.
-          completionBonusXP: getCompletionBonusForDuration(ps.template, ps.durationDays),
-          passingScore: ps.template.passing_score ?? DEFAULT_PASSING_SCORE,
-          keystoneRequirement: ps.template.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
-          badgeId: ps.template.rewards?.badge_id || null,
-          // Locked challenge-attempt rule — default false, MT only.
-          coldExposureUpgradeEnabled: coldEnabled,
-          ...(hardFatLoss ? {
-            fatLossHard: FLH.buildConfig(hardSetup),
-            // Per-attempt weekly defs win over the legacy Fat Loss constant, so
-            // Hard gets 3 lifts + 2 Zone 2-3 + 1 interval + waist + review while
-            // every existing Beginner/Standard attempt keeps 3 lifts + 2 Zone 2.
-            weeklyRequirementDefs: FLH.weeklyRequirementDefs(),
-          } : {}),
-        },
-        tasks: hardFatLoss
-          ? FLH.buildStartTasks(hardSetup)
-          : applyColdExposureUpgrade(variantDef.start_tasks, coldEnabled),
-        bonusMissions: ps.template.bonus_missions || [],
-        futureSelfLetter: letter,
-        startDate,
-      });
-    }
+    const payload = buildAttemptPayload({
+      template: ps.template,
+      variant: ps.variant,
+      durationDays: ps.durationDays,
+      configuredSetup: ps.configuredSetup || null,
+      coldExposureUpgradeEnabled: ps.coldExposureUpgradeEnabled === true,
+      hardSetup: ps.hardSetup || null,
+      legacy: ps.legacy75
+        ? { meta: DISCIPLINE_75_META, tasks: discipline75Tasks(activeProfile) }
+        : null,
+    });
+    if (!payload) return;
+    startChallenge(undefined, { ...payload, futureSelfLetter: letter, startDate });
     setPendingStart(null);
     setView('today');
   }

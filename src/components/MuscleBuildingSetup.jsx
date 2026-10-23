@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as MB from '../data/muscleBuildingConfig';
 import { HABIT_KEYS } from '../data/habitKeys';
+import { previewConfigured } from '../data/challengeAttempt';
+import { PricedRequirements, PricedWeekly, XPSummaryCard } from './XPPreview';
 
 /**
  * Muscle Building setup — the minimum useful customization, on one screen.
@@ -26,6 +28,11 @@ export default function MuscleBuildingSetup({ onCancel, onSubmit }) {
     return setSpec({ priority: [...cur, id] });
   };
   const mode = MB.nutritionMode(s.nutritionMode);
+  // Priced from the attempt these choices would start. Training days and the
+  // optimization habits both change it: the weekly budget is divided across
+  // however many sessions are required, and an optimization joins the daily
+  // list and re-divides the same daily budget.
+  const preview = useMemo(() => previewConfigured(MB.MUSCLE_BUILDING_TEMPLATE_ID, s), [s]);
 
   function setMode(id) {
     const m = MB.nutritionMode(id);
@@ -378,9 +385,23 @@ export default function MuscleBuildingSetup({ onCancel, onSubmit }) {
             </label>
           ))}
           <div className="mb-hint">
-            Both are optional and worth less XP than any fundamental. You are never penalised for a
-            habit you did not enable.
+            All optional, and each is worth less XP than any fundamental. Turning one on adds it to
+            the daily list and re-divides the same daily budget, so it earns a share rather than
+            inflating the day. You are never penalised for a habit you did not enable.
           </div>
+        </div>
+
+        {/* ── What this setup is worth ── */}
+        <div className="mb-field">
+          <label className="mb-label">Daily requirements</label>
+          <PricedRequirements tasks={preview.tasks} />
+          {preview.weekly.length > 0 && (
+            <>
+              <label className="mb-label">Weekly requirements</label>
+              <PricedWeekly weekly={preview.weekly} />
+            </>
+          )}
+          <XPSummaryCard preview={preview} />
         </div>
 
         {/* ── Physique tracking ── */}

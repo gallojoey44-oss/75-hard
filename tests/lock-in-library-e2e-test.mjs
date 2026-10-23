@@ -84,13 +84,19 @@ async function startLockIn(duration) {
   await page.waitForTimeout(700);
 }
 
+// XP economy v2: LOCK IN is a medium_hard challenge, so its daily budget is 180
+// at standard mode and its completion bonus is 0.20 x 180 x duration. The
+// advertised figure is therefore proportional to length rather than the flat
+// per-duration table the setup screen used to carry.
+const LOCK_IN_BUDGET = 180;
+const bonusFor = (days) => Math.round(0.20 * LOCK_IN_BUDGET * days);
 const DURATIONS = [
-  [7, 'Lock In Sprint', 350],
-  [14, 'Focus Reset', 700],
-  [21, 'Discipline Builder', 1050],
-  [30, 'High Performance', 1500],
-  [60, 'Deep Discipline', 3000],
-  [90, 'Lifestyle Transformation', 4500],
+  [7, 'Lock In Sprint', bonusFor(7)],
+  [14, 'Focus Reset', bonusFor(14)],
+  [21, 'Discipline Builder', bonusFor(21)],
+  [30, 'High Performance', bonusFor(30)],
+  [60, 'Deep Discipline', bonusFor(60)],
+  [90, 'Lifestyle Transformation', bonusFor(90)],
 ];
 
 await page.goto(BASE);

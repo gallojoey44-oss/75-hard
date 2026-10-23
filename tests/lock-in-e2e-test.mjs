@@ -78,7 +78,11 @@ check('2: it shows the flow ramp before you commit',
 check('2: it states the lighter-day rule up front', /planned lighter days/i.test(setupText));
 check('2: it states the no-less-sleep rule up front',
   /nothing in this challenge rewards sleeping less/i.test(setupText));
-check('2: it shows the day count, habit count and XP', /14/.test(setupText) && /8/.test(setupText) && /700/.test(setupText));
+// XP economy v2: the completion bonus is 0.20 x daily budget x duration, so a
+// 14-day LOCK IN at its medium_hard 180 budget is 504 rather than the flat 700
+// the setup screen used to advertise.
+check('2: it shows the day count, habit count and XP',
+  /14/.test(setupText) && /8/.test(setupText) && /\b504\b/.test(setupText));
 
 // The eight habits are behind a disclosure, so the setup screen stays short.
 await page.locator('.li-disclosure', { hasText: /daily habits/i }).click();
@@ -86,7 +90,17 @@ await page.waitForTimeout(250);
 check('2: the habit preview lists nine rows (eight habits + the Daily Log)',
   (await page.locator('.li-habit').count()) === 9);
 setupText = await page.textContent('.li-setup');
-check('2: sleep is previewed as the highest-XP habit', /40 XP/.test(setupText));
+// Asserted as a relationship rather than a figure: the habits are priced by the
+// XP engine from the challenge's daily budget, and the guarantee that matters is
+// the ordering — sleep is the most valuable habit here.
+const habitXP = await page.locator('.li-habit').evaluateAll(rows => rows.map(r => ({
+  name: r.querySelector('.li-habit-name')?.textContent || '',
+  xp: Number((/(\d+)\s*XP/.exec(r.querySelector('.li-habit-xp')?.textContent || '') || [])[1] || 0),
+})));
+const topHabit = habitXP.slice().sort((a, b) => b.xp - a.xp)[0];
+check('2: sleep is previewed as the highest-XP habit',
+  /sleep/i.test(topHabit.name), `${topHabit.name.trim()} at ${topHabit.xp} XP`);
+check('2: and every habit is priced', habitXP.every(h => h.xp > 0));
 
 // Targets are adjustable but optional.
 await page.locator('.li-disclosure', { hasText: /Adjust targets/i }).click();

@@ -11,6 +11,9 @@ import { SOURCES } from '../data/defaultQuotes';
 import { computeAverages } from '../utils/insightsUtils';
 import { computeTotalXP, computeBadges, computeChallengeScore, isChallengePassed, getPassingConfig, getBonusXP, requiredTasksForDay, computeChallengeChanges, computeWithinChallengeTrend, DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, LEGACY_PASSING_SCORE } from '../utils/gamification';
 import { buildTimeline } from '../utils/archiveUtils';
+// One definition of a new attempt's defaults, shared with the library preview:
+// two copies is how the library came to advertise XP the attempt did not honour.
+import { NEW_ATTEMPT_DEFAULTS } from '../data/challengeAttempt';
 import { computeWeeklyRequirements, hasWeeklyRequirements, makeSession, weeklyAdherence, WEEKLY_REQUIREMENT_TEMPLATE_IDS as WEEKLY_REQ_TEMPLATES } from '../utils/weeklyRequirements';
 import { makeVolumeEntry, weeklyVolume, tracksVolume } from '../utils/muscleVolume';
 import { makeExerciseEntry } from '../utils/exerciseLog';
@@ -114,19 +117,6 @@ export const DISCIPLINE_75_META = {
   completionBonusXP: 2500,
 };
 
-/**
- * Scoring defaults for a NEWLY started attempt, applied only under whatever the
- * chosen template supplies. Deliberately carries no identity and no duration —
- * a new attempt's templateId, name, emoji, variant and durationDays must come
- * from the selected challenge, so nothing can leak in from a previous one.
- */
-const NEW_ATTEMPT_DEFAULTS = {
-  variant: null,
-  durationDays: null,
-  passingScore: DEFAULT_PASSING_SCORE,
-  keystoneRequirement: DEFAULT_KEYSTONE_REQUIREMENT,
-  completionBonusXP: 0,
-};
 
 /**
  * The 75-Day Discipline Challenge's own daily task set.

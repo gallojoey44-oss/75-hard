@@ -1,4 +1,4 @@
-import { TIER_LABELS } from './xpEconomy';
+import { TIER_LABELS, EFFORT_TIERS } from './xpEconomy';
 import { HABIT_KEYS } from './habitKeys';
 import * as MB from './muscleBuildingConfig';
 import * as HH from './hormoneHealthConfig';
@@ -125,6 +125,30 @@ export function difficultyLabel(template, mode = null) {
   const tier = (mode && template?.effort_tier_by_variant?.[mode])
     || template?.effort_tier;
   return TIER_LABELS[tier] || template?.overall_difficulty || 'Medium';
+}
+
+/**
+ * The rating for a challenge whose MODE is not yet chosen.
+ *
+ * A template that rates its modes separately has no single honest rating before
+ * one is picked: Mental Training's beginner mode is an easy challenge and its
+ * standard and hard modes medium ones, and they are priced accordingly. Naming
+ * only one of them on the card advertised a difficulty — and so a daily budget
+ * — that two thirds of its modes do not have, so the collapsed card states the
+ * range and the expanded card states the rating for the selected mode.
+ *
+ * `tier` is the top of the range, for callers that colour by severity.
+ */
+export function difficultyRange(template) {
+  const byVariant = template?.effort_tier_by_variant;
+  const present = byVariant ? EFFORT_TIERS.filter(t => Object.values(byVariant).includes(t)) : [];
+  if (present.length < 2) {
+    const tier = present[0] || template?.effort_tier || null;
+    return { label: difficultyLabel(template), tier, spans: false };
+  }
+  const lo = present[0];
+  const hi = present[present.length - 1];
+  return { label: `${TIER_LABELS[lo]}–${TIER_LABELS[hi]}`, tier: hi, spans: true };
 }
 
 export function getDurationOptions(template) {
@@ -506,15 +530,6 @@ export const CHALLENGE_TEMPLATES = [
     variants: {
       beginner: {
         expected_results: '1–2 lb body fat loss',
-        required_daily_tasks: [
-          '⭐⭐⭐ Hit protein goal (0.8–1.0 g per lb of goal body weight) (40 XP).',
-          '⭐⭐⭐ Eat mostly whole foods (80%+) (40 XP).',
-          '⭐⭐ Walk 6,000+ steps (25 XP).',
-          '⭐⭐ Sleep 7.5+ hours (25 XP).',
-          '⭐ Hit water goal (15 XP).',
-          '⭐ Take a progress photo (10 XP).',
-          '⭐ Complete Daily Log (10 XP).',
-        ],
         weekly_requirements: [
           'Lift 3x',
           '1 × 30-minute Zone 2 cardio',
@@ -539,18 +554,9 @@ export const CHALLENGE_TEMPLATES = [
       },
       standard: {
         expected_results: '2–4 lb body fat loss',
-        required_daily_tasks: [
-          '⭐⭐⭐ Hit protein goal (0.8–1.0 g per lb of goal body weight) (40 XP).',
-          '⭐⭐⭐ Eat mostly whole foods (90%) (40 XP).',
-          '⭐⭐ Walk 8,000+ steps (25 XP).',
-          '⭐⭐ Sleep 7.5–9 hours (25 XP).',
-          '⭐ Hit water goal (15 XP).',
-          '⭐ Take a progress photo (10 XP).',
-          '⭐ Complete Daily Log (10 XP).',
-        ],
         weekly_requirements: [
-          '🏋️ Lift 3x — required (25 XP each)',
-          '❤️ 2 × 30-minute Zone 2 cardio — required (20 XP each)',
+          '🏋️ Lift 3x — required',
+          '❤️ 2 × 30-minute Zone 2 cardio — required',
           'Track these throughout each 7-day challenge week.',
         ],
         optional_tasks: [
@@ -579,16 +585,6 @@ export const CHALLENGE_TEMPLATES = [
       hard: {
         recommended_duration_days: FLH.HARD_DURATION_DAYS,
         expected_results: 'Typical target: approximately 3–5 lb of body fat over 30 days for an appropriate candidate following the program consistently. Results vary.',
-        required_daily_tasks: [
-          `⭐⭐⭐ Hit protein goal (${FLH.PROTEIN.perLbLow}–${FLH.PROTEIN.perLbHigh} g per lb of target body weight) (${FLH.XP.protein} XP).`,
-          `⭐⭐⭐ Eat mostly whole foods (~${FLH.WHOLE_FOOD_PCT}% of intake) (${FLH.XP.wholeFood} XP).`,
-          `⭐⭐ Walk ${FLH.STEP_TARGET.toLocaleString()}+ steps (${FLH.XP.steps} XP).`,
-          `⭐⭐ ${FLH.FULLNESS.short} (${FLH.XP.fullness} XP).`,
-          `⭐⭐ Sleep ${FLH.SLEEP_TARGET.min}–${FLH.SLEEP_TARGET.max} hours (${FLH.XP.sleep} XP).`,
-          `⭐ Hit water goal (${FLH.XP.water} XP).`,
-          `⭐ Daily progress photo — taken in the app, required (${FLH.XP.photo} XP).`,
-          `⭐ Complete Daily Log (${FLH.XP.dailyLog} XP).`,
-        ],
         weekly_requirements: [
           '🏋️ Resistance training ×3 — your existing programme counts',
           '❤️ Zone 2–3 cardio ×2 — 30 minutes each',
@@ -771,15 +767,6 @@ export const CHALLENGE_TEMPLATES = [
     variants: {
       beginner: {
         progression: 'Build the habit.',
-        required_daily_tasks: [
-          '⭐⭐⭐ Mental Training — 2 minutes (100 XP).',
-          '⭐⭐ Read 2 pages (40 XP).',
-          '⭐⭐ Prayer (40 XP).',
-          '⭐ Write one gratitude (20 XP).',
-          '⭐ 30-minute phone-free focus block (20 XP).',
-          '🚶 Short Physical Reset — 5 minutes (20 XP).',
-          '📊 Complete Daily Log (20 XP).',
-        ],
         optional_tasks: [],
         start_tasks: [
           { id: 'mt_mind',      name: 'Mental Training — 2 minutes',         icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3, habitKey: HABIT_KEYS.MEDITATION },
@@ -793,15 +780,6 @@ export const CHALLENGE_TEMPLATES = [
       },
       standard: {
         progression: 'Strengthen the habit.',
-        required_daily_tasks: [
-          '⭐⭐⭐ Mental Training — 5 minutes (100 XP).',
-          '⭐⭐ Read 5 pages (40 XP).',
-          '⭐⭐ Prayer (40 XP).',
-          '⭐ Write one gratitude (20 XP).',
-          '⭐ 60-minute phone-free focus block (20 XP).',
-          '🚶 Short Physical Reset — 10 minutes (30 XP).',
-          '📊 Complete Daily Log (20 XP).',
-        ],
         optional_tasks: [],
         start_tasks: [
           { id: 'mt_mind',      name: 'Mental Training — 5 minutes',         icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3, habitKey: HABIT_KEYS.MEDITATION },
@@ -815,15 +793,6 @@ export const CHALLENGE_TEMPLATES = [
       },
       hard: {
         progression: 'Optimize the habit.',
-        required_daily_tasks: [
-          '⭐⭐⭐ Mental Training — 10 minutes (100 XP).',
-          '⭐⭐ Read 10 pages (40 XP).',
-          '⭐⭐ Prayer (40 XP).',
-          '⭐ Write one gratitude (20 XP).',
-          '⭐ 90-minute phone-free focus block (20 XP).',
-          '🚶 Short Physical Reset — 15 minutes (40 XP).',
-          '📊 Complete Daily Log (20 XP).',
-        ],
         optional_tasks: [],
         start_tasks: [
           { id: 'mt_mind',      name: 'Mental Training — 10 minutes',        icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3, habitKey: HABIT_KEYS.MEDITATION },
