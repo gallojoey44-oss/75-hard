@@ -68,6 +68,27 @@ const DEFAULT_TASKS_GF = [
   { ...DAILY_LOG_TASK, order: 12 },
 ];
 
+/**
+ * The Forge Daily baseline, stamped with the current XP economy and its tasks
+ * priced to the easy-tier budget.
+ *
+ * Every path that returns to the baseline uses this. Creating an UNSTAMPED
+ * baseline would leave it era-1, and the economy migration would then fire on
+ * it a moment later — archiving and clearing day records mid-flow, which is
+ * how promoting a support challenge lost the records it needed to re-key.
+ */
+function stampedBaseline(extraTaskFields = {}) {
+  const st = stampAttempt({
+    meta: { ...FORGE_DAILY_META },
+    tasks: FORGE_DAILY_TASKS,
+    template: null,
+  });
+  return {
+    meta: st.meta,
+    tasks: st.tasks.map((t, i) => ({ ...t, source: 'template', order: i, ...extraTaskFields })),
+  };
+}
+
 export const DISCIPLINE_75_ID = '75_day_discipline_challenge';
 
 /**
@@ -1731,7 +1752,7 @@ export function AppProvider({ children }) {
         [profId]: {
           ...prev[profId],
           challengeStart: supportStart,
-          activeChallenge: { ...FORGE_DAILY_META },
+          activeChallenge: stampedBaseline().meta,
           tasks,
           bonusMissions: [],
           lastCompletion: summary,
@@ -1756,8 +1777,8 @@ export function AppProvider({ children }) {
       [profId]: {
         ...prev[profId],
         challengeStart: getTodayStr(),
-        activeChallenge: { ...FORGE_DAILY_META },
-        tasks: FORGE_DAILY_TASKS.map((t, i) => ({ ...t, source: 'template', order: i })),
+        activeChallenge: stampedBaseline().meta,
+        tasks: stampedBaseline().tasks,
         bonusMissions: [],
         lastCompletion: summary,
         xpOffset: 0,
@@ -1816,8 +1837,8 @@ export function AppProvider({ children }) {
       [profId]: {
         ...prev[profId],
         challengeStart: getTodayStr(),
-        activeChallenge: { ...FORGE_DAILY_META },
-        tasks: FORGE_DAILY_TASKS.map((t, i) => ({ ...t, source: 'template', order: i, challenges: [LANE.PRIMARY] })),
+        activeChallenge: stampedBaseline().meta,
+        tasks: stampedBaseline({ challenges: [LANE.PRIMARY] }).tasks,
         bonusMissions: [],
         // The support lane is chosen to complement one specific primary, so it
         // never survives that primary ending. (Archived just above.)
@@ -2586,6 +2607,12 @@ export function AppProvider({ children }) {
       });
       if (entry) {
         setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
+        // Clear the live day records, exactly as starting a new challenge does.
+        // They are SNAPSHOTTED inside the archive entry above (`days:
+        // profDays`), so nothing is lost — and without this the new era-2
+        // segment would re-read day 1 of the segment just archived and award
+        // era-2 XP for work already banked, i.e. pay twice for the same days.
+        setAllDays(prev => ({ ...prev, [profId]: {} }));
       }
       setProfiles(prev => ({
         ...prev,
@@ -2603,7 +2630,7 @@ export function AppProvider({ children }) {
       }));
       return;   // one profile per pass; the next render settles the other
     }
-  }, [profiles, allDays, buildArchiveEntry, setArchives, setProfiles]);
+  }, [profiles, allDays, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   // ── Missed days: recent notice vs permanent record ───────────────────────
 

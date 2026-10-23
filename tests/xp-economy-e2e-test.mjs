@@ -372,7 +372,73 @@ check('7: archives were never rewritten',
   (await arch()).find(a => a.id === 'arch_healthy').xpEarned === 8245 &&
   (await arch()).find(a => a.id === 'arch_abandoned').xpEarned === 0);
 
-// ══ 8: no page errors throughout ═══════════════════════════════════════════
+// ══ 9: migrating the baseline must not pay twice for the same days ═════════
+// The regression this pins: the migration archives the era-1 segment and then
+// starts a fresh one from today. If the live day records are left in place,
+// day 1 of the NEW segment re-reads day 1 of the segment just archived and
+// awards era-2 XP for work already banked. A profile at rank 1 is used
+// deliberately — with a high rank the floor masks the inflated figure, which
+// is exactly why the first version of this test passed while the bug was live.
+await page.evaluate(() => {
+  const d = (o) => { const x = new Date(); x.setDate(x.getDate() + o); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
+  localStorage.clear();
+  localStorage.setItem('activeProfile', JSON.stringify('me'));
+});
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 });
+await page.evaluate(() => {
+  const d = (o) => { const x = new Date(); x.setDate(x.getDate() + o); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
+  const p = JSON.parse(localStorage.getItem('profiles'));
+  p.me.highestRank = 1;                 // floor 0, so nothing can be masked
+  p.me.xpPenalties = false;             // isolate earnings from penalties
+  p.me.challengeStart = d(-4);
+  p.me.activeChallenge = {
+    templateId: 'forge_daily', name: 'Forge Daily', durationDays: null, isBaseline: true,
+  };
+  p.me.tasks = [
+    { id: 'fd_sleep', name: 'Sleep', xp: 8, keystone: 0, source: 'template', order: 0 },
+    { id: 'fd_mind', name: 'Mental Training', xp: 12, keystone: 1, source: 'template', order: 1 },
+  ];
+  localStorage.setItem('profiles', JSON.stringify(p));
+  const days = {};
+  for (let i = 1; i <= 5; i++) days[i] = { tasks: { fd_sleep: true, fd_mind: true } };
+  localStorage.setItem('allDays', JSON.stringify({ me: days, girlfriend: {} }));
+  localStorage.setItem('archives', JSON.stringify({ me: [], girlfriend: [] }));
+});
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 });
+await page.waitForTimeout(1400);
+
+const migrated = await prof();
+const archived = await arch();
+check('9: the era-1 segment was archived', archived.length === 1, `${archived.length}`);
+check('9: and the live day records were cleared, not left to be re-read',
+  Object.keys(await page.evaluate(() => JSON.parse(localStorage.getItem('allDays')).me)).length === 0,
+  JSON.stringify(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('allDays')).me))));
+check('9: the archive kept the day records it needs to recompute',
+  Object.keys(archived[0].days || {}).length === 5,
+  `${Object.keys(archived[0].days || {}).length} days`);
+
+details = await openRankDetails();
+const afterMigration = await rankFigure('Current XP');
+// The archived era-1 total, converted. Nothing else has been earned yet.
+const expected = archived[0].xpEarned * 10;
+check('9: Current XP is exactly the converted archive — no XP paid twice',
+  afterMigration === expected, `${afterMigration} vs ${expected}`);
+check('9: the new segment starts at zero, not mid-way through old days',
+  migrated.xpStartDay === 1 && migrated.xpOffset === 0);
+
+// Idempotence: reloading must not archive again or change the balance.
+for (let i = 0; i < 3; i++) {
+  await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 });
+  await page.waitForTimeout(500);
+}
+check('9: three reloads do not archive the segment again',
+  (await arch()).length === 1, `${(await arch()).length}`);
+details = await openRankDetails();
+check('9: and the balance is unchanged — the conversion is idempotent',
+  (await rankFigure('Current XP')) === expected, `${await rankFigure('Current XP')}`);
+check('9: the rank was not lost', !!(await prof()).highestRank);
+
+// ══ 10: no page errors throughout ══════════════════════════════════════════
 const real = errors.filter(e => !/favicon|manifest|ServiceWorker|sw\.js/i.test(e));
 check('8: no page errors throughout', real.length === 0, real.slice(0, 2).join(' | '));
 
