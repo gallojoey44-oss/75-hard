@@ -950,6 +950,77 @@ So a keystone is worth **2.4x to 3.2x** a minor habit depending on the
 challenge — about the 3x you asked for — and Mental Training's era-1 5.0x
 distortion is gone. Daily budgets are unchanged.
 
+### 14.10 Three data-safety defects found in the pre-deployment audit
+
+All three found by auditing the migration against the question "will existing
+data survive this", all three fixed, all three proven by a test that fails
+without the fix.
+
+**The baseline migration paid XP twice.** `startChallenge` clears
+`allDays[profId]` after archiving. The migration archived the era-1 Forge Daily
+segment but left the live day records in place, then moved `challengeStart` to
+today with `xpStartDay: 1` — so day 1 of the new era-2 segment re-read day 1 of
+the segment just archived and awarded era-2 XP for work already banked.
+
+Measured by reverting the fix: Current XP read **1,079 against a correct
+1,000** — 79 XP paid twice on a five-day fixture, scaling with however much
+Forge Daily history a profile carries. The day records are snapshotted inside
+the archive entry, so taking the banked copies off the live slate loses
+nothing.
+
+Worth recording why this survived the first green run: the e2e fixture had
+`highestRank: 7`, and the 75,000 rank floor masked the inflated figure
+entirely. The regression test now uses rank 1 with penalties off, so no floor
+can hide an error.
+
+**Fixing that broke support-challenge promotion.** Clearing `allDays` collided
+with the challenge-combination flow: after a primary finishes the app drops to
+an *unstamped* Forge Daily baseline, the migration fired on that transient
+state, and it destroyed the day records promotion needs to re-key.
+`challenge-combination-e2e` caught it.
+
+The fix belongs upstream: a `stampedBaseline()` helper builds the baseline with
+its economy version and its tasks priced to the easy-tier budget, and every
+path returning to Forge Daily uses it. A freshly created baseline is era 2 from
+the start, so the migration only ever applies to genuinely pre-existing era-1
+data — which is what it was always meant to do.
+
+**And clearing the whole slate swallowed the day in progress.**
+`scheduled-start-e2e` caught the next layer: a log dated before a scheduled
+challenge's Day 1 stopped being retained. The underlying behaviour was worse
+than the test name suggests — the new era-2 segment starts *today*, so anyone
+who had already ticked part of today off before opening the updated app would
+have found it blanked, their Daily Log entry gone, and re-completing it would
+have paid for that day a second time (era-1 in the archive, era-2 live).
+
+The boundary was in the wrong place. Today is Day 1 of the new segment, so it
+belongs to the new segment: the migration now banks the days *strictly before*
+today and carries today's record over, re-keyed to Day 1. `buildArchiveEntry`
+takes an optional `throughDay` to bank a prefix of a segment, with the scoring
+boundary moved to `throughDay + 1` so every banked day is finalised and no day
+outside the banked range is scored. Each day is therefore paid exactly once, at
+the rates of the era it ran under, and nothing the user had already entered is
+lost.
+
+Pinned by `xp-economy-e2e` §9b on a fixture whose today is logged: the archive
+holds four days, the live slate holds one re-keyed to Day 1 with its ticks and
+mood intact, and Current XP is **4,038 = 390 × 10 + 138** — the banked segment
+converted, plus exactly one era-2 day (the 120-unit easy-tier budget and the
+15% perfect-day bonus), not two.
+
+**Also verified in the same audit:** no `localStorage.clear()` or
+`removeItem` anywhere in app code; the migration only ever appends to archives;
+backup, export and import untouched, with `LS_KEYS` still covering every new
+field because they live inside `profiles` and `archives`; `api/` untouched; and
+`public/sw.js` differing only by its cache version, with the push and
+`notificationclick` handlers and the `forge-identity` cache left alone.
+
+**One edge case, recorded rather than hidden.** A baseline with a start date
+weeks back but no logged days has nothing to archive, so the migration resets
+`challengeStart` to today — which forgives the missed-day penalties those
+untouched days carried. The alternative, charging era-2 rates for era-1 days, is
+worse; but it is a silent change and belongs in the record.
+
 ---
 
 ## 15. Finalized per-challenge XP breakdown

@@ -1096,9 +1096,15 @@ export function AppProvider({ children }) {
    * reflections, XP earned, badges earned, and comeback history.
    * Returns null when there is nothing worth archiving.
    */
-  const buildArchiveEntry = useCallback((profId) => {
+  const buildArchiveEntry = useCallback((profId, opts = {}) => {
     const prof = profiles[profId];
-    const profDays = allDays[profId] || {};
+    // `throughDay` banks only the days up to and including that day number and
+    // leaves anything later on the live slate. The economy migration uses it to
+    // archive the era-1 segment WITHOUT swallowing the day in progress.
+    const through = opts.throughDay ?? null;
+    const liveDays = allDays[profId] || {};
+    const profDays = through == null ? liveDays : Object.fromEntries(
+      Object.entries(liveDays).filter(([n]) => Number(n) <= through));
     if (!prof?.challengeStart || Object.keys(profDays).length === 0) return null;
     // A scheduled attempt never reached Day 1, so there is nothing to archive —
     // cancelling or rescheduling it must not create a phantom completed/failed
@@ -1110,7 +1116,9 @@ export function AppProvider({ children }) {
     // against. The old `meta.durationDays || 75` fell back to 75, so a Forge
     // Daily period longer than 75 days banked only its first 75 days and the
     // rest of its earned XP was silently dropped.
-    const elapsedDays = getDayNumberFromStart(prof.challengeStart) || 1;
+    const elapsedDays = through == null
+      ? (getDayNumberFromStart(prof.challengeStart) || 1)
+      : Math.min(getDayNumberFromStart(prof.challengeStart) || 1, through);
     const dayNum = meta.durationDays != null
       ? Math.min(elapsedDays, meta.durationDays)
       : elapsedDays;
@@ -1130,8 +1138,12 @@ export function AppProvider({ children }) {
     // Challenge Performance snapshot (percentage score, pass/fail, bonus).
     // Use the RAW (uncapped) local day so a finished challenge finalises every
     // day (no in-progress day left neutral); a mid-challenge archive still gets
-    // the fair current-day-neutral score.
-    const rawDay = getDayNumberFromStart(prof.challengeStart) || 1;
+    // the fair current-day-neutral score. With `throughDay` the boundary sits
+    // one day past the banked segment, so every day IN it is finalised and no
+    // day outside it is scored.
+    const rawDay = through == null
+      ? (getDayNumberFromStart(prof.challengeStart) || 1)
+      : Math.min(getDayNumberFromStart(prof.challengeStart) || 1, through + 1);
     const cfg = getPassingConfig(meta);
     const scoreObj = computeChallengeScore(allDays, profiles, profId, rawDay);
     const passed = scoreObj ? isChallengePassed(scoreObj, meta) : null;
@@ -1170,7 +1182,7 @@ export function AppProvider({ children }) {
       weeklyRequirements: hasWeeklyRequirements(meta) ? (() => {
         const wr = computeWeeklyRequirements({
           sessions: prof.weeklySessions, meta, challengeStart: prof.challengeStart,
-          currentRawDay: (getDayNumberFromStart(prof.challengeStart) || 1) + 1, // finalise every elapsed week
+          currentRawDay: elapsedDays + 1, // finalise every elapsed (banked) week
           penaltiesEnabled: prof.xpPenalties !== false,
         });
         return {
@@ -2599,20 +2611,36 @@ export function AppProvider({ children }) {
       if (economyVersionOf(meta) >= CURRENT_ECONOMY_VERSION) continue;
       if (isScheduled(prof)) continue;
 
-      const entry = buildArchiveEntry(profId);
+      // The new era-2 segment starts TODAY, so today is its Day 1 — and the
+      // day in progress belongs to it, not to the segment being banked. Days
+      // strictly before today are archived; today's record (if the user has
+      // already filled some of it in) is carried over, re-keyed to Day 1.
+      //
+      // Both halves of that matter. Archiving today as well would pay for it
+      // twice — once at era-1 rates in the archive, once at era-2 rates when
+      // the new segment re-read it — and would blank out a day the user had
+      // already completed. Leaving the earlier days on the live slate would
+      // double-pay those instead.
+      const profDays = allDays[profId] || {};
+      const todayNum = getDayNumberFromStart(prof.challengeStart) || 1;
+      const carried = {};
+      for (const [n, rec] of Object.entries(profDays)) {
+        if (!rec || Number(n) < todayNum) continue;
+        const k = Number(n) - todayNum + 1;
+        carried[k] = { ...rec, dayNumber: k };
+      }
+
+      const entry = buildArchiveEntry(profId, { throughDay: todayNum - 1 });
       const stamped = stampAttempt({
         meta: { ...meta },
         tasks: prof.tasks || [],
         template: getTemplateById(meta.templateId),
       });
-      if (entry) {
-        setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
-        // Clear the live day records, exactly as starting a new challenge does.
-        // They are SNAPSHOTTED inside the archive entry above (`days:
-        // profDays`), so nothing is lost — and without this the new era-2
-        // segment would re-read day 1 of the segment just archived and award
-        // era-2 XP for work already banked, i.e. pay twice for the same days.
-        setAllDays(prev => ({ ...prev, [profId]: {} }));
+      if (entry) setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
+      // The banked days are SNAPSHOTTED inside the archive entry (`days:
+      // profDays`), so nothing is lost by taking them off the live slate.
+      if (Object.keys(profDays).length) {
+        setAllDays(prev => ({ ...prev, [profId]: carried }));
       }
       setProfiles(prev => ({
         ...prev,

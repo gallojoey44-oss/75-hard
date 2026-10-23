@@ -390,7 +390,10 @@ await page.evaluate(() => {
   const p = JSON.parse(localStorage.getItem('profiles'));
   p.me.highestRank = 1;                 // floor 0, so nothing can be masked
   p.me.xpPenalties = false;             // isolate earnings from penalties
-  p.me.challengeStart = d(-4);
+  // Five logged days, all of them finished and in the past: today (day 6) has
+  // nothing logged yet, so the whole segment is banked and the new one starts
+  // empty. Section 9b covers a migration that lands mid-day.
+  p.me.challengeStart = d(-5);
   p.me.activeChallenge = {
     templateId: 'forge_daily', name: 'Forge Daily', durationDays: null, isBaseline: true,
   };
@@ -437,6 +440,71 @@ details = await openRankDetails();
 check('9: and the balance is unchanged — the conversion is idempotent',
   (await rankFigure('Current XP')) === expected, `${await rankFigure('Current XP')}`);
 check('9: the rank was not lost', !!(await prof()).highestRank);
+
+// ══ 9b: a migration that lands mid-day keeps the day in progress ═══════════
+// The new era-2 segment starts today, so today IS its Day 1. A user who had
+// already ticked some of today off before the update must not find it blanked
+// — and must not be paid for it twice either. So days strictly before today
+// are banked, and today's record is carried over as Day 1 of the new segment.
+await page.evaluate(() => {
+  localStorage.clear();
+  localStorage.setItem('activeProfile', JSON.stringify('me'));
+});
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 });
+await page.evaluate(() => {
+  const d = (o) => { const x = new Date(); x.setDate(x.getDate() + o); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
+  const p = JSON.parse(localStorage.getItem('profiles'));
+  p.me.highestRank = 1;
+  p.me.xpPenalties = false;
+  p.me.challengeStart = d(-4);          // today is day 5, and it IS logged
+  p.me.activeChallenge = {
+    templateId: 'forge_daily', name: 'Forge Daily', durationDays: null, isBaseline: true,
+  };
+  p.me.tasks = [
+    { id: 'fd_sleep', name: 'Sleep', xp: 8, keystone: 0, source: 'template', order: 0 },
+    { id: 'fd_mind', name: 'Mental Training', xp: 12, keystone: 1, source: 'template', order: 1 },
+  ];
+  localStorage.setItem('profiles', JSON.stringify(p));
+  const days = {};
+  for (let i = 1; i <= 5; i++) days[i] = { dayNumber: i, date: d(i - 5), mood: 4, tasks: { fd_sleep: true, fd_mind: true } };
+  localStorage.setItem('allDays', JSON.stringify({ me: days, girlfriend: {} }));
+  localStorage.setItem('archives', JSON.stringify({ me: [], girlfriend: [] }));
+});
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 });
+await page.waitForTimeout(1400);
+
+const midDay = await page.evaluate(() => JSON.parse(localStorage.getItem('allDays')).me);
+const midArch = await arch();
+const todayStr = await page.evaluate(() => { const x = new Date(); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; });
+check('9b: the four finished days were banked, today was not',
+  Object.keys(midArch[0]?.days || {}).length === 4 && midArch[0]?.endDayNum === 4,
+  `${Object.keys(midArch[0]?.days || {}).length} days, endDayNum ${midArch[0]?.endDayNum}`);
+check('9b: today is still on the live slate, re-keyed to Day 1',
+  Object.keys(midDay).length === 1 && midDay[1]?.date === todayStr,
+  `${JSON.stringify(Object.keys(midDay))} / ${midDay[1]?.date} vs ${todayStr}`);
+check('9b: and it kept what the user had already filled in',
+  midDay[1]?.tasks?.fd_sleep === true && midDay[1]?.tasks?.fd_mind === true && midDay[1]?.mood === 4);
+check('9b: the carried day is NOT also in the archive',
+  !Object.values(midArch[0]?.days || {}).some(x => x?.date === todayStr));
+
+details = await openRankDetails();
+const midXP = await rankFigure('Current XP');
+// The banked four days converted, plus exactly ONE era-2 day: the 120-unit
+// easy-tier budget (both template tasks) and the 15% perfect-day bonus.
+const ONE_ERA2_PERFECT_DAY = 138;
+const midExpected = midArch[0].xpEarned * 10 + ONE_ERA2_PERFECT_DAY;
+check('9b: Current XP is the banked segment plus one era-2 day, not two',
+  midXP === midExpected,
+  `${midXP} vs ${midExpected} (${midArch[0].xpEarned}×10 + ${ONE_ERA2_PERFECT_DAY})`);
+
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 });
+await page.waitForTimeout(600);
+check('9b: reloading does not re-archive or re-pay the carried day',
+  (await arch()).length === 1 &&
+  Object.keys(await page.evaluate(() => JSON.parse(localStorage.getItem('allDays')).me)).length === 1);
+details = await openRankDetails();
+check('9b: and the balance is unchanged', (await rankFigure('Current XP')) === midExpected,
+  `${await rankFigure('Current XP')}`);
 
 // ══ 10: no page errors throughout ══════════════════════════════════════════
 const real = errors.filter(e => !/favicon|manifest|ServiceWorker|sw\.js/i.test(e));
