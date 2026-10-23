@@ -906,30 +906,313 @@ at read time, so removing the scale table restores the previous display exactly.
   missed day the balance never charged, because it trusted a caller-supplied
   `rawDay` while the engine derives that boundary from `challengeStart`.
 
-### 14.9 A consequence worth your decision: the keystone spread narrowed
+### 14.9 The keystone spread — corrected
 
-Allocating a budget by keystone tier caps how far apart two habits in the same
-challenge can be. The weights are 3.0 / 2.0 / 1.3 / 1.0, and the within-tier
-nudge is clamped at ±12%, so the widest possible three-star-to-one-star ratio
-is **2.94x**.
+**Decision taken: the era-2 weights stay as they are. No widening.** Keystone
+habits earn substantially more without the economy leaning on any single task.
 
-The hand-tuned configs went further:
+**Correction to the previous revision.** That section quoted a 2.94x ceiling and
+then listed Mental Training's "meditation 100 vs Daily Log 20" beneath it. The
+two do not belong together: Mental Training's Daily Log is a **zero-star** task,
+and 2.94x is the **keystone-to-one-star** bound. The ratios in the table were
+right; the ceiling quoted above them applied to a different pair. Rounding is
+not the explanation — the integer allocation drifts by at most 0.59 XP anywhere
+in the catalogue.
 
-| Challenge | Era-1 spread | Era-2 spread |
+The bounds follow from the weights (3.0 / 2.0 / 1.3 / 1.0) and the within-tier
+nudge, clamped at ±12%: `max ratio = (w_high x 1.12) / (w_low x 0.88)`.
+
+| Pair | Ceiling | Widest measured | Where |
+|---|---|---|---|
+| keystone → two-star | 1.909x | 1.53x | Muscle Building |
+| **keystone → one-star** | **2.937x** | **2.65x** | Hormone Health |
+| **keystone → zero-star** | **3.818x** | **3.15x** | Mental Training |
+| two-star → one-star | 1.958x | — | |
+| one-star → zero-star | 1.655x | 1.46x | Forge Daily |
+
+A tier holding a single task sits exactly on its weight with no nudge at all,
+so the unnudged ratios are 2.308x (k3:k1) and 3.000x (k3:k0) — which is why
+LOCK IN lands on precisely 3.00x.
+
+Measured across every challenge:
+
+| Challenge | Top habit | Lowest habit | Ratio | Pair |
+|---|---|---|---|---|
+| Muscle Building | 46 | 19 | 2.42x | k3:k1 |
+| Fat Loss | 35 | 14 | 2.50x | k3:k1 |
+| Energy Reset | 29 | 11 | 2.64x | k3:k1 |
+| Hormone Health | 45 | 17 | 2.65x | k3:k1 |
+| LOCK IN | 30 | 10 | 3.00x | k3:k0 |
+| Mental Training | 41 | 13 | 3.15x | k3:k0 |
+| Forge Daily | 19 | 13 | 1.46x | k1:k0 |
+
+So a keystone is worth **2.4x to 3.2x** a minor habit depending on the
+challenge — about the 3x you asked for — and Mental Training's era-1 5.0x
+distortion is gone. Daily budgets are unchanged.
+
+---
+
+## 15. Finalized per-challenge XP breakdown
+
+For review. Regenerate with `tools/xp-audit/final-tables.mjs`.
+
+Generated from the shipped code. Keystone weights 3.0 / 2.0 / 1.3 / 1.0,
+mode multipliers 0.85 / 1.00 / 1.08, unchanged daily budgets.
+
+| Tier | Beginner | Standard | Hard |
+|---|---|---|---|
+| Easy | 102 | **120** | 130 |
+| Medium | 136 | **160** | 173 |
+| Medium/Hard | 153 | **180** | 194 |
+| Hard | 170 | **200** | 216 |
+| Elite | 187 | **220** | 238 |
+
+### The reference challenge
+
+#### 75-Day Discipline Challenge — Hard · standard · 75 days
+
+The benchmark anchor. Forge's own standard variant — one workout, not canonical 75 Hard's two (§2). Its legacy tasks carry no keystone tiers, so they are weighted by the era-1 high-value scheme, which is why the top three are level.
+
+| XP | Keystone | Habit |
 |---|---|---|
-| Hormone Health | sleep 40 vs hydration 10 — **4.0x** | 44 vs 17 — **2.6x** |
-| Mental Training | meditation 100 vs Daily Log 20 — **5.0x** | 41 vs 13 — **3.2x** |
-| Energy Reset | sleep 40 vs Daily Log 10 — **4.0x** | 29 vs 11 — **2.6x** |
-| LOCK IN | sleep 40 vs Daily Log 10 — **4.0x** | 30 vs 10 — **3.0x** |
+| **35** | — | 45-minute workout complete |
+| **35** | — | Diet followed |
+| **35** | — | Mental training complete |
+| **24** | — | Water goal hit |
+| **24** | — | 10 pages read |
+| **24** | — | Progress photo taken |
+| **23** | — | Complete Daily Log |
+| **200** | | **= daily budget** |
 
-So a keystone is still worth substantially more than a supporting habit, but
-the lowest-value habits are relatively more valuable than they were. Mental
-Training's 5.0x was the distortion this rebalance exists to remove; whether
-Hormone Health's 4.0x was also too wide, or a design worth keeping, is a
-judgement I should not make silently.
+Perfect day **200 + 30 = 230** · missed day **−100** (43% of a perfect day) · completion bonus **3000** · optional cap **20/day**
 
-**If you want a wider spread**, it is one line: widening the weights to
-`{ 3: 3.5, 2: 2.0, 1: 1.2, 0: 0.8 }` gives a 4.4x ceiling. That changes every
-per-task figure in §7 and §14 but no total, no benchmark and no anti-farm
-result, because the budget and every bonus are unchanged. Say the word and I
-will regenerate the tables.
+A perfect attempt banks **21,000 XP**.
+
+### Configured challenges
+
+#### LOCK IN — Medium/Hard · standard · 14 days
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **30** | ⭐⭐⭐ | Sleep opportunity: 8+ hours |
+| **29** | ⭐⭐⭐ | Flow training: 2 focused sessions |
+| **28** | ⭐⭐⭐ | Execute 2 of 3 priorities |
+| **20** | ⭐⭐ | Daily mission: 3 priorities |
+| **20** | ⭐⭐ | Physical energy: move, eat, hydrate |
+| **18** | ⭐⭐ | Attention training: 10+ minutes |
+| **13** | ⭐ | Mental recovery: 20+ minutes |
+| **12** | ⭐ | Stress off-switch: 5 minutes |
+| **10** | — | Complete Daily Log |
+| **180** | | **= daily budget** |
+
+Perfect day **180 + 27 = 207** · missed day **−90** (43% of a perfect day) · completion bonus **504** · optional cap **18/day**
+
+A perfect attempt banks **3,528 XP**.
+
+#### Muscle Building — Medium/Hard · standard · 60 days
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **46** | ⭐⭐⭐ | Hit protein target |
+| **32** | ⭐⭐ | Hit Nutrition Target |
+| **32** | ⭐⭐ | Hit carb target |
+| **30** | ⭐⭐ | Sleep 8+ hours |
+| **21** | ⭐ | Daily Recovery Practice |
+| **19** | ⭐ | Complete Daily Log |
+| **180** | | **= daily budget** |
+
+Perfect day **180 + 27 = 207** · missed day **−90** (43% of a perfect day) · completion bonus **2160** · optional cap **18/day**
+
+Weekly requirements: Hypertrophy Training 4× at 23 XP — **92 XP/week**
+
+A perfect attempt banks **15,120 XP**.
+
+#### Energy Reset — Medium · standard · 10 days
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **29** | ⭐⭐⭐ | Sleep opportunity: 8+ hours |
+| **27** | ⭐⭐⭐ | Morning light: 10+ minutes outdoors |
+| **21** | ⭐⭐ | Eat nutrient-dense whole foods |
+| **18** | ⭐⭐ | Walk 8,000+ steps |
+| **17** | ⭐⭐ | Caffeine used deliberately |
+| **13** | ⭐ | Drink water soon after waking |
+| **12** | ⭐ | 5+ minutes of downshifting |
+| **12** | ⭐ | Evening wind-down |
+| **11** | ⭐ | Complete Daily Log |
+| **160** | | **= daily budget** |
+
+Perfect day **160 + 24 = 184** · missed day **−80** (43% of a perfect day) · completion bonus **320** · optional cap **16/day**
+
+A perfect attempt banks **2,230 XP**.
+
+#### Women's Hormone Health — Medium · standard · 84 days
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **45** | ⭐⭐⭐ | Sleep 7.5–9 hours |
+| **31** | ⭐⭐ | Eat mostly whole foods |
+| **28** | ⭐⭐ | Walk 8,000+ steps |
+| **22** | ⭐ | 5+ minutes of down-regulation |
+| **17** | ⭐ | Hit your hydration target |
+| **17** | ⭐ | Complete Daily Log |
+| **160** | | **= daily budget** |
+
+Perfect day **160 + 24 = 184** · missed day **−80** (43% of a perfect day) · completion bonus **2688** · optional cap **16/day**
+
+Weekly requirements: Exercise 3× at 14 XP · Omega-3 Foods 2× at 6 XP · Iron-Rich Foods 4× at 6 XP — **78 XP/week**
+
+A perfect attempt banks **18,816 XP**.
+
+### Variant challenges, every mode
+
+#### Mental Training Phase — Easy · beginner · 14 days
+
+Moved to the Easy tier by the effort audit: about seven minutes of stated active work a day (§4).
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **26** | ⭐⭐⭐ | Mental Training — 2 minutes |
+| **18** | ⭐⭐ | Read 2 pages |
+| **18** | ⭐⭐ | Prayer |
+| **11** | ⭐ | Write one gratitude |
+| **11** | ⭐ | 30-min phone-free focus block |
+| **9** | — | Short Physical Reset — 5 minutes |
+| **9** | — | Complete Daily Log |
+| **102** | | **= daily budget** |
+
+Perfect day **102 + 15 = 117** · missed day **−51** (44% of a perfect day) · completion bonus **286** · optional cap **10/day**
+
+A perfect attempt banks **1,995 XP**.
+
+#### Mental Training Phase — Medium · standard · 14 days
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **41** | ⭐⭐⭐ | Mental Training — 5 minutes |
+| **28** | ⭐⭐ | Read 5 pages |
+| **27** | ⭐⭐ | Prayer |
+| **18** | ⭐ | Write one gratitude |
+| **18** | ⭐ | 60-min phone-free focus block |
+| **15** | — | Short Physical Reset — 10 minutes |
+| **13** | — | Complete Daily Log |
+| **160** | | **= daily budget** |
+
+Perfect day **160 + 24 = 184** · missed day **−80** (43% of a perfect day) · completion bonus **448** · optional cap **16/day**
+
+A perfect attempt banks **3,136 XP**.
+
+#### Mental Training Phase — Medium · hard · 14 days
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **45** | ⭐⭐⭐ | Mental Training — 10 minutes |
+| **30** | ⭐⭐ | Read 10 pages |
+| **30** | ⭐⭐ | Prayer |
+| **19** | ⭐ | Write one gratitude |
+| **19** | ⭐ | 90-min phone-free focus block |
+| **16** | — | Short Physical Reset — 15 minutes |
+| **14** | — | Complete Daily Log |
+| **173** | | **= daily budget** |
+
+Perfect day **173 + 26 = 199** · missed day **−87** (44% of a perfect day) · completion bonus **484** · optional cap **17/day**
+
+A perfect attempt banks **3,391 XP**.
+
+#### Fat Loss Challenge — Medium · beginner · 30 days
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **29** | ⭐⭐⭐ | Hit protein goal (0.8–1 g/lb goal weight) |
+| **29** | ⭐⭐⭐ | Eat mostly whole foods (80%+) |
+| **20** | ⭐⭐ | Walk 6,000+ steps |
+| **20** | ⭐⭐ | Sleep 7.5+ hours |
+| **14** | ⭐ | Hit water goal |
+| **12** | ⭐ | Take progress photo |
+| **12** | ⭐ | Complete Daily Log |
+| **136** | | **= daily budget** |
+
+Perfect day **136 + 20 = 156** · missed day **−68** (44% of a perfect day) · completion bonus **816** · optional cap **14/day**
+
+Weekly requirements: Lifting 3× at 14 XP · Zone 2 Cardio 2× at 14 XP — **70 XP/week**
+
+A perfect attempt banks **5,700 XP**.
+
+#### Fat Loss Challenge — Medium · standard · 30 days
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **35** | ⭐⭐⭐ | Hit protein goal (0.8–1 g/lb goal weight) |
+| **35** | ⭐⭐⭐ | Eat mostly whole foods (90%) |
+| **23** | ⭐⭐ | Walk 8,000+ steps |
+| **23** | ⭐⭐ | Sleep 7.5–9 hours |
+| **16** | ⭐ | Hit water goal |
+| **14** | ⭐ | Take progress photo |
+| **14** | ⭐ | Complete Daily Log |
+| **160** | | **= daily budget** |
+
+Perfect day **160 + 24 = 184** · missed day **−80** (43% of a perfect day) · completion bonus **960** · optional cap **16/day**
+
+Weekly requirements: Lifting 3× at 16 XP · Zone 2 Cardio 2× at 16 XP — **80 XP/week**
+
+A perfect attempt banks **6,720 XP**.
+
+#### Fat Loss Challenge — Medium · hard · 30 days
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **33** | ⭐⭐⭐ | Hit protein: 140–175g |
+| **33** | ⭐⭐⭐ | Eat mostly whole foods (~90%) |
+| **22** | ⭐⭐ | Walk 10,000+ steps |
+| **22** | ⭐⭐ | Stop eating at ~90% full — satisfied, not stuffed. |
+| **21** | ⭐⭐ | Sleep 7.5–9 hours |
+| **15** | ⭐ | Hit water goal |
+| **14** | ⭐ | Daily progress photo |
+| **13** | ⭐ | Complete Daily Log |
+| **173** | | **= daily budget** |
+
+Perfect day **173 + 26 = 199** · missed day **−87** (44% of a perfect day) · completion bonus **1038** · optional cap **17/day**
+
+Weekly requirements: Resistance Training 3× at 15 XP · Zone 2–3 Cardio 2× at 10 XP · Interval Session 1× at 10 XP · Waist Measurement 1× at 6 XP · Weekly Review 1× at 6 XP — **87 XP/week**
+
+A perfect attempt banks **7,268 XP**.
+
+### The baseline
+
+#### Forge Daily — Easy · standard · open-ended
+
+Open-ended, so no completion bonus. A perfect year yields about 51,200 XP — Elite Warrior, not Unbreakable.
+
+| XP | Keystone | Habit |
+|---|---|---|
+| **19** | ⭐ | Mental Training |
+| **17** | — | Complete Daily Log |
+| **15** | — | Hit sleep goal |
+| **15** | — | Move your body |
+| **14** | — | Read |
+| **14** | — | Pray |
+| **13** | — | Gratitude |
+| **13** | — | Drink water |
+| **120** | | **= daily budget** |
+
+Perfect day **120 + 18 = 138** · missed day **−60** (43% of a perfect day) · optional cap **12/day**
+
+### Completion bonuses — duration-neutral
+
+`0.20 × daily budget × duration`, so the bonus is worth the same per day
+at every length and no duration can be farmed for a better rate.
+
+| Duration | Easy (120) | Medium (160) | Medium/Hard (180) | Hard (200) |
+|---|---|---|---|---|
+| 7 days | 168 | 224 | 252 | 280 |
+| 10 days | 240 | 320 | 360 | 400 |
+| 14 days | 336 | 448 | 504 | 560 |
+| 21 days | 504 | 672 | 756 | 840 |
+| 30 days | 720 | 960 | 1080 | 1200 |
+| 56 days | 1344 | 1792 | 2016 | 2240 |
+| 60 days | 1440 | 1920 | 2160 | 2400 |
+| 75 days | 1800 | 2400 | 2700 | 3000 |
+| 84 days | 2016 | 2688 | 3024 | 3360 |
+| 90 days | 2160 | 2880 | 3240 | 3600 |
+
+Per day, in every column: **24.0 / 32.0 / 36.0 / 40.0 XP**.
