@@ -222,8 +222,14 @@ for (const [d, label, bonus] of DURATIONS) {
   check(`3: starting ${d} days stores a ${d}-day attempt`,
     p.activeChallenge?.templateId === 'lock_in_14_day' && p.activeChallenge?.durationDays === d,
     `${p.activeChallenge?.durationDays}`);
+  // XP economy v2: the bonus is 0.20 x daily budget x duration, so it is
+  // proportional to length and worth the same per day at every duration.
   check(`3: ${d} days stores its proportional completion bonus`,
-    p.activeChallenge?.completionBonusXP === bonus, `${p.activeChallenge?.completionBonusXP}`);
+    p.activeChallenge?.completionBonusXP === Math.round(0.20 * p.activeChallenge.dailyBudget * d),
+    `${p.activeChallenge?.completionBonusXP} at budget ${p.activeChallenge?.dailyBudget}`);
+  check(`3: ${d} days is worth the same per day as every other length`,
+    Math.abs((p.activeChallenge.completionBonusXP / d) - 0.20 * p.activeChallenge.dailyBudget) < 1,
+    `${(p.activeChallenge.completionBonusXP / d).toFixed(2)}/day`);
   check(`3: ${d} days snapshots a ramp covering exactly ${d} days`,
     Array.isArray(cfg.flowStages) && cfg.flowStages[0].fromDay === 1 &&
     cfg.flowStages[cfg.flowStages.length - 1].toDay === d,
@@ -234,10 +240,12 @@ for (const [d, label, bonus] of DURATIONS) {
     Array.isArray(cfg.lighterDays) && cfg.lighterDays.length === Math.floor(d / 7) &&
     cfg.lighterDays.every(x => x % 7 === 0 && x <= d),
     `${cfg.lighterDays?.length} days`);
-  check(`3: ${d} days installs the same nine tasks with the same XP`,
+  // Every duration installs the same nine habits for the same daily total:
+  // length changes the completion bonus, never the day's worth.
+  check(`3: ${d} days installs the same nine tasks summing to the daily budget`,
     (p.tasks || []).length === 9 &&
-    (p.tasks || []).reduce((s, t) => s + t.xp, 0) === 212,
-    `${(p.tasks || []).reduce((s, t) => s + t.xp, 0)} XP`);
+    (p.tasks || []).reduce((s, t) => s + t.xp, 0) === p.activeChallenge.dailyBudget,
+    `${(p.tasks || []).reduce((s, t) => s + t.xp, 0)} vs budget ${p.activeChallenge.dailyBudget}`);
 }
 
 // ══ 4: progress, streaks and completion percentage at each length ════════

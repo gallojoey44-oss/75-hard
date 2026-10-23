@@ -113,7 +113,10 @@ await page.waitForTimeout(800);
 let p = await prof();
 check('3: the attempt is active', p.activeChallenge?.templateId === 'lock_in_14_day');
 check('3: it is 14 days long', p.activeChallenge?.durationDays === 14);
-check('3: the completion bonus is stored', p.activeChallenge?.completionBonusXP === 700);
+// XP economy v2: completion bonus = 0.20 x daily budget x duration.
+check('3: the completion bonus is stored',
+  p.activeChallenge?.completionBonusXP === Math.round(0.20 * p.activeChallenge.dailyBudget * 14),
+  `${p.activeChallenge?.completionBonusXP} at budget ${p.activeChallenge?.dailyBudget}`);
 check('3: the attempt snapshots its own config', !!p.activeChallenge?.lockIn?.flowStages);
 check('3: nine tasks were installed', (p.tasks || []).length === 9, `${(p.tasks || []).length}`);
 check('3: eight of them carry a strategy guide',
@@ -250,8 +253,15 @@ const xpAfter = await page.evaluate(() => {
   const t = document.querySelector('.xp-split-row')?.textContent || '';
   return parseInt((t.match(/Challenge:\s*([\d,]+)/) || [])[1]?.replace(/,/g, '') || '0', 10);
 });
-// 40 + 35 + 30 + 25 + 25 + 20 + 15 + 12 = 202 from the eight habits.
-check('10: the eight habits award exactly 202 XP', xpAfter - xpBefore === 202, `${xpBefore} → ${xpAfter}`);
+// The eight habits are the daily budget less the Daily Log, which is not
+// toggled here. Derived from the attempt itself rather than hardcoded.
+const eightHabitsXP = await page.evaluate(() => {
+  const pr = JSON.parse(localStorage.getItem('profiles')).me;
+  return pr.tasks.filter(t => t.source === 'template' && t.id !== 'daily_log')
+    .reduce((s, t) => s + t.xp, 0);
+});
+check('10: the eight habits award exactly their stated XP',
+  xpAfter - xpBefore === eightHabitsXP, `${xpBefore} → ${xpAfter}, expected +${eightHabitsXP}`);
 
 // ══ 11: persistence across a reload ═══════════════════════════════════════
 await page.reload();

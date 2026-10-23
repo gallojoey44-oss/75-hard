@@ -163,11 +163,16 @@ check('11/15: canonical habitKeys are attached', (() => {
     && keys.mb_sleep === 'sleep_target' && keys.mb_recovery === 'stress_recovery'
     && keys.mb_creatine === 'creatine' && keys.mb_protein_distribution === 'protein_distribution';
 })());
+// Absolute values come from the attempt's difficulty budget (XP economy v2).
+// The ORDER is the design, and the day must sum to the budget.
 check('14: the XP ladder holds in the running app', (() => {
   const xp = Object.fromEntries(p.tasks.map(t => [t.id, t.xp]));
-  return xp.mb_protein === 40 && xp.mb_nutrition === 30 && xp.mb_sleep === 25
-    && xp.mb_recovery === 15 && xp.mb_protein_distribution < xp.daily_log && xp.mb_creatine < xp.daily_log;
-})());
+  const total = p.tasks.filter(t => t.source === 'template').reduce((s, t) => s + t.xp, 0);
+  return xp.mb_protein > xp.mb_nutrition && xp.mb_nutrition >= xp.mb_sleep
+    && xp.mb_sleep > xp.mb_recovery && xp.mb_recovery > xp.daily_log
+    && xp.mb_protein_distribution < xp.daily_log && xp.mb_creatine < xp.daily_log
+    && total === p.activeChallenge.dailyBudget;
+})(), p.tasks.map(t => `${t.id}:${t.xp}`).join(' '));
 check('9: creatine is labelled optional with 3–5 g and no loading phase',
   /3–5 g/.test(p.tasks.find(t => t.id === 'mb_creatine').desc) &&
   /No loading phase/i.test(p.tasks.find(t => t.id === 'mb_creatine').desc));
@@ -229,12 +234,17 @@ await gotoTab('Today');
 await page.locator('.check-item', { hasText: /protein target/i }).click();
 await page.waitForTimeout(400);
 await gotoTab('Home');
-check('14: completing the protein keystone awards its 40 XP', (await challengeXP()) - xp0 === 40, `+${(await challengeXP()) - xp0}`);
+const proteinXP = (await prof()).tasks.find(t => t.id === 'mb_protein').xp;
+check('14: completing the protein keystone awards exactly the XP it shows',
+  (await challengeXP()) - xp0 === proteinXP, `+${(await challengeXP()) - xp0} vs ${proteinXP}`);
 await gotoTab('Today');
 await page.locator('.check-item', { hasText: 'Take Creatine' }).click();
 await page.waitForTimeout(400);
 await gotoTab('Home');
-check('14: creatine awards far less than the keystone', (await challengeXP()) - xp0 === 46, `+${(await challengeXP()) - xp0}`);
+const creatineXP = (await prof()).tasks.find(t => t.id === 'mb_creatine').xp;
+check('14: creatine awards far less than the keystone',
+  (await challengeXP()) - xp0 === proteinXP + creatineXP && creatineXP < proteinXP / 2,
+  `+${(await challengeXP()) - xp0}; creatine ${creatineXP} vs protein ${proteinXP}`);
 
 // ══ 7: progressive overload logging ═════════════════════════════════════════
 await gotoTab('Today');
@@ -258,7 +268,8 @@ check('7: the entry records exercise, load, reps and sets', (() => {
 })());
 check('7: RIR is absent when not supplied', p.exerciseLog[0].rir === undefined);
 check('7: logging a lift awards no XP either',
-  (await (async () => { await gotoTab('Home'); const v = await challengeXP(); await gotoTab('Today'); return v; })()) === xp0 + 46);
+  (await (async () => { await gotoTab('Home'); const v = await challengeXP(); await gotoTab('Today'); return v; })())
+    === xp0 + proteinXP + creatineXP);
 // Enough history for a verdict, showing progression via more reps at one load.
 await page.evaluate((dates) => {
   const p = JSON.parse(localStorage.getItem('profiles'));

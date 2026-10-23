@@ -203,10 +203,14 @@ function inputs(days, startedDaysAgo) {
     }));
   check('7: the deductions shown are never negative',
     cases.every(c => computeXPBreakdown({ archives: c.archives, currentSegment: c.seg, ledger: c.ledger }).grossPenalties >= 0));
+  // These fixtures are era-1, so the breakdown converts them x10 on read.
   check('7: protection is reported separately, so nothing is hidden',
     (() => {
-      const b = computeXPBreakdown({ archives: cases[2].archives, currentSegment: cases[2].seg, ledger: cases[2].ledger });
-      return b.forgiven === 549 && b.grossPenalties === 725;
+      const b = computeXPBreakdown({ archives: cases[2].archives, currentSegment: cases[2].seg, ledger: cases[2].ledger, currentEra: 1 });
+      return b.forgiven === 549 * 10 && b.grossPenalties === 725 * 10;
+    })(), (() => {
+      const b = computeXPBreakdown({ archives: cases[2].archives, currentSegment: cases[2].seg, ledger: cases[2].ledger, currentEra: 1 });
+      return `forgiven ${b.forgiven}, gross ${b.grossPenalties}`;
     })());
 }
 
@@ -218,13 +222,14 @@ function inputs(days, startedDaysAgo) {
   const seg = computeTotalXP({ p: days }, profiles, 'p', () => 0, 10, 10);
   const banked = Math.max(0, seg.rawTotal);
   // After archiving: the banked figure is what carries forward.
+  // The archive is era-1 (no stamp), so its banked figure converts x10.
   const afterArchive = computeXPBreakdown({
-    archives: [{ xpEarned: banked }], currentSegment: { gained: 0, lost: 0 }, ledger: makeLedger(),
+    archives: [{ xpEarned: banked }], currentSegment: { gained: 0, lost: 0 }, ledger: makeLedger(), currentEra: 1,
   });
   check('8: the penalties are still reflected in what was banked',
     banked === seg.gained - seg.lost && seg.lost > 0, `banked ${banked} from ${seg.gained}−${seg.lost}`);
   check('8: completing the challenge does not refund them',
-    afterArchive.net === banked, `${afterArchive.net}`);
+    afterArchive.net === banked * 10, `${afterArchive.net} vs ${banked * 10}`);
   check('8: and the new challenge starts with no inherited penalty',
     afterArchive.grossPenalties === 0);
   check('8: a fresh challenge shows no missed days of its own',

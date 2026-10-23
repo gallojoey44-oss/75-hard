@@ -4,6 +4,7 @@
  * profile isolation.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { RANKS } from '../src/data/xpEconomy.js';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -15,7 +16,17 @@ function dstr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(
 function offset(n) { const d = new Date(); d.setDate(d.getDate() + n); return dstr(d); }
 
 // The frozen ladder (mirrored here so the test asserts against real numbers).
-const ELITE = 5000, TRUE_W = 7500, UNBREAKABLE = 10000;
+// Thresholds come from the central ladder rather than being copied out of it,
+// so this suite follows a rebalance instead of breaking on one. (xpEconomy.js
+// imports nothing, so a plain node e2e can read it directly.)
+const ELITE = RANKS.find(r => r.name === 'Elite Warrior').minXP;
+const TRUE_W = RANKS.find(r => r.name === 'True Warrior').minXP;
+const UNBREAKABLE = RANKS.find(r => r.name === 'Unbreakable').minXP;
+const WARRIOR = RANKS.find(r => r.name === 'Warrior').minXP;
+const APPRENTICE = RANKS.find(r => r.name === 'Apprentice').minXP;
+const DISCIPLINED = RANKS.find(r => r.name === 'Disciplined').minXP;
+/** A point a given fraction of the way through a tier. */
+const inTier = (from, to, frac) => Math.round(from + (to - from) * frac);
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -54,7 +65,10 @@ async function seed({ archivedXP, highestRank = null, rankHistory = null, profil
   await page.evaluate(({ archivedXP, highestRank, rankHistory, profile, activeProfile, other, start }) => {
     const mk = (xp) => ([{
       id: `arch_${xp}`, archivedAt: '2026-01-31', challengeStart: '2026-01-01', endDate: '2026-01-30',
-      endDayNum: 30, completed: true, challenge: { templateId: 'mental_training_phase', name: 'Mental Training Phase', durationDays: 30 },
+      // Stamped era 2 so the seeded figure IS the displayed figure. An
+      // unstamped archive is era 1 and is converted x10 on read, which would
+      // put every seeded profile ten tiers higher than intended.
+      endDayNum: 30, completed: true, challenge: { templateId: 'mental_training_phase', name: 'Mental Training Phase', durationDays: 30, xpEconomyVersion: 2 },
       days: { 1: { dayNumber: 1, tasks: { mt_mind: true } } }, tasks: [{ id: 'mt_mind', xp: 100, keystone: 3 }],
       xpEarned: xp, badges: [], finalScore: 84, scoreAvailable: true, passingScore: 70, passed: true,
     }]);
@@ -62,7 +76,10 @@ async function seed({ archivedXP, highestRank = null, rankHistory = null, profil
     for (const id of ['me', 'girlfriend']) {
       p[id].challengeStart = start;
       p[id].xpPenalties = false;
-      p[id].activeChallenge = { templateId: 'forge_daily', name: 'Forge Daily', emoji: '🔥', durationDays: null };
+      // Era 2, so the baseline migration leaves it alone and the seeded
+      // archive total is the whole of Lifetime XP.
+      p[id].activeChallenge = { templateId: 'forge_daily', name: 'Forge Daily', emoji: '🔥', durationDays: null,
+        xpEconomyVersion: 2, effortTier: 'easy', dailyBudget: 120 };
       p[id].tasks = [{ id: 'fd_mind', name: 'Mental Training', xp: 12, keystone: 1, source: 'template', order: 0 }];
       if (highestRank != null) delete p[id].highestRank;
     }
@@ -94,32 +111,37 @@ await page.evaluate(() => { localStorage.setItem('activeProfile', JSON.stringify
 await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 });
 
 // ══ 1: below a new tier, XP moves normally in both directions ═══════════════
-await seed({ archivedXP: 4000 });
-check('1: a profile below Elite Warrior shows its real XP', (await lifetimeXP()) === 4000, `${await lifetimeXP()}`);
+const MID_WARRIOR = inTier(WARRIOR, ELITE, 0.5);
+await seed({ archivedXP: MID_WARRIOR });
+check('1: a profile below Elite Warrior shows its real XP',
+  (await lifetimeXP()) === MID_WARRIOR, `${await lifetimeXP()}`);
 check('1: and the tier that XP sits in', (await rankName()) === 'Warrior', await rankName());
-await setArchivedXP(4500);
-check('1: gaining XP below the next tier is reflected', (await lifetimeXP()) === 4500);
-await setArchivedXP(3200);
-check('1: losing XP below the next tier is reflected in full', (await lifetimeXP()) === 3200);
+const HIGHER = inTier(WARRIOR, ELITE, 0.7);
+await setArchivedXP(HIGHER);
+check('1: gaining XP below the next tier is reflected', (await lifetimeXP()) === HIGHER);
+const LOWER = inTier(WARRIOR, ELITE, 0.2);
+await setArchivedXP(LOWER);
+check('1: losing XP below the next tier is reflected in full', (await lifetimeXP()) === LOWER);
 check('1: no floor notice is shown while above the floor',
   (await page.locator('.xp-floor-row').count()) === 0);
 
 // ══ 2: reaching a tier permanently unlocks and persists it ══════════════════
 await setArchivedXP(ELITE);
-check('2: reaching 5,000 promotes to Elite Warrior', (await rankName()) === 'Elite Warrior');
+check('2: reaching the threshold promotes to Elite Warrior', (await rankName()) === 'Elite Warrior');
 let p = await prof();
 check('2: the unlock is PERSISTED by the state layer, not by the Home screen',
   p.highestRank === 6, `highestRank=${p.highestRank}`);
 check('2: it is recorded in rank history too', (p.rankHistory || []).some(h => h.rank === 6));
 
 // ══ 3/4/5: decline stops exactly at the tier threshold ══════════════════════
-// Stay INSIDE the Elite Warrior tier (5,000–7,499) — climbing to 7,500 would
-// legitimately promote to True Warrior and raise the floor, which is tested
-// separately below.
-await setArchivedXP(7000);
-check('3: XP can climb within the tier', (await lifetimeXP()) === 7000);
-await setArchivedXP(6000);
-check('3: XP can decline after unlocking a tier', (await lifetimeXP()) === 6000);
+// Stay INSIDE the Elite Warrior tier — reaching the next threshold would
+// legitimately promote and raise the floor, which is tested separately below.
+const HIGH_ELITE = inTier(ELITE, TRUE_W, 0.8);
+const LOW_ELITE = inTier(ELITE, TRUE_W, 0.4);
+await setArchivedXP(HIGH_ELITE);
+check('3: XP can climb within the tier', (await lifetimeXP()) === HIGH_ELITE);
+await setArchivedXP(LOW_ELITE);
+check('3: XP can decline after unlocking a tier', (await lifetimeXP()) === LOW_ELITE);
 await setArchivedXP(ELITE);
 check('4: XP can decline all the way to the tier minimum', (await lifetimeXP()) === ELITE);
 await setArchivedXP(ELITE - 1);
@@ -131,17 +153,21 @@ check('5: even zero calculated XP holds at the floor', (await lifetimeXP()) === 
 check('5: still Elite Warrior at zero raw XP', (await rankName()) === 'Elite Warrior');
 check('5: the floor is explained to the user', (await page.locator('.xp-floor-row').count()) === 1);
 check('5: the notice names the floor value',
-  /cannot fall below 5,000/.test(await page.textContent('.xp-floor-row')));
+  new RegExp(`cannot fall below ${ELITE.toLocaleString()}`).test(await page.textContent('.xp-floor-row')),
+  await page.textContent('.xp-floor-row'));
 
 // ══ 19: no screen can show a rank beside XP below its threshold ═════════════
-check('19: Home shows Elite Warrior with XP at or above 5,000',
+check('19: Home shows Elite Warrior with XP at or above its threshold',
   (await rankName()) === 'Elite Warrior' && (await lifetimeXP()) >= ELITE);
 await gotoTab('Settings');
 const settingsText = await page.textContent('.settings-view');
 check('19: Settings shows the same rank', /Rank \(Lifetime\)[\s\S]{0,80}Elite Warrior/.test(settingsText));
 check('19: Settings shows the same effective Lifetime XP, not the raw total',
-  /Lifetime XP[\s\S]{0,40}5,000 XP/.test(settingsText), settingsText.match(/Lifetime XP[\s\S]{0,40}/)?.[0]);
-check('19: Settings surfaces the permanent floor', /Permanent floor[\s\S]{0,60}5,000 XP · Elite Warrior/.test(settingsText));
+  new RegExp(`Lifetime XP[\\s\\S]{0,40}${ELITE.toLocaleString()} XP`).test(settingsText),
+  settingsText.match(/Lifetime XP[\s\S]{0,40}/)?.[0]);
+check('19: Settings surfaces the permanent floor',
+  new RegExp(`Permanent floor[\\s\\S]{0,60}${ELITE.toLocaleString()} XP · Elite Warrior`).test(settingsText),
+  settingsText.match(/Permanent floor[\s\S]{0,60}/)?.[0]);
 await gotoTab('Home');
 // Ladder + details panels.
 await page.locator('.xp-details-btn', { hasText: 'Ladder' }).click();
@@ -169,21 +195,24 @@ check('16: at the floor the copy says start-of-tier, not a pending re-unlock',
   /start of Elite Warrior/.test(await nextLabel()) && !/XP to Elite Warrior/.test(await nextLabel()),
   await nextLabel());
 check('18: "XP to next" uses the real NEXT tier',
-  /2,500 XP to True Warrior/.test(await nextLabel()), await nextLabel());
-await setArchivedXP(6250);
+  new RegExp(`${(TRUE_W - ELITE).toLocaleString()} XP to True Warrior`).test(await nextLabel()),
+  await nextLabel());
+const MID_ELITE = inTier(ELITE, TRUE_W, 0.5);
+await setArchivedXP(MID_ELITE);
 check('17: the midpoint of the tier reads 50%', (await barPct()) === 50, `${await barPct()}%`);
 check('18: remaining XP tracks the next threshold',
-  /1,250 XP to True Warrior/.test(await nextLabel()), await nextLabel());
+  new RegExp(`${(TRUE_W - MID_ELITE).toLocaleString()} XP to True Warrior`).test(await nextLabel()),
+  await nextLabel());
 await setArchivedXP(TRUE_W - 10);
-check('18: at 7,490 the copy reads 10 XP to True Warrior',
+check('18: ten short of the threshold the copy reads 10 XP to True Warrior',
   /^10 XP to True Warrior/.test(await nextLabel()), await nextLabel());
 check('18: and the rank is still Elite Warrior — this is internally consistent',
-  (await rankName()) === 'Elite Warrior' && (await lifetimeXP()) === 7490);
+  (await rankName()) === 'Elite Warrior' && (await lifetimeXP()) === TRUE_W - 10);
 check('17: progress is full just below the next tier', (await barPct()) === 100);
 
 // ══ 14: reaching the next tier raises the floor permanently ═════════════════
 await setArchivedXP(TRUE_W);
-check('14: reaching 7,500 promotes to True Warrior', (await rankName()) === 'True Warrior');
+check('14: reaching the threshold promotes to True Warrior', (await rankName()) === 'True Warrior');
 p = await prof();
 check('14: the higher rank is persisted', p.highestRank === 7);
 await setArchivedXP(TRUE_W - 1);
@@ -204,12 +233,12 @@ const page2 = await ctx2.newPage();
 await page2.goto(BASE);
 await page2.waitForSelector('.dashboard', { timeout: 8000 });
 await page2.waitForTimeout(500);
-check('8: an app restart (fresh context) preserves it', await page2.evaluate(() => {
+check('8: an app restart (fresh context) preserves it', await page2.evaluate((floor) => {
   const badge = document.querySelector('.xp-rank-badge')?.textContent?.trim();
   const t = document.querySelector('.xp-split-row')?.textContent || '';
   const xp = parseInt((t.match(/Lifetime:\s*([\d,]+)/) || [])[1]?.replace(/,/g, '') || '0', 10);
-  return badge === 'True Warrior' && xp === 7500;
-}));
+  return badge === 'True Warrior' && xp === floor;
+}, TRUE_W));
 await ctx2.close();
 
 // ══ 9: backup / restore ═════════════════════════════════════════════════════
@@ -236,7 +265,7 @@ check('15: and the permanent rank is preserved, not rewritten downward',
   (await prof()).highestRank === 6);
 
 // Evidence from rank history alone, with no persisted highestRank.
-await seed({ archivedXP: 2000, rankHistory: [{ rank: 5, name: 'Warrior' }, { rank: 6, name: 'Elite Warrior' }] });
+await seed({ archivedXP: inTier(APPRENTICE, WARRIOR, 0.2), rankHistory: [{ rank: 5, name: 'Warrior' }, { rank: 6, name: 'Elite Warrior' }] });
 check('15: rank history alone rescues the earned tier', (await rankName()) === 'Elite Warrior');
 check('15: XP is normalized to that tier\'s floor', (await lifetimeXP()) === ELITE);
 check('15: and the permanent rank is now persisted so it cannot happen again',
@@ -245,9 +274,10 @@ check('15: the baseline is silent — no retroactive ceremony',
   (await page.locator('.rankup-overlay').count()) === 0 && !(await prof()).pendingRankUp);
 
 // A rank the user never earned is never fabricated.
-await seed({ archivedXP: 300 });
+const LOW_XP = inTier(APPRENTICE, DISCIPLINED, 0.2);
+await seed({ archivedXP: LOW_XP });
 check('15: a genuinely low-XP profile is not inflated',
-  (await rankName()) === 'Apprentice' && (await lifetimeXP()) === 300, `${await rankName()} ${await lifetimeXP()}`);
+  (await rankName()) === 'Apprentice' && (await lifetimeXP()) === LOW_XP, `${await rankName()} ${await lifetimeXP()}`);
 
 // ══ 10/11/21: challenges and archives ═══════════════════════════════════════
 await seed({ archivedXP: ELITE + 500, highestRank: 6 });
@@ -298,14 +328,18 @@ check('11: and the permanent rank', (await prof()).highestRank === 6);
 
 // ══ 12/13: XP reversals and historical edits respect the floor ══════════════
 // Start high INSIDE the Elite Warrior tier — 7,500+ would legitimately promote.
-await seed({ archivedXP: 7400, highestRank: 6 });
+await seed({ archivedXP: TRUE_W - 100, highestRank: 6 });
 const walk = [];
-for (const xp of [7000, 6500, 5700, 5300, 5000, 4000, 0]) {
+// Four reversals that stay inside the Elite tier, then ones that would cross
+// its floor.
+const STEP = Math.round((TRUE_W - ELITE) / 5);
+for (const xp of [ELITE + STEP * 4, ELITE + STEP * 3, ELITE + STEP * 2, ELITE + STEP, ELITE, ELITE - STEP, 0]) {
   await setArchivedXP(xp);
   walk.push(await lifetimeXP());
 }
 check('12: reversals above the floor take effect in full',
-  walk.slice(0, 4).join() === '7000,6500,5700,5300', walk.join());
+  walk.slice(0, 4).join() === [ELITE + STEP * 4, ELITE + STEP * 3, ELITE + STEP * 2, ELITE + STEP].join(),
+  walk.join());
 check('12: the reversal that reaches the floor lands exactly on it', walk[4] === ELITE);
 check('12: reversals that would cross the floor are clamped, not rejected', walk[5] === ELITE && walk[6] === ELITE);
 check('13: a historical edit wiping all archived XP still holds the floor',
@@ -314,7 +348,7 @@ check('13: the underlying archive value really did change (the reversal was not 
   (await page.evaluate(() => JSON.parse(localStorage.getItem('archives')).me[0].xpEarned)) === 0);
 
 // ══ 20: profiles are fully independent ══════════════════════════════════════
-await seed({ archivedXP: 9000, highestRank: 7, profile: 'me', other: { profile: 'girlfriend', archivedXP: 300 } });
+await seed({ archivedXP: inTier(TRUE_W, UNBREAKABLE, 0.6), highestRank: 7, profile: 'me', other: { profile: 'girlfriend', archivedXP: inTier(APPRENTICE, DISCIPLINED, 0.2) } });
 await page.evaluate(() => {
   const pr = JSON.parse(localStorage.getItem('profiles'));
   delete pr.girlfriend.highestRank;
@@ -330,12 +364,12 @@ check('20: each profile has its own permanent rank',
 await page.evaluate(() => { localStorage.setItem('activeProfile', JSON.stringify('girlfriend')); });
 await page.reload(); await page.waitForSelector('.dashboard', { timeout: 5000 }); await page.waitForTimeout(500);
 check('20: the Female profile is unaffected by the other profile\'s rank',
-  (await rankName()) === 'Apprentice' && (await lifetimeXP()) === 300,
+  (await rankName()) === 'Apprentice' && (await lifetimeXP()) === inTier(APPRENTICE, DISCIPLINED, 0.2),
   `${await rankName()} ${await lifetimeXP()}`);
 // Collapsing one profile's XP must not touch the other's floor.
 await setArchivedXP(0, 'girlfriend');
 check('20: the Female profile keeps only its OWN floor',
-  (await lifetimeXP()) === 250 && (await rankName()) === 'Apprentice', `${await lifetimeXP()}`);
+  (await lifetimeXP()) === APPRENTICE && (await rankName()) === 'Apprentice', `${await lifetimeXP()}`);
 check('20: the Male profile\'s permanent rank is untouched', (await prof('me')).highestRank === 7);
 await page.evaluate(() => { localStorage.setItem('activeProfile', JSON.stringify('me')); });
 await page.reload(); await page.waitForSelector('.dashboard', { timeout: 5000 }); await page.waitForTimeout(500);

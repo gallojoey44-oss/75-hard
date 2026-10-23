@@ -905,3 +905,31 @@ at read time, so removing the scale table restores the previous display exactly.
   and `getTemplateById` returns nothing for it; and the breakdown charged one
   missed day the balance never charged, because it trusted a caller-supplied
   `rawDay` while the engine derives that boundary from `challengeStart`.
+
+### 14.9 A consequence worth your decision: the keystone spread narrowed
+
+Allocating a budget by keystone tier caps how far apart two habits in the same
+challenge can be. The weights are 3.0 / 2.0 / 1.3 / 1.0, and the within-tier
+nudge is clamped at ±12%, so the widest possible three-star-to-one-star ratio
+is **2.94x**.
+
+The hand-tuned configs went further:
+
+| Challenge | Era-1 spread | Era-2 spread |
+|---|---|---|
+| Hormone Health | sleep 40 vs hydration 10 — **4.0x** | 44 vs 17 — **2.6x** |
+| Mental Training | meditation 100 vs Daily Log 20 — **5.0x** | 41 vs 13 — **3.2x** |
+| Energy Reset | sleep 40 vs Daily Log 10 — **4.0x** | 29 vs 11 — **2.6x** |
+| LOCK IN | sleep 40 vs Daily Log 10 — **4.0x** | 30 vs 10 — **3.0x** |
+
+So a keystone is still worth substantially more than a supporting habit, but
+the lowest-value habits are relatively more valuable than they were. Mental
+Training's 5.0x was the distortion this rebalance exists to remove; whether
+Hormone Health's 4.0x was also too wide, or a design worth keeping, is a
+judgement I should not make silently.
+
+**If you want a wider spread**, it is one line: widening the weights to
+`{ 3: 3.5, 2: 2.0, 1: 1.2, 0: 0.8 }` gives a 4.4x ceiling. That changes every
+per-task figure in §7 and §14 but no total, no benchmark and no anti-farm
+result, because the budget and every bonus are unchanged. Say the word and I
+will regenerate the tables.

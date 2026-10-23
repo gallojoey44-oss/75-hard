@@ -239,9 +239,13 @@ check('canonical habitKeys are attached', (() => {
 check('the XP ladder holds in the running app', (() => {
   const xp = Object.fromEntries(p.tasks.map(t => [t.id, t.xp]));
   // The ORDER is the design; the absolute values are budget-derived.
+  // The keystone is worth substantially more than a supporting habit, but the
+  // spread is narrower than the old hand-tuned 4x: keystone weights cap the
+  // three-star-to-one-star ratio at about 2.9x, which is the deliberate
+  // consequence of difficulty — not task count — setting what a day is worth.
   return xp.hh_sleep > xp.hh_whole_food && xp.hh_whole_food > xp.hh_movement &&
     xp.hh_movement >= xp.hh_stress && xp.hh_stress > xp.hh_hydration &&
-    xp.hh_sleep >= xp.hh_hydration * 4 &&
+    xp.hh_sleep >= xp.hh_hydration * 2.5 &&
     p.tasks.filter(t => t.source === 'template').reduce((a, t) => a + t.xp, 0) ===
       p.activeChallenge.dailyBudget;
 })());
