@@ -52,6 +52,9 @@ const TASKS = [
   { id: 'fl_steps', name: 'Walk 10,000+ steps', icon: '🚶', xp: 30, keystone: 2, habitKey: 'daily_steps', source: 'template', order: 5, challenges: ['support'] },
 ];
 const PRIMARY_META = {
+  // Stamped with the current economy, as a real new attempt is. An unstamped
+  // primary is era 1, which the stacking guard correctly refuses.
+  xpEconomyVersion: 2,
   templateId: 'mental_training_phase', name: 'Mental Training Phase', emoji: '🧠',
   variant: 'standard', durationDays: 14, templateVersion: 3, completionBonusXP: 300,
   passingScore: 70, keystoneRequirement: 65, coldExposureUpgradeEnabled: true,

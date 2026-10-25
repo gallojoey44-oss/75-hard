@@ -16,6 +16,7 @@
  * ramp, counts its days, and reaches 100% at its own length rather than at 14.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, beginSetup, passReview, pickStartDate, confirmStart, detailsText } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -57,11 +58,8 @@ async function reset() {
 async function startLockIn(duration) {
   await gotoTab('Challenges');
   await page.waitForTimeout(400);
-  const c = page.locator('.challenge-card', { hasText: 'LOCK IN' }).first();
-  await c.locator('.challenge-card-header').click();
-  await page.waitForTimeout(350);
-  await c.locator('button', { hasText: /Start LOCK IN/i }).first().click();
-  await page.waitForTimeout(450);
+  await openChallenge(page, 'LOCK IN');
+  await beginSetup(page);
   if (duration) {
     const ok = await page.evaluate((d) => {
       const btn = [...document.querySelectorAll('.li-duration')]
@@ -76,11 +74,13 @@ async function startLockIn(duration) {
   }
   await page.locator('.li-setup button', { hasText: 'Continue' }).first().click();
   await page.waitForTimeout(450);
+  await passReview(page);
   const tas = page.locator('textarea');
   for (let i = 0; i < await tas.count(); i++) await tas.nth(i).fill('Because scattered days cost me what I care about.');
   await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
   await page.waitForTimeout(450);
-  await page.locator('button', { hasText: 'Start Today' }).first().click();
+  await pickStartDate(page, 'today');
+await confirmStart(page);
   await page.waitForTimeout(700);
 }
 
@@ -170,25 +170,25 @@ await page.waitForTimeout(300);
 check('1: the library closes', (await page.locator('.hl-card').count()) === 0);
 
 // ══ 2: tappable requirements on an INACTIVE challenge card ═══════════════
-const card = page.locator('.challenge-card', { hasText: 'LOCK IN' }).first();
-await card.locator('.challenge-card-header').click();
-await page.waitForTimeout(400);
+await openChallenge(page, 'LOCK IN');
 check('2: the inactive card lists the daily requirements',
-  (await card.locator('.tpl-task-list li').count()) === 9);
+  (await page.locator('.tpl-task-list li').count()) === 9);
 check('2: eight of them are tappable',
-  (await card.locator('.tpl-task-link').count()) === 8);
+  (await page.locator('.tpl-task-link').count()) === 8);
 check('2: the Daily Log requirement is not tappable',
-  (await card.locator('.tpl-task-guided', { hasText: 'Daily Log' }).count()) === 0);
-const cardNote = await card.textContent();
+  (await page.locator('.tpl-task-guided', { hasText: 'Daily Log' }).count()) === 0);
+const cardNote = await detailsText(page);
 check('2: the card explains that tapping does not complete anything',
   /never\s+completes a habit or awards XP/i.test(cardNote));
 check('2: the card stays concise — no guide prose inlined',
   !/Optimization strategies|Common mistakes|pre-flow ritual/i.test(cardNote));
-check('2: the card advertises all six lengths',
-  [7, 14, 21, 30, 60, 90].every(d => new RegExp(`${d} days`).test(cardNote)),
-  cardNote.match(/Duration[^A-Z]*/)?.[0]?.slice(0, 80) || '');
+check('2: the page offers all six lengths',
+  JSON.stringify((await page.locator('.f4c-dur').allTextContents())
+    .map(t => Number((t.match(/\d+/) || [])[0]))) === JSON.stringify([7, 14, 21, 30, 60, 90]),
+  (await page.locator('.f4c-dur').allTextContents()).join(' / '));
 
-await card.locator('.tpl-task-link', { hasText: 'Sleep opportunity' }).click();
+await page.locator('.tpl-task-guided', { hasText: 'Sleep opportunity' })
+  .locator('.tpl-task-link').click();
 await page.waitForTimeout(400);
 check('2: tapping a requirement opens its guide with no challenge active',
   (await page.locator('.hg-card').count()) === 1 &&
@@ -200,7 +200,7 @@ check('2: still no day records after opening a guide from the card',
   Object.keys(await days()).length === 0);
 
 // ══ 3: all six durations ═════════════════════════════════════════════════
-await card.locator('button', { hasText: /Start LOCK IN/i }).first().click();
+await page.locator('button', { hasText: /Start LOCK IN/i }).first().click();
 await page.waitForTimeout(450);
 check('3: the setup screen offers six durations', (await page.locator('.li-duration').count()) === 6);
 const durText = await page.textContent('.li-durations');

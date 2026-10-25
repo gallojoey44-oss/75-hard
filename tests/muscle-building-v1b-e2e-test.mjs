@@ -5,6 +5,7 @@
  * unaffected by any of it.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, beginSetup, passReview, pickStartDate, confirmStart } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -46,11 +47,9 @@ async function reset() {
 async function openSetup() {
   await gotoTab('Challenges');
   await page.waitForTimeout(400);
-  const card = page.locator('.challenge-card', { hasText: 'Muscle Building' });
-  await card.locator('.challenge-card-header').click();
-  await page.waitForTimeout(400);
-  await card.locator('button', { hasText: /Start Muscle Building/ }).first().click();
-  await page.waitForTimeout(600);
+  await openChallenge(page, 'Muscle Building');
+  await beginSetup(page);
+  await page.waitForTimeout(500);
 }
 
 await page.goto(BASE);
@@ -159,13 +158,15 @@ check('a gradual ramp is previewed, not a jump to the target',
 await page.locator('.modal-card button', { hasText: /^Continue$/ }).first().click();
 await page.waitForTimeout(500);
 {
+  await passReview(page);
   const tas = page.locator('textarea');
   const n = await tas.count();
   for (let i = 0; i < n; i++) await tas.nth(i).fill('Because I want to build real muscle.');
 }
 await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
 await page.waitForTimeout(500);
-await page.locator('button', { hasText: 'Start Today' }).first().click();
+await pickStartDate(page, 'today');
+await confirmStart(page);
 await page.waitForTimeout(800);
 
 const p = await prof();

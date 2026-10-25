@@ -56,6 +56,9 @@ async function seed({ primaryStart = offset(-4), tasks = FL_TASKS, support = nul
     p.me.xpPenalties = false;
     p.me.weeklySessions = [];
     p.me.activeChallenge = {
+      // Stamped like a real new attempt; an unstamped primary is era 1 and the
+      // stacking guard refuses it.
+      xpEconomyVersion: 2,
       templateId: 'fat_loss_phase', name: 'Fat Loss Challenge', emoji: '⚡', variant: 'standard',
       durationDays: 30, templateVersion: 3, rewardXP: 500, completionBonusXP: 500,
       passingScore: 70, keystoneRequirement: 65, weeklyRequirementsStartDate: '2099-01-01',
@@ -154,7 +157,7 @@ const SHARED_SLEEP_TASKS = [
   { id: 'fl_sleep', name: 'Sleep 8 hours', icon: '😴', xp: 25, keystone: 2, habitKey: 'sleep_target', source: 'template', order: 1, challenges: ['primary', 'support'], mergedFrom: { primary: 'fl_sleep', support: 'mt_sleep' } },
   { id: 'mt_mind', name: 'Mental Training — 5 minutes', icon: '🧘', xp: 100, keystone: 3, habitKey: 'meditation', source: 'template', order: 2, challenges: ['support'] },
 ];
-const supMeta0 = { templateId: 'mental_training_phase', name: 'Mental Training Phase', emoji: '🧠', variant: 'standard', durationDays: 21, passingScore: 70, keystoneRequirement: 65 };
+const supMeta0 = { xpEconomyVersion: 2, templateId: 'mental_training_phase', name: 'Mental Training Phase', emoji: '🧠', variant: 'standard', durationDays: 21, passingScore: 70, keystoneRequirement: 65 };
 await seed({ primaryStart: offset(-4), tasks: SHARED_SLEEP_TASKS, support: { meta: supMeta0, start: offset(-2) } });
 await gotoTab('Home'); const xp0 = await challengeXP();
 await gotoTab('Today');
@@ -171,11 +174,11 @@ await sharedRow.click();
 await page.waitForTimeout(400);
 await gotoTab('Home');
 const xpGain = (await challengeXP()) - xp0;
-// The row is from an era-1 (unstamped) stack, so its stored 25 is quoted on the
-// lifetime ladder as 250 — and the point of the check is unchanged: the shared
-// habit pays that figure ONCE, not once per challenge.
+// The one thing this guards: a habit both challenges require pays what its row
+// advertises ONCE, not once per challenge. Compared against the app's own
+// figure rather than a number copied here, so it holds under either economy.
 check('5: completing the shared habit awards its advertised XP exactly once — not twice',
-  xpGain === sharedShown && sharedShown === 250, `+${xpGain}, row says ${sharedShown}`);
+  xpGain === sharedShown && sharedShown > 0, `+${xpGain}, row says ${sharedShown}`);
 await gotoTab('Today');
 const sharedChecked = await page.evaluate(() =>
   [...document.querySelectorAll('.check-item.shared-habit .check-box')].every(b => b.classList.contains('checked')));
@@ -288,7 +291,7 @@ if (await page.locator('.sup-warn').count()) {
 await page.keyboard.press('Escape');
 
 // ══ 3/7: ending support leaves the primary completely untouched ═════════════
-const supportMeta = { templateId: 'mental_training_phase', name: 'Mental Training Phase', emoji: '🧠', variant: 'standard', durationDays: 21, passingScore: 70, keystoneRequirement: 65 };
+const supportMeta = { xpEconomyVersion: 2, templateId: 'mental_training_phase', name: 'Mental Training Phase', emoji: '🧠', variant: 'standard', durationDays: 21, passingScore: 70, keystoneRequirement: 65 };
 const stackedTasks = [
   ...FL_TASKS.map(t => t.id === 'daily_log' ? { ...t, challenges: ['primary', 'support'] } : t),
   { id: 'mt_mind', name: 'Mental Training — 5 minutes', icon: '🧘', xp: 100, keystone: 3, habitKey: 'meditation', source: 'template', order: 3, challenges: ['support'] },

@@ -3,7 +3,7 @@ import { useApp, DISCIPLINE_75_META, discipline75Tasks } from '../../context/App
 import { previewAttempt } from '../../data/challengeAttempt';
 import {
   difficultyLabel, difficultyRange, getDefaultDuration, durationRangeText,
-  getProgramForDuration, METRIC_LABELS, MENTAL_TRAINING_TEMPLATE_ID,
+  getProgramForDuration, getDurationLabel, isRecommendedDuration, METRIC_LABELS,
 } from '../../data/challengeTemplates';
 import { focusTagsOf, focusLabel } from '../../data/challengeFocus';
 import { TIER_LABELS } from '../../data/xpEconomy';
@@ -84,6 +84,9 @@ export default function ChallengeDetails({
   const scale = preview?.displayScale ?? 1;
   const xp = (v) => displayXP(v || 0, scale).toLocaleString();
   const program = getProgramForDuration(template, duration);
+  // Named lengths get the roomier row; a bare list of numbers stays compact.
+  const labelled = !!template.duration_labels
+    || template.duration_options_days?.some(d => isRecommendedDuration(template, d));
 
   return (
     <div className="f4c-details">
@@ -159,7 +162,7 @@ export default function ChallengeDetails({
                 type="button"
                 role="radio"
                 aria-checked={mode === m.key}
-                className={`f4c-mode${mode === m.key ? ' on' : ''}`}
+                className={`f4c-mode tpl-variant-tab${mode === m.key ? ' on active' : ''}`}
                 onClick={() => setMode(m.key)}
               >
                 <span className="f4c-mode-l">{m.label}</span>
@@ -180,20 +183,34 @@ export default function ChallengeDetails({
       {(template.duration_options_days?.length > 1) && (
         <section className="f4c-card">
           <h3 className="f4c-card-h">Length</h3>
-          <div className="f4c-durations" role="radiogroup" aria-label="Challenge length">
-            {template.duration_options_days.map(d => (
-              <button
-                key={d}
-                type="button"
-                role="radio"
-                aria-checked={duration === d}
-                className={`f4c-dur${duration === d ? ' on' : ''}`}
-                onClick={() => setDuration(d)}
-              >
-                <span className="f4c-dur-n">{d}</span>
-                <span className="f4c-dur-l">days</span>
-              </button>
-            ))}
+          {/* A template that names its lengths ("Kickstart", "Transformation")
+              or recommends one says so here. That naming is real template data
+              and is most of what makes the choice meaningful. */}
+          <div
+            className={`f4c-durations${labelled ? ' col' : ''}`}
+            role="radiogroup"
+            aria-label="Challenge length"
+          >
+            {template.duration_options_days.map(d => {
+              const label = getDurationLabel(template, d);
+              const rec = isRecommendedDuration(template, d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  role="radio"
+                  aria-checked={duration === d}
+                  className={`f4c-dur tpl-duration-card${labelled ? ' wide' : ''}${duration === d ? ' on active' : ''}`}
+                  onClick={() => setDuration(d)}
+                >
+                  <span className="f4c-dur-n">{d}{labelled ? ' DAYS' : ''}</span>
+                  <span className="f4c-dur-l">
+                    {labelled ? (label || 'days') : 'days'}
+                    {rec ? ' · Recommended' : ''}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
@@ -207,7 +224,7 @@ export default function ChallengeDetails({
               {preview.tasks.map(t => {
                 const g = guideForTask(t);
                 return (
-                  <li key={t.id} className="f4c-req">
+                  <li key={t.id} className={`f4c-req${g ? ' tpl-task-guided' : ''}`}>
                     <span className="f4c-req-icon" aria-hidden="true">{t.icon || '•'}</span>
                     <span className="f4c-req-body">
                       <span className="f4c-req-name">
@@ -220,7 +237,7 @@ export default function ChallengeDetails({
                       </span>
                       {t.desc && <span className="f4c-req-desc">{t.desc}</span>}
                       {g && (
-                        <button type="button" className="f4c-link sm" onClick={() => setGuideTask(t)}>
+                        <button type="button" className="f4c-link sm tpl-task-link" onClick={() => setGuideTask(t)}>
                           Strategy guide
                         </button>
                       )}
@@ -232,7 +249,8 @@ export default function ChallengeDetails({
             </ul>
             <p className="f4c-note">
               Each requirement states what counts, so a guide is optional reading rather than
-              something you need in order to know whether you finished.
+              something you need in order to know whether you finished. Opening one never
+              completes a habit or awards XP.
             </p>
           </>
         ) : (
@@ -251,10 +269,8 @@ export default function ChallengeDetails({
               <li key={w.id} className="f4c-req">
                 <span className="f4c-req-icon" aria-hidden="true">{w.icon || '•'}</span>
                 <span className="f4c-req-body">
-                  <span className="f4c-req-name">{w.label}</span>
-                  <span className="f4c-req-desc">
-                    {w.perWeek}× per week{w.note ? ` — ${w.note}` : ''}
-                  </span>
+                  <span className="f4c-req-name">{w.label} — {w.perWeek}× per week</span>
+                  {w.note && <span className="f4c-req-desc">{w.note}</span>}
                 </span>
                 <span className="f4c-req-xp">{xp(w.xp)} XP each</span>
               </li>
@@ -264,6 +280,29 @@ export default function ChallengeDetails({
             Weekly requirements are counted across the whole week, not day by day — a missed
             session can still be made up before the week ends.
           </p>
+        </section>
+      )}
+
+      {/* ── How to approach it ───────────────────────────────────────── */}
+      {(template.training_quality || template.exercise_guidance || template.physical_examples?.length > 0) && (
+        <section className="f4c-card">
+          <h3 className="f4c-card-h">How to approach it</h3>
+          {template.training_quality && (
+            <p className="f4c-note">
+              <strong>{template.training_quality.headline}.</strong> {template.training_quality.body}
+            </p>
+          )}
+          {template.exercise_guidance && (
+            <p className="f4c-note">
+              <strong>{template.exercise_guidance.principle}</strong> {template.exercise_guidance.notice}
+            </p>
+          )}
+          {template.physical_examples?.length > 0 && (
+            <p className="f4c-note">
+              Any intentional movement counts, even a walk — {template.physical_examples.join(', ').toLowerCase()}.
+              No hard workout required.
+            </p>
+          )}
         </section>
       )}
 
@@ -324,7 +363,7 @@ export default function ChallengeDetails({
               {program?.why_it_works && <p className="f4c-phase-b">{program.why_it_works}</p>}
               {program?.expected_results?.length > 0 && (
                 <>
-                  <div className="f4c-phase-h">Commonly reported</div>
+                  <div className="f4c-phase-h">Expected Results ({duration} Days)</div>
                   <ul className="f4c-work">
                     {program.expected_results.map((r, i) => <li key={i}>{r}</li>)}
                   </ul>

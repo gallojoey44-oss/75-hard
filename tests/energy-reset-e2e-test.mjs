@@ -8,6 +8,7 @@
  * improvement calculation, missing-rating edge cases and the mobile layout.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, beginSetup, passReview, pickStartDate, confirmStart, detailsText } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -67,10 +68,8 @@ async function reset() {
 async function startEnergyReset({ startTomorrow = false, openBaseline = null, duration = null } = {}) {
   await gotoTab('Challenges');
   await page.waitForTimeout(400);
-  const card = page.locator('.challenge-card', { hasText: 'Energy Reset' }).first();
-  await card.locator('.challenge-card-header').click();
-  await page.waitForTimeout(400);
-  await card.locator('button', { hasText: 'Start Energy Reset' }).first().click();
+    await openChallenge(page, 'Energy Reset');
+  await beginSetup(page);
   await page.waitForTimeout(500);
   if (duration) {
     await clickDuration(duration);
@@ -85,13 +84,14 @@ async function startEnergyReset({ startTomorrow = false, openBaseline = null, du
   }
   await page.locator('.er-setup button', { hasText: 'Continue' }).first().click();
   await page.waitForTimeout(500);
+  await passReview(page);
   const tas = page.locator('textarea');
   const n = await tas.count();
   for (let i = 0; i < n; i++) await tas.nth(i).fill('Because I am tired of being tired.');
   await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
   await page.waitForTimeout(500);
-  await page.locator('button', { hasText: startTomorrow ? 'Start Tomorrow' : 'Start Today' }).first().click();
-  await page.waitForTimeout(700);
+  await pickStartDate(page, startTomorrow ? 'tomorrow' : 'today');
+  await confirmStart(page);
 }
 
 await page.goto(BASE);
@@ -103,19 +103,20 @@ await page.waitForSelector('.dashboard', { timeout: 10000 });
 await reset();
 await gotoTab('Challenges');
 await page.waitForTimeout(400);
-const card = page.locator('.challenge-card', { hasText: 'Energy Reset' }).first();
-check('the challenge appears in the library', (await card.count()) === 1);
-await card.locator('.challenge-card-header').click();
-await page.waitForTimeout(400);
-const cardText = await card.textContent();
+check('the challenge appears in the library',
+  (await page.locator('.f4c-tile', { hasText: 'Energy Reset' }).count()) === 1);
+await openChallenge(page, 'Energy Reset');
+const cardText = await detailsText(page);
 check('it shows the lightning-bolt identity', /⚡/.test(cardText));
 check('it shows the goal sentence', /wake up sharper, reduce energy crashes, and feel consistently energized/.test(cardText));
-check('the library card advertises all four lengths',
-  /7, 10, 14, or 30 days/.test(cardText), cardText.slice(0, 120));
-check('it is startable', (await card.locator('button', { hasText: 'Start Energy Reset' }).count()) === 1);
+check('the details page offers all four lengths',
+  JSON.stringify((await page.locator('.f4c-dur').allTextContents())
+    .map(t => Number((t.match(/\d+/) || [])[0]))) === JSON.stringify([7, 10, 14, 30]),
+  (await page.locator('.f4c-dur').allTextContents()).join(' / '));
+check('it is startable', (await page.locator('button', { hasText: 'Start Energy Reset' }).count()) === 1);
 
 // ══ Setup screen ═══════════════════════════════════════════════════════════
-await card.locator('button', { hasText: 'Start Energy Reset' }).first().click();
+await beginSetup(page);
 await page.waitForTimeout(500);
 check('the configured setup screen opens', (await page.locator('.er-setup').count()) === 1);
 const setupText = await page.textContent('.er-setup');

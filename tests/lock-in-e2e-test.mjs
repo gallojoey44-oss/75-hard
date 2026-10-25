@@ -11,6 +11,7 @@
  * and that none of it overflows a phone screen.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, passReview, pickStartDate, confirmStart, detailsText } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -58,15 +59,15 @@ await page.waitForSelector('.dashboard', { timeout: 10000 });
 await reset();
 await gotoTab('Challenges');
 await page.waitForTimeout(400);
-const card = page.locator('.challenge-card', { hasText: 'LOCK IN' }).first();
-check('1: LOCK IN appears in the challenge library', (await card.count()) === 1);
-await card.locator('.challenge-card-header').click();
-await page.waitForTimeout(400);
-const cardText = await card.textContent();
+check('1: LOCK IN appears in the challenge library',
+  (await page.locator('.f4c-tile', { hasText: 'LOCK IN' }).count()) === 1);
+await openChallenge(page, 'LOCK IN');
+const cardText = await detailsText(page);
 check('1: it shows its identity', /🎯/.test(cardText) && /LOCK IN/.test(cardText));
 check('1: it states its purpose', /focused work|protected attention/i.test(cardText));
 check('1: it advertises 14 days', /14/.test(cardText));
-check('1: it is startable', (await card.locator('button', { hasText: /Start LOCK IN/i }).count()) === 1);
+check('1: it is startable',
+  (await page.locator('.f4c-btn.primary', { hasText: /Start LOCK IN/i }).count()) === 1);
 
 // ══ 2: setup screen ═══════════════════════════════════════════════════════
 await card.locator('button', { hasText: /Start LOCK IN/i }).first().click();
@@ -117,11 +118,13 @@ await page.waitForTimeout(200);
 // ══ 3: starting the challenge ══════════════════════════════════════════════
 await page.locator('.li-setup button', { hasText: 'Continue' }).first().click();
 await page.waitForTimeout(500);
+await passReview(page);
 const tas = page.locator('textarea');
 for (let i = 0; i < await tas.count(); i++) await tas.nth(i).fill('Because scattered days cost me what I care about.');
 await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
 await page.waitForTimeout(500);
-await page.locator('button', { hasText: 'Start Today' }).first().click();
+await pickStartDate(page, 'today');
+await confirmStart(page);
 await page.waitForTimeout(800);
 
 let p = await prof();

@@ -4,6 +4,7 @@
  * stacking as a Primary/Support pair, and no damage to existing challenges.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, beginSetup, passReview, pickStartDate, confirmStart, detailsText } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -49,20 +50,20 @@ async function init() {
 async function startMuscleBuilding(tweak = null) {
   await gotoTab('Challenges');
   await page.waitForTimeout(300);
-  const card = page.locator('.challenge-card', { hasText: 'Muscle Building' });
-  await card.locator('.challenge-card-header').click();
-  await page.waitForTimeout(300);
-  await card.locator('button', { hasText: 'Start Muscle Building' }).click();
+    await openChallenge(page, 'Muscle Building');
+  await beginSetup(page);
   await page.waitForSelector('.mb-setup', { timeout: 5000 });
   if (tweak) await tweak();
   await page.locator('.mb-setup button', { hasText: 'Continue' }).click();
-  await page.waitForSelector('.letter-modal, textarea', { timeout: 5000 });
+  await passReview(page);
+  await page.waitForSelector('.letter-modal, textarea', { timeout: 8000 });
   const tas = page.locator('textarea');
   const n = await tas.count();
   for (let i = 0; i < n; i++) await tas.nth(i).fill('To become someone who trains with purpose.');
   await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
   await page.waitForSelector('.start-when-options', { timeout: 5000 });
-  await page.locator('.start-when-btn', { hasText: 'Start Today' }).click();
+  await pickStartDate(page, 'today');
+await confirmStart(page);
   await page.waitForSelector('.daily-view', { timeout: 5000 });
 }
 
@@ -73,16 +74,18 @@ await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 })
 // ══ 16/17: the challenge exists with its own identity and setup screen ══════
 await init();
 await gotoTab('Challenges');
-const card = page.locator('.challenge-card', { hasText: 'Muscle Building' });
-check('17: Muscle Building appears in the challenge library', (await card.count()) === 1);
-await card.locator('.challenge-card-header').click();
-await page.waitForTimeout(300);
-const cardText = await card.textContent();
+check('17: Muscle Building appears in the challenge library',
+  (await page.locator('.f4c-tile', { hasText: 'Muscle Building' }).count()) === 1);
+await openChallenge(page, 'Muscle Building');
+const cardText = await detailsText(page);
 check('17: it states the hypertrophy goal, not a generic strength goal',
   /muscle growth/i.test(cardText) && !/^.*maximal strength/i.test(cardText));
-check('1: the card advertises 30, 60 or 90 days', /30, 60, or 90 days/.test(cardText), cardText.slice(0, 90));
+check('1: the details page offers 30, 60 and 90 days',
+  JSON.stringify((await page.locator('.f4c-dur').allTextContents())
+    .map(t => Number((t.match(/\d+/) || [])[0]))) === JSON.stringify([30, 60, 90]),
+  (await page.locator('.f4c-dur').allTextContents()).join(' / '));
 
-await card.locator('button', { hasText: 'Start Muscle Building' }).click();
+await beginSetup(page);
 await page.waitForSelector('.mb-setup', { timeout: 5000 });
 const setupText = await page.textContent('.mb-setup');
 check('16: setup shows the title and subtitle',

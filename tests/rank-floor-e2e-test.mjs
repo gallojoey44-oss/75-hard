@@ -4,6 +4,7 @@
  * profile isolation.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, beginSetup, advanceToStart, pickStartDate, confirmStart } from './helpers/challenges.mjs';
 import { RANKS } from '../src/data/xpEconomy.js';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
@@ -285,19 +286,12 @@ const beforeArchives = await page.evaluate(() => localStorage.getItem('archives'
 await gotoTab('Challenges');
 await page.waitForTimeout(300);
 // Start a challenge through the normal flow (Forge Daily → Mental Training).
-await page.evaluate(() => {
-  const c = [...document.querySelectorAll('.challenge-card')].find(x => /Mental Training Phase/.test(x.textContent));
-  c.querySelector('.challenge-card-header').click();
-});
-await page.waitForTimeout(300);
-await page.locator('.challenge-card', { hasText: 'Mental Training Phase' }).locator('button', { hasText: 'Start Mental Training Phase' }).click();
-await page.waitForTimeout(500);
-const tas = page.locator('textarea');
-for (let i = 0, n = await tas.count(); i < n; i++) await tas.nth(i).fill('Because I want to keep going.');
-await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
-await page.waitForSelector('.start-when-options', { timeout: 5000 });
-await page.locator('.start-when-btn', { hasText: 'Start Today' }).click();
-await page.waitForSelector('.daily-view', { timeout: 5000 });
+await openChallenge(page, 'Mental Training Phase');
+await beginSetup(page);
+await advanceToStart(page, { letter: 'Because I want to keep going.' });
+await pickStartDate(page, 'today');
+await confirmStart(page);
+await page.waitForSelector('.daily-view', { timeout: 8000 });
 await gotoTab('Home');
 p = await prof();
 check('10: starting a challenge does not reset the permanent rank', p.highestRank === 6);

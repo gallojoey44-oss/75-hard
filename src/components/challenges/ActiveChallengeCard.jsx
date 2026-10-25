@@ -36,7 +36,7 @@ export default function ActiveChallengeCard({
     // business moving the handle every test reaches for.
     <section className={`f4c-active active-challenge-card${support ? ' support acc-support' : ''}`}>
       <div className="f4c-active-top">
-        <span className="f4c-lane-label">
+        <span className="f4c-lane-label acc-label">
           {support ? 'Support Challenge' : 'Primary Challenge'}
         </span>
         <span className={`f4c-status${scheduled ? ' scheduled' : ''}`}>
@@ -86,8 +86,16 @@ export default function ActiveChallengeCard({
         </>
       )}
 
-      <div className="f4c-active-actions">
-        <button type="button" className="f4c-btn ghost" onClick={onManage}>{manageLabel}</button>
+      <div className="f4c-active-actions acc-actions">
+        {/* `acc-support-end` keeps the handle the suite ends a Support
+            Challenge by: on the support card this button IS that control. */}
+        <button
+          type="button"
+          className={`f4c-btn ghost btn${support ? ' acc-support-end' : ''}`}
+          onClick={onManage}
+        >
+          {manageLabel}
+        </button>
       </div>
     </section>
   );

@@ -5,6 +5,7 @@
  * isolation, and protection of existing attempts and archives.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, pickMode, beginSetup, advanceToStart, pickStartDate, confirmStart } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -86,31 +87,24 @@ await page.evaluate(() => {
 await page.reload(); await page.waitForSelector('.dashboard', { timeout: 5000 });
 await gotoTab('Challenges');
 await page.waitForTimeout(400);
-// Walk the real Mental Training setup flow through to the Future Self Letter.
-const mtCard = page.locator('.challenge-card', { hasText: 'Mental Training Phase' });
-await mtCard.locator('.challenge-card-header').click();
-await page.waitForTimeout(400);
-await mtCard.locator('button', { hasText: /^Standard/ }).first().click();
-await page.waitForTimeout(300);
-await mtCard.locator('button', { hasText: 'Start Mental Training Phase' }).first().click();
-await page.waitForTimeout(600);
-// Future Self Letter → answer every prompt and submit.
-const tas = page.locator('textarea');
-const nTa = await tas.count();
-for (let i = 0; i < nTa; i++) await tas.nth(i).fill('Because I want to become someone who keeps promises.');
-await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
-await page.waitForTimeout(500);
-const scheduleStep = await page.locator('.start-when-options').count();
-check('1: setup asks "When do you want to begin?" with a schedule step', scheduleStep === 1);
-const whenText = scheduleStep ? await page.textContent('.start-when-options') : '';
+// Walk the real Mental Training setup flow through to its final step. The
+// flow is now a page per step rather than a stack of modals, so the journey
+// goes through the shared helpers.
+await openChallenge(page, 'Mental Training Phase');
+await pickMode(page, 'Standard');
+await beginSetup(page);
+await advanceToStart(page, { letter: 'Because I want to become someone who keeps promises.' });
+const scheduleStep = await page.locator('.f4c-setup .f4c-durations').count();
+check('1: setup asks "When does Day 1 begin?" as its own step', scheduleStep === 1);
+const whenText = scheduleStep ? await page.textContent('.f4c-setup') : '';
 check('1: it offers Start Today, Start Tomorrow and Choose Date',
   /Start Today/.test(whenText) && /Start Tomorrow/.test(whenText) && /Choose Date/.test(whenText));
 check('1: the date picker cannot select the past', scheduleStep
-  ? (await page.locator('.start-when-btn input[type=date]').getAttribute('min')) === TODAY : false);
+  ? (await page.locator('.f4c-setup input[type=date]').getAttribute('min')) === TODAY : false);
 
 if (scheduleStep) {
-  await page.locator('.start-when-btn', { hasText: 'Start Tomorrow' }).click();
-  await page.waitForTimeout(500);
+  await pickStartDate(page, 'tomorrow');
+  await confirmStart(page);
 }
 let p1 = await prof();
 check('1: choosing Start Tomorrow sets Day 1 to tomorrow', p1.challengeStart === TOMORROW, p1.challengeStart);

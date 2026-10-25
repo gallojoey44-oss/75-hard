@@ -1,4 +1,5 @@
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, beginSetup, passReview, pickStartDate, confirmStart, backToChallenges } from './helpers/challenges.mjs';
 
 const BASE = 'http://localhost:4173';
 const results = [];
@@ -24,30 +25,36 @@ async function init() {
   await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('profiles')); p.me.highestRank = 8; p.girlfriend.highestRank = 8; localStorage.setItem('profiles', JSON.stringify(p)); });
   await page.reload(); await page.waitForSelector('.dashboard', { timeout: 5000 });
 }
-const flCard = () => page.locator('.challenge-card', { hasText: 'Fat Loss Challenge' });
+/** The Fat Loss details page, open. */
+const flCard = () => page.locator('.f4c-details');
+/** The details page's text, re-opening the challenge if something closed it. */
+async function flText() {
+  if (!(await page.locator('.f4c-details').count())) await openFatLoss();
+  return page.textContent('.f4c-details');
+}
 async function openFatLoss() {
   await gotoTab('Challenges');
   await page.waitForSelector('.challenges-view', { timeout: 5000 });
-  const startBtn = flCard().locator('.challenge-card-action', { hasText: 'Start Fat Loss Challenge' });
-  if (!((await startBtn.count()) > 0 && await startBtn.first().isVisible().catch(() => false))) {
-    await page.evaluate(() => { const h = [...document.querySelectorAll('.challenge-card-header')].find(x => /Fat Loss Challenge/.test(x.textContent)); if (h) h.click(); });
-    await page.waitForTimeout(300);
+  if (!(await page.locator('.f4c-details').count())) {
+    await openChallenge(page, 'Fat Loss Challenge');
   }
 }
 async function startFatLoss(days) {
   await openFatLoss();
   if (days != null) {
-    await flCard().locator('.tpl-duration-card', { hasText: `${days} DAYS` }).click();
+    await page.locator('.tpl-duration-card', { hasText: `${days} DAYS` }).click();
     await page.waitForTimeout(150);
   }
-  await flCard().locator('.challenge-card-action', { hasText: 'Start Fat Loss Challenge' }).click();
-  await page.waitForSelector('.letter-modal', { timeout: 5000 });
+  await beginSetup(page);
+  await passReview(page);
+  await page.waitForSelector('.letter-modal', { timeout: 8000 });
   await page.locator('.letter-modal .letter-textarea').first().fill('Get lean and stay consistent.');
   await page.locator('.letter-modal .btn-primary', { hasText: 'Save & Begin' }).click();
   // Setup now asks when to begin — these suites test a challenge running today.
-  await page.waitForSelector('.start-when-options', { timeout: 5000 });
-  await page.locator('.start-when-btn', { hasText: 'Start Today' }).click();
-  await page.waitForSelector('.daily-view', { timeout: 5000 });
+  await page.waitForSelector('.start-when-options', { timeout: 8000 });
+  await pickStartDate(page, 'today');
+  await confirmStart(page);
+  await page.waitForSelector('.daily-view', { timeout: 8000 });
 }
 const meta = () => page.evaluate(() => JSON.parse(localStorage.getItem('profiles')).me.activeChallenge);
 
@@ -60,32 +67,53 @@ check('1: exactly three duration cards', cards.length === 3, cards.join(' | '));
 check('1: 14 Kickstart / 30 Standard / 60 Transformation', /14 DAYS.*Kickstart/s.test(cards[0]) && /30 DAYS.*Standard/s.test(cards[1]) && /60 DAYS.*Transformation/s.test(cards[2]));
 check('2: 30 DAYS is marked Recommended', /Recommended/.test(cards[1]) && !/Recommended/.test(cards[0]) && !/Recommended/.test(cards[2]));
 check('2: 30 DAYS is pre-selected by default', (await flCard().locator('.tpl-duration-card.active').textContent()).includes('30 DAYS'));
-const header = await flCard().locator('.challenge-card-meta').textContent();
-check('Header no longer implies 30 days only', /14/.test(header) && /30/.test(header) && /60/.test(header), header.trim());
+// The details page states the span of lengths in its facts row.
+const header = await flCard().locator('.f4c-facts').textContent();
+check('Header no longer implies 30 days only',
+  /14/.test(header) && /60/.test(header), header.trim());
 
 // ══ 10/11: Expected Results + Goal change with the selection ════════════════
-let body = await flCard().textContent();
+// The programme detail is behind a disclosure now — opened before reading it.
+const openProgram = async () => {
+  // Re-open the challenge if a previous section navigated away from it, so a
+  // read of the page is never a read of whatever replaced it.
+  if (!(await page.locator('.f4c-details').count())) await openFatLoss();
+  const d = page.locator('.f4c-disclose');
+  if ((await d.count()) && (await d.first().getAttribute('aria-expanded')) !== 'true') {
+    await d.first().click();
+    await page.waitForTimeout(250);
+  }
+};
+await openProgram();
+let body = await flText();
 check('10: default shows "Expected Results (30 Days)" with 2–5 lb', /Expected Results \(30 Days\)/.test(body) && /2–5 lb/.test(body));
 await flCard().locator('.tpl-duration-card', { hasText: '14 DAYS' }).click();
 await page.waitForTimeout(200);
-body = await flCard().textContent();
+await openProgram();
+body = await flText();
 check('10: 14 selected → "Expected Results (14 Days)" with 1–2.5 lb', /Expected Results \(14 Days\)/.test(body) && /1–2\.5 lb/.test(body));
 check('10: 14 no longer shows the 30-day 2–5 lb claim', !/2–5 lb/.test(body));
 check('10: 14 shows the momentum emphasis', /Build momentum and create visible early progress/.test(body));
 check('10: disclaimer still present on 14', /Results vary depending on starting body fat/.test(body));
 await flCard().locator('.tpl-duration-card', { hasText: '60 DAYS' }).click();
 await page.waitForTimeout(200);
-body = await flCard().textContent();
+await openProgram();
+body = await flText();
 check('10: 60 selected → "Expected Results (60 Days)" with 4–10 lb', /Expected Results \(60 Days\)/.test(body) && /4–10 lb/.test(body));
 check('10: 60 shows the transformation emphasis', /clearly noticeable transformation/.test(body));
 check('11: 60 "Finish all 60 days" copy (not 30)', /Finish all 60 days/.test(body) && !/Finish all 30 days/.test(body));
 
 // ══ 19: other challenges are untouched ══════════════════════════════════════
-await page.evaluate(() => { const h = [...document.querySelectorAll('.challenge-card-header')].find(x => /Mental Training Phase/.test(x.textContent)); if (h) h.click(); });
-await page.waitForTimeout(300);
-const mtCard = page.locator('.challenge-card', { hasText: 'Mental Training Phase' });
-check('19: Mental Training has NO labelled duration cards', (await mtCard.locator('.tpl-duration-card').count()) === 0);
-check('19: Mental Training keeps its plain 7/14/21 chips', (await mtCard.locator('.tpl-duration-chip').allTextContents()).join(',') === '7 days,14 days,21 days');
+// One picker serves both now: a challenge that NAMES its lengths gets the
+// roomier labelled row, one that does not keeps plain numbered chips.
+await backToChallenges(page);
+await openChallenge(page, 'Mental Training Phase');
+const mtDur = page.locator('.f4c-details .f4c-dur');
+check('19: Mental Training has no labelled duration cards',
+  (await page.locator('.f4c-details .f4c-dur.wide').count()) === 0);
+check('19: Mental Training keeps its plain 7/14/21 chips',
+  (await mtDur.allTextContents()).map(t => t.replace(/days/i, '').trim()).join(',') === '7,14,21',
+  (await mtDur.allTextContents()).join(' / '));
 
 // ══ 3/4/5 + 6: each duration persists and ends on its own final day ═════════
 for (const days of [14, 30, 60]) {

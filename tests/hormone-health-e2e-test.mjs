@@ -4,6 +4,7 @@
  * three-cycle progress, medical safety, and no effect on any other challenge.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, passReview, pickStartDate, confirmStart, detailsText } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -50,10 +51,8 @@ async function init(which = 'girlfriend') {
 async function startHormoneHealth(weeks = null) {
   await gotoTab('Challenges');
   await page.waitForTimeout(300);
-  const card = page.locator('.challenge-card', { hasText: "Women's Hormone Health" });
-  await card.locator('.challenge-card-header').click();
-  await page.waitForTimeout(300);
-  await card.locator('button', { hasText: "Start Women's Hormone Health" }).click();
+    await openChallenge(page, "Women's Hormone Health");
+  await page.locator('button', { hasText: "Start Women's Hormone Health" }).click();
   await page.waitForSelector('.hh-setup', { timeout: 5000 });
   if (weeks) {
     await page.locator('.hh-duration', { hasText: `${weeks} Weeks` }).click();
@@ -61,12 +60,14 @@ async function startHormoneHealth(weeks = null) {
   }
   await page.locator('.hh-safety .hh-check input').check();
   await page.locator('.hh-setup button', { hasText: 'Continue' }).click();
-  await page.waitForSelector('.letter-modal, textarea', { timeout: 5000 });
+  await passReview(page);
+  await page.waitForSelector('.letter-modal, textarea', { timeout: 8000 });
   const tas = page.locator('textarea');
   for (let i = 0, n = await tas.count(); i < n; i++) await tas.nth(i).fill('Because I want my month back.');
   await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
   await page.waitForSelector('.start-when-options', { timeout: 5000 });
-  await page.locator('.start-when-btn', { hasText: 'Start Today' }).click();
+  await pickStartDate(page, 'today');
+await confirmStart(page);
   await page.waitForSelector('.daily-view', { timeout: 5000 });
 }
 
@@ -87,11 +88,12 @@ check('it is not offered to the Male profile (female-only, per the existing conv
 // ══ Setup screen ════════════════════════════════════════════════════════════
 await init('girlfriend');
 await gotoTab('Challenges');
-const card = page.locator('.challenge-card', { hasText: "Women's Hormone Health" });
-await card.locator('.challenge-card-header').click();
-await page.waitForTimeout(300);
-const cardText = await card.textContent();
-check('the card offers both lengths', /56 or 84 days/.test(cardText), cardText.slice(0, 140));
+await openChallenge(page, "Women's Hormone Health");
+const cardText = await detailsText(page);
+check('the details page offers both lengths',
+  JSON.stringify((await page.locator('.f4c-dur').allTextContents())
+    .map(t => Number((t.match(/\d+/) || [])[0]))) === JSON.stringify([56, 84]),
+  (await page.locator('.f4c-dur').allTextContents()).join(' / '));
 check('the card previews the real daily requirements',
   /Sleep 7\.5–9 hours/.test(cardText) && /Eat mostly whole foods/.test(cardText) && /8,000\+ steps/.test(cardText));
 check('the card previews the weekly requirements',
@@ -99,7 +101,7 @@ check('the card previews the weekly requirements',
 check('the card carries the cycle-aware exercise principle',
   /Adjust intensity, not consistency/.test(cardText));
 
-await card.locator('button', { hasText: "Start Women's Hormone Health" }).click();
+await page.locator('button', { hasText: "Start Women's Hormone Health" }).click();
 await page.waitForSelector('.hh-setup', { timeout: 5000 });
 const setupText = await page.textContent('.hh-setup');
 check('setup shows the name and subtitle',

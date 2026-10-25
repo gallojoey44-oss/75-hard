@@ -186,7 +186,7 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
                 type="button"
                 role="radio"
                 aria-checked={mode === m.key}
-                className={`f4c-mode${mode === m.key ? ' on' : ''}`}
+                className={`f4c-mode tpl-variant-tab${mode === m.key ? ' on active' : ''}`}
                 onClick={() => setMode(m.key)}
               >
                 <span className="f4c-mode-l">{m.label}</span>
@@ -211,7 +211,7 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
                 type="button"
                 role="radio"
                 aria-checked={duration === d}
-                className={`f4c-dur wide${duration === d ? ' on' : ''}`}
+                className={`f4c-dur wide tpl-duration-card${duration === d ? ' on active' : ''}`}
                 onClick={() => setDuration(d)}
               >
                 <span className="f4c-dur-n">{d} days</span>
@@ -362,25 +362,25 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
             Tasks, XP, streaks and scoring all start then. A future date counts no missed days
             before it arrives.
           </p>
-          <div className="f4c-durations col" role="radiogroup" aria-label="Start date">
+          <div className="f4c-durations col start-when-options" role="radiogroup" aria-label="Start date">
             <button
               type="button" role="radio" aria-checked={startDate === getTodayStr()}
-              className={`f4c-dur wide${startDate === getTodayStr() ? ' on' : ''}`}
+              className={`f4c-dur wide start-when-btn${startDate === getTodayStr() ? ' on' : ''}`}
               onClick={() => { setStartDate(getTodayStr()); setCustomDate(''); }}
             >
-              <span className="f4c-dur-n">Start today</span>
+              <span className="f4c-dur-n">Start Today</span>
               <span className="f4c-dur-l">Day 1 is {formatDateLong(getTodayStr())}</span>
             </button>
             <button
               type="button" role="radio" aria-checked={startDate === dateOffsetFromToday(1)}
-              className={`f4c-dur wide${startDate === dateOffsetFromToday(1) ? ' on' : ''}`}
+              className={`f4c-dur wide start-when-btn${startDate === dateOffsetFromToday(1) ? ' on' : ''}`}
               onClick={() => { setStartDate(dateOffsetFromToday(1)); setCustomDate(''); }}
             >
-              <span className="f4c-dur-n">Start tomorrow</span>
+              <span className="f4c-dur-n">Start Tomorrow</span>
               <span className="f4c-dur-l">Day 1 is {formatDateLong(dateOffsetFromToday(1))}</span>
             </button>
-            <label className={`f4c-dur wide choose${customDate && startDate === customDate ? ' on' : ''}`}>
-              <span className="f4c-dur-n">Choose a date</span>
+            <label className={`f4c-dur wide choose start-when-btn${customDate && startDate === customDate ? ' on' : ''}`}>
+              <span className="f4c-dur-n">Choose Date</span>
               <input
                 type="date"
                 className="f4c-date"

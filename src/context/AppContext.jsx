@@ -1450,7 +1450,12 @@ export function AppProvider({ children }) {
     // and one display scale per day, both the primary's, so an era-2 support
     // habit inside an era-1 segment would be worth ten times its own value.
     // Refused rather than repriced — see utils/eraSafety.js.
-    if (!checkStackEras(prof.activeChallenge, economyVersionOf(options.challenge)).ok) return false;
+    //
+    // Compared against the era a new attempt is priced under, NOT against the
+    // incoming descriptor: a support descriptor carries no economy stamp (this
+    // function has never written one), so reading its version would say "era 1"
+    // for every pairing and refuse them all.
+    if (!checkStackEras(prof.activeChallenge, CURRENT_ECONOMY_VERSION).ok) return false;
 
     const startDate = options.startDate || getTodayStr();
     const meta = { ...NEW_ATTEMPT_DEFAULTS, ...options.challenge };

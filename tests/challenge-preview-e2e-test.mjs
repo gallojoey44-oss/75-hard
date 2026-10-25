@@ -9,6 +9,7 @@
  * Run against a production build:  npx vite preview --port 4173
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, passReview, pickStartDate, confirmStart, detailsText } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -69,10 +70,8 @@ await reset();
 await gotoTab('Challenges');
 
 // ══ 1: the reported figures are gone ══════════════════════════════════════
-const mt = page.locator('.challenge-card', { hasText: 'Mental Training' }).first();
-await mt.locator('.challenge-card-header').click();
-await page.waitForTimeout(500);
-let mtText = await mt.textContent();
+await openChallenge(page, 'Mental Training');
+let mtText = await detailsText(page);
 check('1: Mental Training no longer advertises 100 XP for a single habit',
   !/\(100 XP\)/.test(mtText), (/\(100 XP\)[^]*/.exec(mtText) || [''])[0].slice(0, 40));
 check('1: nor a 270 XP daily total', !/270/.test(mtText));
@@ -91,54 +90,56 @@ check('2: the perfect-day bonus is the approved 15% of the budget',
   perfectShown === Math.round(0.15 * 160), `${perfectShown}`);
 check('2: a projected perfect total is stated', totalShown > 0, `${totalShown}`);
 check('2: the optional-XP ceiling is stated',
-  /capped at 16 a day/i.test(await mt.locator('.xp-preview-note').first().textContent()));
+  /capped at 16 a day/i.test(await page.locator('.xp-preview-note').first().textContent()));
 
 // ══ 3: switching mode reprices the whole panel ════════════════════════════
-await mt.locator('.tpl-variant-tab', { hasText: 'Beginner' }).click();
+await page.locator('.tpl-variant-tab', { hasText: 'Beginner' }).click();
 await page.waitForTimeout(400);
 const begRendered = await renderedTaskXP(mt);
 check('3: Beginner mode reprices every requirement',
   begRendered.reduce((s, x) => s + x, 0) === 102, String(begRendered.reduce((s, x) => s + x, 0)));
 check('3: and the rating follows the mode it is priced from',
-  /Easy/.test(await mt.locator('.tpl-level-value').first().textContent()),
-  await mt.locator('.tpl-level-value').first().textContent());
-await mt.locator('.tpl-variant-tab', { hasText: 'Hard' }).click();
+  /Easy/.test(await page.locator('.tpl-level-value').first().textContent()),
+  await page.locator('.tpl-level-value').first().textContent());
+await page.locator('.tpl-variant-tab', { hasText: 'Hard' }).click();
 await page.waitForTimeout(400);
 const hardRendered = await renderedTaskXP(mt);
 check('3: Hard mode reprices again',
   hardRendered.reduce((s, x) => s + x, 0) === 173, String(hardRendered.reduce((s, x) => s + x, 0)));
 check('3: the collapsed card states the RANGE, not one mode\'s rating',
-  /Easy–Medium/.test(await mt.locator('.challenge-card-meta').first().textContent()),
-  await mt.locator('.challenge-card-meta').first().textContent());
+  /Easy–Medium/.test(await page.locator('.challenge-card-meta').first().textContent()),
+  await page.locator('.challenge-card-meta').first().textContent());
 
 // ══ 4: the Cold Exposure Upgrade reprices the list it joins ═══════════════
-await mt.locator('.tpl-variant-tab', { hasText: 'Standard' }).click();
+await page.locator('.tpl-variant-tab', { hasText: 'Standard' }).click();
 await page.waitForTimeout(400);
 const beforeCold = await renderedTaskXP(mt);
-await mt.locator('.toggle-btn').first().click();
+await page.locator('.toggle-btn').first().click();
 await page.waitForTimeout(400);
 const afterCold = await renderedTaskXP(mt);
 check('4: enabling it adds a requirement to the advertised list',
   afterCold.length === beforeCold.length + 1, `${beforeCold.length} → ${afterCold.length}`);
 check('4: the daily total is unchanged — it divides the budget, not adds to it',
   afterCold.reduce((s, x) => s + x, 0) === 160, String(afterCold.reduce((s, x) => s + x, 0)));
-const coldXP = await mt.locator('.cold-upgrade-xp').first().textContent();
+const coldXP = await page.locator('.cold-upgrade-xp').first().textContent();
 check('4: the upgrade row shows its allocated share, not a stale 20 XP',
   !/20 XP/.test(coldXP) && /\d+ XP/.test(coldXP), coldXP.trim());
-await mt.locator('.toggle-btn').first().click();
+await page.locator('.toggle-btn').first().click();
 await page.waitForTimeout(300);
 
 // ══ 5: what was advertised is what gets installed ═════════════════════════
 const advertised = await renderedTaskXP(mt);
 const advertisedTotal = await summaryFigure(mt, 'Daily tasks');
 const advertisedBonus = await summaryFigure(mt, 'Completion bonus');
-await mt.locator('button', { hasText: /^Start / }).first().click();
+await page.locator('button', { hasText: /^Start / }).first().click();
 await page.waitForTimeout(500);
+await passReview(page);
 const tas = page.locator('textarea');
 for (let i = 0; i < await tas.count(); i++) await tas.nth(i).fill('Because I want a mind I can rely on.');
 await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
 await page.waitForTimeout(500);
-await page.locator('button', { hasText: 'Start Today' }).first().click();
+await pickStartDate(page, 'today');
+await confirmStart(page);
 await page.waitForTimeout(900);
 
 const p = await prof();
@@ -176,14 +177,12 @@ check('6: the task list on Today is the advertised one',
 // ══ 7: a configured challenge prices its own setup screen ═════════════════
 await reset();
 await gotoTab('Challenges');
-const li = page.locator('.challenge-card', { hasText: 'LOCK IN' }).first();
-await li.locator('.challenge-card-header').click();
-await page.waitForTimeout(450);
+await openChallenge(page, 'LOCK IN');
 const liRendered = await renderedTaskXP(li);
 check('7: LOCK IN prices its requirements in the library',
   liRendered.length === 9 && liRendered.reduce((s, x) => s + x, 0) === 180,
   `${liRendered.length} rows summing ${liRendered.reduce((s, x) => s + x, 0)}`);
-await li.locator('button', { hasText: /Start LOCK IN/i }).first().click();
+await page.locator('button', { hasText: /Start LOCK IN/i }).first().click();
 await page.waitForTimeout(500);
 const setupText = await page.textContent('.li-setup');
 check('7: its setup screen no longer advertises the era-1 700 XP completion bonus',

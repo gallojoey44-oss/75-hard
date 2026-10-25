@@ -86,7 +86,7 @@ export default function ChallengesHome({
               habitsDone={supportCount?.done ?? null}
               onOpen={() => onOpenTemplate(supportMeta.templateId)}
               onManage={onManageSupport}
-              manageLabel={isSupportScheduled?.() ? 'Cancel' : 'End Support'}
+              manageLabel={isSupportScheduled?.() ? 'Cancel Support Challenge' : 'End Support Challenge'}
             />
           ) : era.ok ? (
             <button type="button" className="f4c-add-support acc-add-support" onClick={onAddSupport}>
@@ -139,10 +139,10 @@ export default function ChallengesHome({
       <button type="button" className="f4c-row-link habit-library-entry" onClick={onBrowseHabits}>
         <span className="f4c-add-icon" aria-hidden="true">📖</span>
         <span className="f4c-add-body">
-          <span className="f4c-add-title">Habits &amp; strategies</span>
+          <span className="f4c-add-title">Explore Habits &amp; Strategies</span>
           <span className="f4c-add-sub">
-            {Object.keys(HABIT_GUIDES).length} guides — why each habit matters and how to do it well.
-            No challenge required.
+            {Object.keys(HABIT_GUIDES).length} habit guides — why each one matters and how to do it
+            well. No challenge required.
           </span>
         </span>
         <span className="f4c-chevron" aria-hidden="true">›</span>

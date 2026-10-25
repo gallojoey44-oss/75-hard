@@ -13,6 +13,7 @@
  * missing challenge silently becomes 75-Day.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, beginSetup, passReview, pickStartDate, confirmStart } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -98,7 +99,7 @@ async function seedMentalTraining({ profile = 'me', clear = true, meta = {}, tas
 /** Press Settings → Start New Challenge → confirm. */
 async function pressStartNewChallenge() {
   await gotoTab('Settings');
-  await page.locator('button', { hasText: 'Start New Challenge' }).first().click();
+  await beginSetup(page);
   await page.waitForTimeout(300);
   await page.locator('button', { hasText: /Archive .* Choose New/ }).first().click();
   await page.waitForTimeout(600);
@@ -178,19 +179,19 @@ check('6: Today does not show "of 75" between challenges', !/of 75/.test(todayTe
 async function startFromLibrary(cardName, variantRe = /^Standard/) {
   await gotoTab('Challenges');
   await page.waitForTimeout(400);
-  const card = page.locator('.challenge-card', { hasText: cardName });
-  await card.locator('.challenge-card-header').click();
-  await page.waitForTimeout(400);
-  await card.locator('button', { hasText: variantRe }).first().click();
+    await openChallenge(page, cardName);
+  await page.locator('button', { hasText: variantRe }).first().click();
   await page.waitForTimeout(300);
-  await card.locator('button', { hasText: new RegExp(`Start ${cardName}`) }).first().click();
+  await page.locator('button', { hasText: new RegExp(`Start ${cardName}`) }).first().click();
   await page.waitForTimeout(600);
+  await passReview(page);
   const tas = page.locator('textarea');
   const n = await tas.count();
   for (let i = 0; i < n; i++) await tas.nth(i).fill('Because I want to keep the promises I make to myself.');
   await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
   await page.waitForTimeout(500);
-  await page.locator('button', { hasText: 'Start Today' }).first().click();
+  await pickStartDate(page, 'today');
+await confirmStart(page);
   await page.waitForTimeout(700);
 }
 
@@ -232,21 +233,21 @@ check('14: Cold Exposure defaults OFF on a fresh attempt (not inherited)',
 await pressStartNewChallenge();
 await gotoTab('Challenges');
 await page.waitForTimeout(400);
-const d75card = page.locator('.challenge-card', { hasText: '75-Day Discipline Challenge' });
-await d75card.locator('.challenge-card-header').click();
-await page.waitForTimeout(400);
-await d75card.locator('button', { hasText: /^Start Challenge$/ }).first().click();
+await openChallenge(page, '75-Day Discipline Challenge');
+await page.locator('button', { hasText: /^Start Challenge$/ }).first().click();
 await page.waitForTimeout(500);
 await page.locator('button', { hasText: /Next: Your Why/i }).first().click();
 await page.waitForTimeout(600);
 {
+  await passReview(page);
   const tas = page.locator('textarea');
   const n = await tas.count();
   for (let i = 0; i < n; i++) await tas.nth(i).fill('Because discipline is the promise I keep to myself.');
 }
 await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
 await page.waitForTimeout(500);
-await page.locator('button', { hasText: 'Start Today' }).first().click();
+await pickStartDate(page, 'today');
+await confirmStart(page);
 await page.waitForTimeout(700);
 
 const p75 = await prof();
@@ -285,19 +286,18 @@ await pressStartNewChallenge();
 await gotoTab('Challenges');
 await page.waitForTimeout(400);
 {
-  const card = page.locator('.challenge-card', { hasText: 'Mental Training Phase' });
-  await card.locator('.challenge-card-header').click();
-  await page.waitForTimeout(400);
-  await card.locator('button', { hasText: /^Standard/ }).first().click();
+    await openChallenge(page, 'Mental Training Phase');
+  await page.locator('button', { hasText: /^Standard/ }).first().click();
   await page.waitForTimeout(300);
-  await card.locator('button', { hasText: /Start Mental Training Phase/ }).first().click();
+  await beginSetup(page);
   await page.waitForTimeout(600);
+  await passReview(page);
   const tas = page.locator('textarea');
   const n = await tas.count();
   for (let i = 0; i < n; i++) await tas.nth(i).fill('Because I want to keep going.');
   await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
   await page.waitForTimeout(500);
-  await page.locator('button', { hasText: 'Start Tomorrow' }).first().click();
+  await beginSetup(page);
   await page.waitForTimeout(700);
 }
 const pSched = await prof();
