@@ -1,609 +1,15 @@
-import { useState, useMemo } from 'react';
-import { useApp, DISCIPLINE_75_META, discipline75Tasks } from '../context/AppContext';
-import { previewAttempt, buildAttemptPayload } from '../data/challengeAttempt';
-import { PricedRequirements, PricedWeekly, XPSummaryCard } from './XPPreview';
-import { displayXP } from '../utils/xpDisplay';
+import { useState } from 'react';
+import { useApp } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
-import {
-  METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK,
-  isColdExposureEnabled,
-  getDefaultDuration, getDurationLabel, isRecommendedDuration,
-  getProgramForDuration, getTemplateById, difficultyLabel,
-  difficultyRange,
-} from '../data/challengeTemplates';
-import { TIER_LABELS } from '../data/xpEconomy';
-import { formatDateLong, getTodayStr } from '../utils/dateUtils';
-import { DIFFICULTY_GUIDE, PHILOSOPHY, HARD_CONFIRM } from '../data/challengeContent';
-import { FutureSelfLetterForm } from './FutureSelfLetter';
-import { dateOffsetFromToday, startsInWords } from '../utils/challengeSchedule';
-import ScheduledStartCard from './ScheduledStart';
-import SupportChallengePicker from './SupportChallengePicker';
-import MuscleBuildingSetup from './MuscleBuildingSetup';
-import HormoneHealthSetup from './HormoneHealthSetup';
-import EnergyResetSetup from './EnergyResetSetup';
-import LockInSetup from './LockInSetup';
 import HabitLibrary from './HabitLibrary';
-import HabitGuide from './HabitGuide';
-import { guideForTask, HABIT_GUIDES } from '../data/habitGuides';
-import FatLossHardSetup from './FatLossHardSetup';
-import * as FLH from '../data/fatLossHardConfig';
-import * as MB from '../data/muscleBuildingConfig';
-import * as HH from '../data/hormoneHealthConfig';
-import * as ER from '../data/energyResetConfig';
-import * as LI from '../data/lockInConfig';
-import { CONFIGURED_BUILDERS } from '../data/configuredChallenges';
-
-/**
- * Challenges with a `start_flow: 'configured'` bring their own setup screen and
- * their own meta/task builders. Adding another one is an entry here — nothing
- * in the start flow below branches on a template id.
- */
-// The setup COMPONENT for each configured challenge. Its builders come from the
-// shared registry, so the primary flow here and the support-challenge picker
-// always construct an attempt the same way.
-const CONFIGURED_SETUP_COMPONENTS = {
-  [MB.MUSCLE_BUILDING_TEMPLATE_ID]: MuscleBuildingSetup,
-  [HH.HORMONE_HEALTH_TEMPLATE_ID]: HormoneHealthSetup,
-  [ER.ENERGY_RESET_TEMPLATE_ID]: EnergyResetSetup,
-  [LI.LOCK_IN_TEMPLATE_ID]: LockInSetup,
-};
-
-const CONFIGURED_SETUPS = Object.fromEntries(
-  Object.entries(CONFIGURED_BUILDERS).map(([id, b]) => [id, { ...b, Setup: CONFIGURED_SETUP_COMPONENTS[id] }]),
-);
-
-// Overall challenge difficulty — fixed per challenge, independent of the
-// Beginner/Standard/Hard mode chosen inside it.
-const DIFFICULTY_COLOR = {
-  'Easy':        '#10B981',
-  'Medium':      '#F59E0B',
-  'Medium/Hard': '#F97316',
-  'Hard':        '#EF4444',
-  'Elite':       '#DC2626',
-  'You decide':  '#8B5CF6',
-};
-
-function capitalize(s) {
-  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-}
-
-const VARIANT_TABS = [
-  { key: 'beginner', label: 'Beginner' },
-  { key: 'standard', label: 'Standard' },
-  { key: 'hard',     label: 'Hard' },
-];
-
-function durationText(days) {
-  if (!days?.length) return '';
-  if (days.length === 1) return `${days[0]} days`;
-  if (days.length === 2) return `${days[0]} or ${days[1]} days`;
-  return `${days.slice(0, -1).join(', ')}, or ${days[days.length - 1]} days`;
-}
-
-/** Strip an XP figure out of descriptive copy — the priced lists own the numbers. */
-function withoutXP(s) {
-  return String(s).replace(/\s*[(—-]?\s*\(?\d+\s*XP(\s*each)?\)?\.?/gi, '').replace(/\s+—\s*$/, '').trim();
-}
-
-function VariantPanel({ variant, template, preview, onGuide }) {
-  if (!variant) return null;
-  // A startable mode is described by the attempt it would create. A designed
-  // but unbuilt one has no attempt to price, so its prose is shown with no XP
-  // figures rather than figures nothing will honour.
-  const priced = !!preview?.tasks?.length;
-  // Bonus missions are priced in the attempt's own units like every other
-  // figure here. A preview is of a new attempt, so the scale is 1 — applied all
-  // the same, by the one rule.
-  const bmXP = (v) => displayXP(v, preview?.displayScale ?? 1).toLocaleString();
-  return (
-    <div className="tpl-variant-panel">
-      <div className="tpl-variant-section-label">Daily requirements</div>
-      {priced
-        ? <PricedRequirements tasks={preview.tasks} onGuide={onGuide} scale={preview.displayScale} />
-        : (
-          <ul className="tpl-task-list">
-            {(variant.required_daily_tasks || []).map((t, i) => (
-              <li key={i}>{withoutXP(t)}</li>
-            ))}
-          </ul>
-        )}
-      {priced && variant.required_daily_tasks?.length > 0 && (
-        <ul className="tpl-task-list program">
-          {variant.required_daily_tasks.map((t, i) => <li key={i}>{withoutXP(t)}</li>)}
-        </ul>
-      )}
-      {(preview?.weekly?.length > 0 || variant.weekly_requirements?.length > 0) && (
-        <>
-          <div className="tpl-variant-section-label">Weekly requirements</div>
-          {preview?.weekly?.length > 0 && <PricedWeekly weekly={preview.weekly} scale={preview.displayScale} />}
-          {variant.weekly_requirements?.length > 0 && (
-            <ul className="tpl-task-list weekly">
-              {variant.weekly_requirements.map((t, i) => <li key={i}>{withoutXP(t)}</li>)}
-            </ul>
-          )}
-        </>
-      )}
-      {variant.optional_tasks?.length > 0 && (
-        <>
-          <div className="tpl-variant-section-label">Optional</div>
-          <ul className="tpl-task-list optional">
-            {variant.optional_tasks.map((t, i) => (
-              <li key={i}>{t}</li>
-            ))}
-          </ul>
-        </>
-      )}
-      {variant.expected_results && (
-        <div className="tpl-variant-expected">
-          📈 Expected on this mode: <strong>{variant.expected_results}</strong>
-        </div>
-      )}
-      {template.physical_examples?.length > 0 && (
-        <div className="tpl-panel-note">
-          <strong>Short Physical Reset</strong> — any intentional movement counts, even a walk.
-          Pick whatever fits: {template.physical_examples.join(', ').toLowerCase()}. No hard workout required.
-        </div>
-      )}
-      {template.bonus_missions?.length > 0 && (
-        <>
-          <div className="tpl-variant-section-label">🎯 Bonus Missions (optional)</div>
-          <ul className="tpl-task-list optional">
-            {template.bonus_missions.map(bm => (
-              <li key={bm.id}>
-                {bm.icon} {bm.name} — +{bmXP(bm.xp)} bonus XP
-                {preview && Number.isFinite(preview.bonusPerDayCap) && bm.xp > preview.bonusPerDayCap
-                  ? ` (capped at ${bmXP(preview.bonusPerDayCap)} a day)`
-                  : ''}
-              </li>
-            ))}
-          </ul>
-          <div className="tpl-panel-note">
-            Bonus Missions are optional. They add bonus XP but are never required to complete the day
-            {preview && Number.isFinite(preview.bonusPerDayCap)
-              ? `, and optional XP is capped at ${bmXP(preview.bonusPerDayCap)} a day`
-              : ''}.
-          </div>
-        </>
-      )}
-      <XPSummaryCard preview={preview} />
-    </div>
-  );
-}
-
-// Transformation-program sections (🎯 Goal, 📈 Expected Results, etc.) for
-// templates that ship full program content.
-function ProgramSections({ program, category, durationDays }) {
-  if (!program) return null;
-  return (
-    <div className="tpl-program">
-      {category && <div className="tpl-program-category">🏷 {category}</div>}
-
-      {/* Expected results — shown prominently, not collapsed. The heading and
-          copy follow the selected duration so a 14- or 60-day attempt never
-          shows 30-day expectations. */}
-      <div className="tpl-program-block">
-        <div className="tpl-program-title">📈 Expected Results{durationDays ? ` (${durationDays} Days)` : ''}</div>
-        <ul className="tpl-task-list program">
-          {program.expected_results.map((r, i) => <li key={i}>{r}</li>)}
-        </ul>
-        {program.emphasis && <div className="tpl-program-emphasis">{program.emphasis}</div>}
-        <div className="tpl-program-disclaimer">{program.results_disclaimer}</div>
-      </div>
-
-      <details className="tpl-program-details">
-        <summary className="tpl-program-summary">🎯 Goal</summary>
-        <p className="tpl-program-text">{program.goal}</p>
-      </details>
-
-      <details className="tpl-program-details">
-        <summary className="tpl-program-summary">👀 What You&apos;ll Notice</summary>
-        <ul className="tpl-task-list program">
-          {program.visual_changes.map((v, i) => <li key={i}>{v}</li>)}
-        </ul>
-      </details>
-
-      <details className="tpl-program-details">
-        <summary className="tpl-program-summary">🧠 Why This Works</summary>
-        <div className="tpl-program-pillars">
-          {program.why_it_works.map((p, i) => (
-            <div key={i} className="tpl-program-pillar">
-              <div className="tpl-program-pillar-name">{p.pillar}</div>
-              <ul className="tpl-task-list program">
-                {p.points.map((pt, j) => <li key={j}>{pt}</li>)}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </details>
-
-      <details className="tpl-program-details">
-        <summary className="tpl-program-summary">📅 Transformation Timeline</summary>
-        <div className="tpl-program-pillars">
-          {program.timeline.map((w, i) => (
-            <div key={i} className="tpl-program-pillar">
-              <div className="tpl-program-pillar-name">{w.week}</div>
-              <ul className="tpl-task-list program">
-                {w.points.map((pt, j) => <li key={j}>{pt}</li>)}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </details>
-
-      <details className="tpl-program-details">
-        <summary className="tpl-program-summary">📷 Progress</summary>
-        <ul className="tpl-task-list program">
-          {program.progress.items.map((p, i) => <li key={i}>{p}</li>)}
-        </ul>
-        <p className="tpl-program-text">{program.progress.finish}</p>
-      </details>
-    </div>
-  );
-}
-
-function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) {
-  const { activeProfile } = useApp();
-  const [expanded, setExpanded] = useState(false);
-  const [variantTab, setVariantTab] = useState(isActive && activeVariant ? activeVariant : 'standard');
-  const isVariantStart = template.start_flow === 'variant';
-  const isLegacy75 = template.id === DISCIPLINE_75_META.templateId;
-  // A 'configured' challenge (Muscle Building) opens its own setup screen
-  // instead of the generic variant + duration chips.
-  const isConfiguredStart = template.start_flow === 'configured';
-  const isCustom = template.id === 'custom_challenge_framework';
-  const isMT = template.id === MENTAL_TRAINING_TEMPLATE_ID;
-  const defaultDuration = getDefaultDuration(template);
-  const [durationSel, setDurationSel] = useState(defaultDuration);
-  // Cold Exposure Upgrade — Mental Training only, opt-in, disabled by default,
-  // and re-asked for every new attempt (this is local setup state, never a
-  // stored profile preference).
-  const [coldUpgrade, setColdUpgrade] = useState(false);
-  // The strategy guide opened from a daily-requirement row. Available whether
-  // or not this challenge is active — the guides are education, not progress.
-  const [guideTask, setGuideTask] = useState(null);
-
-  // The attempt this card's current selections would create, stamped with the
-  // XP economy exactly as starting it would be. Every figure shown below is
-  // read from here, so changing mode, duration or the Cold Exposure Upgrade
-  // re-prices the whole panel — and what is advertised is what gets installed.
-  const preview = useMemo(() => previewAttempt({
-    template,
-    variant: variantTab,
-    durationDays: durationSel,
-    coldExposureUpgradeEnabled: coldUpgrade,
-    // The 75-Day challenge's task list is a per-profile default rather than
-    // template data, so it is handed in. Its descriptor carries no variant, so
-    // the mode tabs cannot change what it is worth — and the panel shows the
-    // one list it actually installs.
-    legacy: isLegacy75
-      ? { meta: DISCIPLINE_75_META, tasks: discipline75Tasks(activeProfile) }
-      : null,
-  }), [template, variantTab, durationSel, coldUpgrade, isLegacy75, activeProfile]);
-
-  // The difficulty RATING, which follows the chosen mode when a template rates
-  // its modes separately (Mental Training's beginner mode is an easy challenge
-  // and its standard mode a medium one, and they are priced that way).
-  const ratingMode = template.effort_tier_by_variant && !isConfiguredStart && !isLegacy75
-    ? variantTab
-    : null;
-  const rating = difficultyLabel(template, ratingMode);
-  // The collapsed card has no mode selected yet, so a template that rates its
-  // modes separately states the range rather than one mode's rating.
-  const range = difficultyRange(template);
-
-  return (
-    <div className={`challenge-card${isActive ? ' active' : ''}`}>
-      <button
-        className="challenge-card-header"
-        onClick={() => setExpanded(v => !v)}
-        aria-expanded={expanded}
-      >
-        <span className="challenge-card-emoji">{template.emoji}</span>
-        <div className="challenge-card-info">
-          <div className="challenge-card-name">
-            {template.challenge_name}
-            {/* A designed-but-unbuilt challenge says so on the card itself, not
-                only once it is expanded, so the library never reads as a list
-                of things that can all be started. */}
-            {!template.startable && <span className="tpl-soon-chip">Coming Soon</span>}
-          </div>
-          <div className="challenge-card-meta">
-            {isCustom ? (
-              <>
-                Custom · <span style={{ color: DIFFICULTY_COLOR[TIER_LABELS[range.tier]] }}>Difficulty: {range.label}</span>
-              </>
-            ) : (
-              <>
-                {durationText(template.duration_options_days)}
-                {' • '}
-                <span style={{ color: DIFFICULTY_COLOR[TIER_LABELS[range.tier]] }}>
-                  {range.label} Challenge
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="challenge-card-badges">
-          {isActive && (
-            <span className="challenge-active-badge">Current Challenge</span>
-          )}
-          <span className="challenge-expand-icon">{expanded ? '▲' : '▼'}</span>
-        </div>
-      </button>
-
-      {expanded && (
-        <div className="challenge-card-body">
-          <p className="challenge-card-desc">{template.purpose}</p>
-          {template.tagline && (
-            <p className="tpl-tagline">{template.tagline}</p>
-          )}
-
-          <ProgramSections program={getProgramForDuration(template, durationSel)} category={template.category} durationDays={durationSel} />
-
-          {/* Duration picker. Templates that name their durations
-              (duration_labels) get the richer labelled cards; every other
-              template keeps the existing plain chips. */}
-          {isVariantStart && template.duration_labels ? (
-            <>
-              <div className="tpl-detail-label" style={{ margin: '12px 0 6px' }}>Choose Your Duration</div>
-              <div className="tpl-duration-cards">
-                {template.duration_options_days.map(d => (
-                  <button
-                    key={d}
-                    className={`tpl-duration-card${durationSel === d ? ' active' : ''}`}
-                    onClick={() => setDurationSel(d)}
-                    aria-pressed={durationSel === d}
-                  >
-                    <span className="tpl-duration-card-days">{d} DAYS</span>
-                    <span className="tpl-duration-card-label">{getDurationLabel(template, d)}</span>
-                    {isRecommendedDuration(template, d) && (
-                      <span className="tpl-duration-card-rec">Recommended</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : (
-          <div className="tpl-detail-row">
-            <span className="tpl-detail-label">Duration</span>
-            <div className="tpl-chip-group">
-              {template.duration_options_days.map(d => (
-                isVariantStart ? (
-                  <button
-                    key={d}
-                    className={`tpl-duration-chip${durationSel === d ? ' active' : ''}`}
-                    onClick={() => setDurationSel(d)}
-                  >
-                    {d} days
-                  </button>
-                ) : (
-                  <span key={d} className="challenge-focus-chip">{d} days</span>
-                )
-              ))}
-            </div>
-          </div>
-          )}
-
-          <div className="tpl-detail-row">
-            <span className="tpl-detail-label">Targets</span>
-            <div className="tpl-chip-group">
-              {template.metrics_targeted.map(m => (
-                <span key={m} className="challenge-focus-chip">{METRIC_LABELS[m] || m}</span>
-              ))}
-            </div>
-          </div>
-
-          <div className="tpl-detail-row">
-            <span className="tpl-detail-label">Difficulty</span>
-            <span className="tpl-level-value" style={{ color: DIFFICULTY_COLOR[rating] }}>
-              {rating}
-            </span>
-            {ratingMode && (
-              <span className="tpl-detail-label" style={{ marginLeft: 8 }}>
-                for {capitalize(variantTab)} mode
-              </span>
-            )}
-            {isActive && activeVariant && (
-              <>
-                <span className="tpl-detail-label" style={{ marginLeft: 14 }}>Your mode</span>
-                <span className="tpl-level-value">{capitalize(activeVariant)}</span>
-              </>
-            )}
-          </div>
-
-          {/* Muscle Building preview — pillars, daily list and weekly training,
-              generated from muscleBuildingConfig so the card never drifts from
-              what the challenge actually creates. */}
-          {/* A configured challenge previews the exact daily and weekly
-              requirements its own config module would create. */}
-          {isConfiguredStart && preview && (
-            <div className="mb-preview">
-              {template.pillars?.length > 0 && (
-                <div className="mb-pillars">
-                  {template.pillars.map(pl => (
-                    <span key={pl.id} className="mb-pillar-chip" title={pl.blurb}>{pl.icon} {pl.label}</span>
-                  ))}
-                </div>
-              )}
-              <div className="tpl-variant-section-label">Daily requirements</div>
-              <PricedRequirements tasks={preview.tasks} onGuide={setGuideTask} scale={preview.displayScale} />
-              {preview.tasks.some(t => guideForTask(t)) && (
-                <p className="tpl-task-guide-note">
-                  Tap any requirement above to read its full strategy guide. Reading one never
-                  completes a habit or awards XP.
-                </p>
-              )}
-              {preview.weekly.length > 0 && (
-                <>
-                  <div className="tpl-variant-section-label">Weekly requirements</div>
-                  <PricedWeekly weekly={preview.weekly} scale={preview.displayScale} />
-                </>
-              )}
-              {template.id === MB.MUSCLE_BUILDING_TEMPLATE_ID && (
-                <>
-                  <div className="tpl-variant-section-label">Optional optimization</div>
-                  <ul className="tpl-task-list optional">
-                    {MB.OPTIMIZATION_HABITS.map(h => (
-                      <li key={h.id}>{h.icon} {h.setupLabel}</li>
-                    ))}
-                  </ul>
-                  <div className="tpl-panel-note">
-                    Turning an optimization on adds it to the daily list and re-divides the same
-                    daily budget, so it earns its share instead of inflating the day. The setup
-                    screen prices every requirement once you have chosen.
-                  </div>
-                </>
-              )}
-              {template.training_quality && (
-                <div className="tpl-panel-note">
-                  <strong>{template.training_quality.headline}.</strong> {template.training_quality.body}
-                </div>
-              )}
-              {template.exercise_guidance && (
-                <div className="tpl-panel-note">
-                  <strong>{template.exercise_guidance.principle}</strong> {template.exercise_guidance.notice}
-                </div>
-              )}
-              <XPSummaryCard preview={preview} />
-            </div>
-          )}
-
-          {/* Difficulty selector — variant-based challenges only. */}
-          {!isConfiguredStart && (<>
-          <div className="tpl-detail-label" style={{ margin: '12px 0 6px' }}>Choose Your Difficulty</div>
-          <div className="tpl-variant-tabs" style={{ margin: '0 0 8px' }}>
-            {VARIANT_TABS.map(v => {
-              const rec = DIFFICULTY_GUIDE[v.key]?.recommended;
-              return (
-                <button
-                  key={v.key}
-                  className={`tpl-variant-tab${variantTab === v.key ? ' active' : ''}`}
-                  onClick={() => setVariantTab(v.key)}
-                >
-                  {v.label}{rec ? ' ★' : ''}
-                </button>
-              );
-            })}
-          </div>
-          {DIFFICULTY_GUIDE[variantTab] && (
-            <div className="tpl-difficulty-guide">
-              <div className="tpl-difficulty-guide-title">
-                {DIFFICULTY_GUIDE[variantTab].label}
-                {DIFFICULTY_GUIDE[variantTab].recommended && <span className="tpl-recommended-tag">Recommended</span>}
-              </div>
-              {template.variants[variantTab]?.progression && (
-                <div className="tpl-progression">{template.variants[variantTab].progression}</div>
-              )}
-              <ul className="tpl-task-list program">
-                {DIFFICULTY_GUIDE[variantTab].points.map((p, i) => <li key={i}>{p}</li>)}
-              </ul>
-            </div>
-          )}
-          <div className="tpl-philosophy">
-            <strong>{PHILOSOPHY.headline}.</strong> {PHILOSOPHY.body}
-          </div>
-          <VariantPanel
-            variant={template.variants[variantTab]}
-            template={template}
-            preview={preview}
-            onGuide={setGuideTask}
-          />
-          </>)}
-
-          {/* Cold Exposure Upgrade — Mental Training only. Optional, disabled by
-              default, chosen fresh each attempt, and locked once the challenge
-              starts. */}
-          {isMT && !isActive && template.startable && (
-            <div className={`cold-upgrade-card${coldUpgrade ? ' on' : ''}`}>
-              <div className="cold-upgrade-head">
-                <div className="cold-upgrade-title">🚿 Cold Exposure Upgrade</div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={coldUpgrade}
-                  className={`toggle-btn${coldUpgrade ? ' on' : ''}`}
-                  onClick={() => setColdUpgrade(v => !v)}
-                >
-                  {coldUpgrade ? 'Enabled' : 'Off'}
-                </button>
-              </div>
-              <p className="cold-upgrade-desc">
-                Add a 30–60 second cold finish to your daily challenge requirements. Once enabled, it
-                counts toward your daily grade and XP just like every other required task.
-              </p>
-              <p className="cold-upgrade-safety">
-                ⚠️ Skip cold exposure if you feel dizzy, hypoglycemic, sick, or unusually weak.
-              </p>
-              <ul className="cold-upgrade-points">
-                <li>Optional — off unless you turn it on.</li>
-                <li>Enabling it increases your daily requirements.</li>
-                <li>It affects both your challenge grade and XP.</li>
-                <li>It joins the same daily budget, so every requirement is repriced — the list above updates.</li>
-                <li>Once the challenge starts, it can&apos;t be casually removed from that attempt.</li>
-              </ul>
-              {coldUpgrade && (
-                <div className="cold-upgrade-preview">
-                  <div className="cold-upgrade-preview-label">Required because Cold Exposure Upgrade is enabled:</div>
-                  <div className="cold-upgrade-preview-task">
-                    {COLD_SHOWER_TASK.icon} Cold Shower — 30–60 second cold finish
-                    <span className="cold-upgrade-xp">
-                      {preview?.tasks.find(t => t.id === COLD_SHOWER_TASK.id)?.xp ?? 0} XP
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {template.inspiration_sources?.length > 0 && template.inspiration_sources[0] !== 'User-defined' && (
-            <div className="tpl-sources">Informed by: {template.inspiration_sources.join(', ')}</div>
-          )}
-
-          {isActive && (
-            <button className="btn btn-ghost challenge-card-action" onClick={() => setView('today')}>
-              Log Today →
-            </button>
-          )}
-          {!isActive && template.startable && isVariantStart && (
-            <button
-              className="btn btn-primary challenge-card-action"
-              onClick={() => onStart({ variant: variantTab, durationDays: durationSel, coldExposureUpgradeEnabled: isMT ? coldUpgrade : false })}
-            >
-              Start {template.challenge_name}
-            </button>
-          )}
-          {!isActive && template.startable && isConfiguredStart && (
-            <button className="btn btn-primary challenge-card-action" onClick={() => onStart({ configured: true })}>
-              Start {template.challenge_name}
-            </button>
-          )}
-          {!isActive && template.startable && !isVariantStart && !isConfiguredStart && (
-            <button className="btn btn-primary challenge-card-action" onClick={() => onStart(null)}>
-              Start Challenge
-            </button>
-          )}
-          {!isActive && !template.startable && (
-            <div className="tpl-soon-note">
-              <strong>Coming Soon.</strong> This challenge is designed but not
-              playable yet — its daily habits are not built, so it cannot be
-              started or earn XP.
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Read-only strategy guide. No xp, no checked state and no onToggle, so
-          HabitGuide draws no checkbox: nothing opened from the library card can
-          complete a habit or award XP. */}
-      {guideTask && (
-        <HabitGuide
-          guide={guideForTask(guideTask)}
-          onClose={() => setGuideTask(null)}
-        />
-      )}
-    </div>
-  );
-}
+import SupportChallengePicker from './SupportChallengePicker';
+import ScheduledStartCard from './ScheduledStart';
+import ChallengesHome from './challenges/ChallengesHome';
+import ChallengeDetails from './challenges/ChallengeDetails';
+import ChallengeSetup from './challenges/ChallengeSetup';
+import ChallengeHistory from './challenges/ChallengeHistory';
+import { getTemplateById, getDefaultDuration, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID } from '../data/challengeTemplates';
+import { formatDateLong } from '../utils/dateUtils';
 
 /**
  * "End Support Challenge?" — the one confirmation used everywhere the action is
@@ -612,6 +18,8 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
  * A SCHEDULED support challenge has not reached Day 1, so there is no progress
  * to archive and nothing to end: it says "Cancel" and does not promise an
  * archive that will not be written.
+ *
+ * Exported because TaskManager offers the same action from the task list.
  */
 export function EndSupportModal({ supportName, primaryName, scheduled, onCancel, onConfirm }) {
   return (
@@ -646,263 +54,127 @@ export function EndSupportModal({ supportName, primaryName, scheduled, onCancel,
   );
 }
 
+/**
+ * The Challenges tab.
+ *
+ * One screen at a time rather than one page containing everything. The tab
+ * holds a small navigation stack — home, a challenge's page, its setup flow,
+ * the history — so each screen is the size of its own job and the hardware back
+ * gesture has something to go back TO.
+ *
+ * What this component does NOT do is own any challenge logic. Starting,
+ * stacking, ending and scheduling all still go through AppContext, and the
+ * screens below build their attempts through `buildAttemptPayload` exactly as
+ * before.
+ */
 export default function ChallengesView({ setView }) {
   const {
-    activeProfile,
-    profile, getChallengeMeta, getDayNumber, getDayCompletion,
-    getStreak,
-    startChallenge, addColdExposureUpgrade,
-    isChallengeTemplateOutdated, syncActiveChallengeWithTemplate, isForgeDaily,
-    isChallengeScheduled,
-    getSupportMeta, getSupportDayNumber, getSupportStart, endSupportChallenge,
-    isSupportScheduled,
+    profile, getChallengeMeta, isChallengeScheduled, getSupportMeta, isSupportScheduled,
+    endSupportChallenge, isChallengeTemplateOutdated, syncActiveChallengeWithTemplate,
+    addColdExposureUpgrade,
   } = useApp();
 
-  // Challenge library filtered by the active profile (e.g. Women's Hormone
-  // Health is female-only). Centralized in visibleChallenges — future
-  // profile-specific challenges only need an `audience` tag.
-  const libraryChallenges = visibleChallenges(activeProfile);
-
-  const [showStartConfirm, setShowStartConfirm] = useState(false);
-  // Start flow: { template, variant, durationDays, step, legacy75 }
-  // step: 'hardWarn' → 'letter'. Standard/Beginner skip straight to 'letter'.
-  const [pendingStart, setPendingStart] = useState(null);
-  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
-  // The permanent Habit Library. Deliberately independent of every challenge:
-  // it reads the shared guide registry and touches no progress data.
+  // { name: 'home' | 'details' | 'setup' | 'history' | 'manage', ... }
+  const [screen, setScreen] = useState({ name: 'home' });
   const [showHabitLibrary, setShowHabitLibrary] = useState(false);
-  const [showColdConfirm, setShowColdConfirm] = useState(false);
   const [showSupportPicker, setShowSupportPicker] = useState(false);
   const [showEndSupport, setShowEndSupport] = useState(false);
+  const [showSync, setShowSync] = useState(false);
+  const [showCold, setShowCold] = useState(false);
 
-  const meta      = getChallengeMeta();
-  const baseline  = isForgeDaily();
-  const duration  = meta.durationDays || 75;
-  const dayNum    = getDayNumber();
-  const todayPct  = dayNum ? getDayCompletion(dayNum) : 0;
-  const streak    = getStreak();
-  // A scheduled attempt is prepared but not running — it gets the pre-start card
-  // instead of the active-challenge summary (no Day N, no score, no streak).
-  const scheduled = isChallengeScheduled();
-  const supportMeta = getSupportMeta();
-  const supportDay = getSupportDayNumber();
-  // Forge Daily is the baseline, not a "challenge" — so the tab shows the
-  // no-active-challenge state and the library to start a real one.
-  const isRunning = !!profile?.challengeStart && !baseline && !scheduled;
+  const meta = getChallengeMeta();
+  const supportMeta = getSupportMeta?.();
+  const home = () => setScreen({ name: 'home' });
 
-  const totalDone = dayNum
-    ? Array.from({ length: dayNum }, (_, i) => i + 1).filter(n => getDayCompletion(n) === 100).length
-    : 0;
-
-  // Begin a challenge once difficulty is confirmed and the Future Self Letter
-  // is written.
-  //
-  // The attempt is built by `buildAttemptPayload` — the same function the
-  // library preview runs through `stampAttempt`. That is deliberately the only
-  // construction path: when the preview and the start assembled the attempt
-  // separately, the library advertised XP the attempt did not honour.
-  function beginChallenge(letter, startDate) {
-    const ps = pendingStart;
-    if (!ps) return;
-    const payload = buildAttemptPayload({
-      template: ps.template,
-      variant: ps.variant,
-      durationDays: ps.durationDays,
-      configuredSetup: ps.configuredSetup || null,
-      coldExposureUpgradeEnabled: ps.coldExposureUpgradeEnabled === true,
-      hardSetup: ps.hardSetup || null,
-      legacy: ps.legacy75
-        ? { meta: DISCIPLINE_75_META, tasks: discipline75Tasks(activeProfile) }
-        : null,
-    });
-    if (!payload) return;
-    startChallenge(undefined, { ...payload, futureSelfLetter: letter, startDate });
-    setPendingStart(null);
-    setView('today');
+  function openTemplate(templateId) {
+    const t = getTemplateById(templateId);
+    if (t) setScreen({ name: 'details', template: t });
+    else home();          // Forge Daily and legacy descriptors have no page
   }
 
   return (
-    <div className="challenges-view">
+    <div className="challenges-view f4c">
       <BuildBanner />
-      <div className="page-header">
-        <h2>🎯 Challenges</h2>
-      </div>
 
-      <div className="challenges-content">
+      {screen.name === 'home' && (
+        <ChallengesHome
+          setView={setView}
+          onOpenTemplate={openTemplate}
+          onAddSupport={() => setShowSupportPicker(true)}
+          onManagePrimary={() => setScreen({ name: 'manage' })}
+          onManageSupport={() => setShowEndSupport(true)}
+          onHistory={() => setScreen({ name: 'history' })}
+          onBrowseHabits={() => setShowHabitLibrary(true)}
+        />
+      )}
 
-        {/* Scheduled (pre-start) attempt */}
-        {scheduled && <ScheduledStartCard />}
+      {screen.name === 'details' && (
+        <ChallengeDetails
+          template={screen.template}
+          activeTemplateId={profile?.challengeStart ? meta.templateId : null}
+          supportTemplateId={supportMeta?.templateId || null}
+          onBack={home}
+          onOpenActive={() => setScreen({ name: 'manage' })}
+          onStart={(start) => setScreen({ name: 'setup', start })}
+        />
+      )}
 
-        {/* Active challenge summary */}
-        {isRunning ? (
-          <div className="active-challenge-card">
-            <div className="acc-label-row">
-              <span className="acc-dot" />
-              <span className="acc-label">{supportMeta ? 'Primary Challenge' : 'Active Challenge'}</span>
-            </div>
-            <div className="acc-name">
-              {meta.emoji} {meta.name}
-              {meta.variant ? ` · ${capitalize(meta.variant)} mode` : ''}
-            </div>
-            <div className="acc-stats-row">
-              <div className="acc-stat">
-                <div className="acc-stat-value">Day {dayNum}</div>
-                <div className="acc-stat-label">of {duration}</div>
-              </div>
-              <div className="acc-stat">
-                <div className="acc-stat-value">{todayPct}%</div>
-                <div className="acc-stat-label">Today</div>
-              </div>
-              <div className="acc-stat">
-                <div className="acc-stat-value">{streak}d</div>
-                <div className="acc-stat-label">Streak</div>
-              </div>
-              <div className="acc-stat">
-                <div className="acc-stat-value">{totalDone}</div>
-                <div className="acc-stat-label">Perfect</div>
-              </div>
-            </div>
-            <div className="acc-progress-wrap">
-              <div className="acc-progress-track">
-                <div
-                  className="acc-progress-fill"
-                  style={{ width: `${((dayNum || 0) / duration) * 100}%` }}
-                />
-              </div>
-              <span className="acc-progress-label">{Math.round(((dayNum || 0) / duration) * 100)}% complete</span>
-            </div>
-            {/* Support Challenge slot — at most one, always subordinate to the
-                primary above it. */}
-            {supportMeta ? (
-              <div className="acc-support">
-                <div className="acc-support-label">Support Challenge</div>
-                <div className="acc-support-row">
-                  <span className="acc-support-name">{supportMeta.emoji} {supportMeta.name}</span>
-                  <span className="acc-support-day">
-                    {supportDay ? `Day ${supportDay} of ${supportMeta.durationDays}` : `Starts ${formatDateLong(getSupportStart())}`}
-                  </span>
-                </div>
-                <button className="acc-support-end" onClick={() => setShowEndSupport(true)}>
-                  {isSupportScheduled() ? 'Cancel Support Challenge' : 'End Support Challenge'}
-                </button>
-              </div>
-            ) : (
-              <button className="btn btn-secondary btn-full acc-add-support" onClick={() => setShowSupportPicker(true)}>
-                ➕ Add a Support Challenge
-              </button>
-            )}
-            {isChallengeTemplateOutdated() && (
-              <div className="tpl-update-box">
-                <div className="tpl-update-notice">🆕 A newer version of this challenge template is available.</div>
-                <button className="btn btn-primary btn-full" onClick={() => setShowSyncConfirm(true)}>
-                  Update Active Challenge
-                </button>
-                <p className="tpl-update-hint">
-                  Updating the challenge will refresh template tasks but keep your custom tasks.
-                </p>
-              </div>
-            )}
-            {/* Cold Exposure Upgrade — add mid-challenge (Mental Training only,
-                one-directional: disabled → enabled). */}
-            {meta.templateId === MENTAL_TRAINING_TEMPLATE_ID && (
-              isColdExposureEnabled(meta) ? (
-                <div className="cold-active-status">
-                  <span>🚿 Cold Exposure Upgrade: <strong>Active</strong></span>
-                  {meta.coldExposureUpgradeStartDate && (
-                    <span className="cold-active-since">Required since {formatDateLong(meta.coldExposureUpgradeStartDate)}</span>
-                  )}
-                </div>
-              ) : (
-                <div className="cold-upgrade-card">
-                  <div className="cold-upgrade-head">
-                    <div className="cold-upgrade-title">🚿 Cold Exposure Upgrade</div>
-                  </div>
-                  <p className="cold-upgrade-desc">
-                    Add a 30–60 second cold finish to the remaining days of this challenge. Once added, it
-                    becomes a required task and cannot be removed from this attempt.
-                  </p>
-                  <p className="cold-upgrade-safety">
-                    ⚠️ Skip cold exposure if you feel dizzy, hypoglycemic, sick, or unusually weak.
-                  </p>
-                  <button className="btn btn-primary btn-full" onClick={() => setShowColdConfirm(true)}>
-                    Add to Current Challenge
-                  </button>
-                </div>
-              )
-            )}
-            <div className="acc-actions">
-              <button className="btn btn-primary" onClick={() => setView('today')}>Log Today →</button>
-              <button className="btn btn-ghost" onClick={() => setView('home')}>Dashboard</button>
-            </div>
-          </div>
-        ) : (
-          <div className="no-active-challenge">
-            <div className="nac-icon">{baseline ? '🔥' : '🎯'}</div>
-            <div className="nac-title">No Active Challenge</div>
-            <p className="nac-body">
-              {baseline
-                ? "You're on Forge Daily — keeping your streak alive with light daily habits. Pick a challenge below when you're ready for the next chapter."
-                : 'Pick a challenge below to get started. Your daily tasks, XP, and progress will track automatically.'}
-            </p>
-          </div>
-        )}
+      {screen.name === 'setup' && (
+        <ChallengeSetup
+          start={screen.start}
+          onCancel={() => setScreen({ name: 'details', template: screen.start.template })}
+          onStarted={() => { home(); setView('today'); }}
+        />
+      )}
 
-        {/* Habit Library — permanent, and never gated behind enrolment. The
-            guides are reference material: readable before a challenge, during
-            one, and after it has ended. */}
-        <button className="habit-library-entry" onClick={() => setShowHabitLibrary(true)}>
-          <span className="hle-icon">📖</span>
-          <span className="hle-text">
-            <span className="hle-title">Explore Habits &amp; Strategies</span>
-            <span className="hle-sub">
-              {Object.keys(HABIT_GUIDES).length} habit guides — why each one matters, how to do it
-              well, and what to avoid. No challenge required.
-            </span>
-          </span>
-          <span className="hle-caret">→</span>
-        </button>
+      {screen.name === 'history' && (
+        <ChallengeHistory onBack={home} onOpenActive={() => setScreen({ name: 'manage' })} />
+      )}
 
-        {/* Template library */}
-        <div className="challenges-section-title">Challenge Library</div>
-        <div className="challenges-list">
-          {libraryChallenges.map(t => (
-            <ChallengeCard
-              key={t.id}
-              template={t}
-              isActive={isRunning && meta.templateId === t.id}
-              activeVariant={isRunning && meta.templateId === t.id ? meta.variant : null}
-              setView={setView}
-              onStart={(payload) => {
-                if (t.start_flow === 'configured' && payload?.configured) {
-                  setPendingStart({ template: t, step: 'configuredSetup' });
-                } else if (t.start_flow === 'variant' && payload) {
-                  setPendingStart({
-                    template: t,
-                    ...payload,
-                    step: payload.variant === 'hard' ? 'hardWarn' : 'letter',
-                  });
-                } else if (t.id === '75_day_discipline_challenge' && !isRunning) {
-                  setShowStartConfirm(true);
-                }
-              }}
-            />
-          ))}
-        </div>
+      {screen.name === 'manage' && (
+        <ManageChallenge
+          onBack={home}
+          setView={setView}
+          onEndSupport={() => setShowEndSupport(true)}
+          onAddSupport={() => setShowSupportPicker(true)}
+          onSync={() => setShowSync(true)}
+          onCold={() => setShowCold(true)}
+        />
+      )}
 
-      </div>
-
-      {/* Habit Library */}
       {showHabitLibrary && <HabitLibrary onClose={() => setShowHabitLibrary(false)} />}
 
-      {/* Sync active challenge with latest template */}
-      {showSyncConfirm && (
-        <div className="modal-overlay" onClick={() => setShowSyncConfirm(false)}>
+      {showSupportPicker && (
+        <SupportChallengePicker
+          onClose={() => setShowSupportPicker(false)}
+          onSwitchPrimary={(template) => {
+            setShowSupportPicker(false);
+            setScreen({
+              name: 'setup',
+              start: { template, variant: 'standard', durationDays: getDefaultDuration(template) },
+            });
+          }}
+        />
+      )}
+
+      {showEndSupport && supportMeta && (
+        <EndSupportModal
+          supportName={supportMeta.name}
+          primaryName={meta.name}
+          scheduled={isSupportScheduled?.()}
+          onCancel={() => setShowEndSupport(false)}
+          onConfirm={() => { endSupportChallenge(); setShowEndSupport(false); home(); }}
+        />
+      )}
+
+      {showSync && (
+        <div className="modal-overlay" onClick={() => setShowSync(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h3>Update Active Challenge?</h3>
             <p>This will refresh challenge template tasks while preserving your custom tasks and saved progress.</p>
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setShowSyncConfirm(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => { syncActiveChallengeWithTemplate(); setShowSyncConfirm(false); }}>
+              <button className="btn btn-ghost" onClick={() => setShowSync(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { syncActiveChallengeWithTemplate(); setShowSync(false); }}>
                 Update Template Tasks
               </button>
             </div>
@@ -910,174 +182,156 @@ export default function ChallengesView({ setView }) {
         </div>
       )}
 
-      {/* Add Cold Exposure Upgrade to the active challenge */}
-      {showColdConfirm && (
-        <div className="modal-overlay" onClick={() => setShowColdConfirm(false)}>
+      {showCold && (
+        <div className="modal-overlay" onClick={() => setShowCold(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h3>Add Cold Exposure Upgrade?</h3>
             <p>
-              Cold Shower will become a required 20 XP task starting today. It will affect your daily
-              score, challenge grade, and XP for the remaining days of this challenge.
+              Cold Shower becomes a required task starting today. It joins the same daily budget, so
+              every requirement is repriced rather than the day getting bigger — and it affects your
+              daily score, challenge grade and XP for the remaining days.
             </p>
             <p><strong>This change cannot be undone for the current challenge.</strong></p>
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setShowColdConfirm(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => { addColdExposureUpgrade(); setShowColdConfirm(false); }}>
+              <button className="btn btn-ghost" onClick={() => setShowCold(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { addColdExposureUpgrade(); setShowCold(false); }}>
                 Confirm Upgrade
               </button>
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Add a Support Challenge — grouped by compatibility with the primary */}
-      {showSupportPicker && (
-        <SupportChallengePicker
-          onClose={() => setShowSupportPicker(false)}
-          onSwitchPrimary={(template) => {
-            // The user chose the conflicting challenge instead. That is a new
-            // PRIMARY, not a stack — the normal start flow runs, which archives
-            // the current challenge first.
-            const durationDays = getDefaultDuration(template);
-            setPendingStart({ template, variant: 'standard', durationDays, step: 'letter' });
-          }}
-        />
-      )}
+/**
+ * Managing what is already running: the scheduled-start controls, the template
+ * update, the Cold Exposure Upgrade, and ending a Support Challenge.
+ *
+ * These are the actions that act on an EXISTING attempt, so they are kept
+ * together and away from the browsing screens — nothing here can start
+ * anything, and the only destructive action goes through its own confirmation.
+ */
+function ManageChallenge({ onBack, setView, onEndSupport, onAddSupport, onSync, onCold }) {
+  const {
+    profile, getChallengeMeta, getDayNumber, isChallengeScheduled, isForgeDaily,
+    getSupportMeta, getSupportDayNumber, getSupportStart, isSupportScheduled,
+    isChallengeTemplateOutdated, supportEraCheck,
+  } = useApp();
 
-      {/* End (or cancel) the support challenge — the primary is untouched */}
-      {showEndSupport && supportMeta && (
-        <EndSupportModal
-          supportName={supportMeta.name}
-          primaryName={meta.name}
-          scheduled={isSupportScheduled()}
-          onCancel={() => setShowEndSupport(false)}
-          onConfirm={() => { endSupportChallenge(); setShowEndSupport(false); }}
-        />
-      )}
+  const meta = getChallengeMeta();
+  const scheduled = isChallengeScheduled();
+  const supportMeta = getSupportMeta?.();
+  const dayNum = getDayNumber();
+  const era = supportEraCheck?.() ?? { ok: true };
+  const isMT = meta.templateId === MENTAL_TRAINING_TEMPLATE_ID;
 
-      {/* Hard-mode confirmation */}
-      {pendingStart?.step === 'hardWarn' && (
-        <div className="modal-overlay" onClick={() => setPendingStart(null)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h3>{HARD_CONFIRM.title}</h3>
-            {HARD_CONFIRM.body.split('\n\n').map((para, i) => (
-              <p key={i} style={i > 0 ? { marginTop: -6 } : undefined}>{para}</p>
-            ))}
-            <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setPendingStart(null)}>{HARD_CONFIRM.backLabel}</button>
-              <button
-                className="btn btn-primary"
-                onClick={() => setPendingStart(p => ({
-                  ...p,
-                  // Fat Loss Hard Mode gets one extra setup step (protein target
-                  // + safety screen) between the warning and the letter. Every
-                  // other Hard variant goes straight to the letter as before.
-                  step: (p.template?.id === FLH.FAT_LOSS_TEMPLATE_ID) ? 'hardFatLossSetup' : 'letter',
-                }))}
-              >
-                {HARD_CONFIRM.continueLabel}
-              </button>
-            </div>
+  return (
+    <div className="f4c-manage">
+      <header className="f4c-subhead">
+        <button type="button" className="f4c-back" onClick={onBack} aria-label="Back to Challenges">‹</button>
+        <span className="f4c-subhead-title">Manage</span>
+      </header>
+
+      {scheduled && <ScheduledStartCard />}
+
+      {!isForgeDaily() && profile?.challengeStart && (
+        <section className="f4c-card">
+          <div className="f4c-review-id">
+            <span className="f4c-active-emoji" aria-hidden="true">{meta.emoji}</span>
+            <span className="f4c-active-id">
+              <span className="f4c-active-name">{meta.name}</span>
+              <span className="f4c-active-meta">
+                {scheduled
+                  ? `Starts ${formatDateLong(profile.challengeStart)}`
+                  : `Day ${dayNum}${meta.durationDays ? ` of ${meta.durationDays}` : ''}`}
+                {' · Primary Challenge'}
+              </span>
+            </span>
           </div>
-        </div>
+          <button type="button" className="f4c-btn primary wide" onClick={() => setView('today')}>
+            Go to today&apos;s tasks →
+          </button>
+        </section>
       )}
 
-      {/* Fat Loss HARD MODE setup — protein target and the safety screen. */}
-      {pendingStart?.step === 'hardFatLossSetup' && (
-        <FatLossHardSetup
-          onCancel={() => setPendingStart(null)}
-          onSubmit={(hardSetup) => setPendingStart(p => ({ ...p, hardSetup, step: 'letter' }))}
-        />
-      )}
-
-      {/* A configured challenge's own setup screen, resolved from the registry
-          rather than branched on by template id. */}
-      {pendingStart?.step === 'configuredSetup' && CONFIGURED_SETUPS[pendingStart.template?.id] && (() => {
-        const { Setup } = CONFIGURED_SETUPS[pendingStart.template.id];
-        return (
-          <Setup
-            onCancel={() => setPendingStart(null)}
-            onSubmit={(setup) => setPendingStart(p => ({
-              ...p,
-              configuredSetup: setup,
-              // A challenge with a fixed length reports its own duration.
-              durationDays: setup.durationDays || getDefaultDuration(p.template),
-              variant: 'standard',
-              step: 'letter',
-            }))}
-          />
-        );
-      })()}
-
-      {/* Future Self Letter — required before a challenge begins */}
-      {pendingStart?.step === 'letter' && (
-        <FutureSelfLetterForm
-          challengeName={pendingStart.template?.challenge_name || '75-Day Discipline Challenge'}
-          onCancel={() => setPendingStart(null)}
-          onSubmit={(letter) => setPendingStart(p => ({ ...p, letter, step: 'schedule' }))}
-        />
-      )}
-
-      {/* When do you want to begin? — Day 1 may be today or any future local
-          date. Preparation is already saved by this point; only the clock
-          start is being chosen. */}
-      {pendingStart?.step === 'schedule' && (
-        <div className="modal-overlay" onClick={() => setPendingStart(null)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h3>When do you want to begin?</h3>
-            <p>Day 1 sets your challenge clock. Tasks, XP, streaks and scoring all begin then.</p>
-            <div className="start-when-options">
-              <button className="start-when-btn" onClick={() => beginChallenge(pendingStart.letter, getTodayStr())}>
-                <span className="start-when-title">Start Today</span>
-                <span className="start-when-sub">Day 1 is {formatDateLong(getTodayStr())}</span>
-              </button>
-              <button className="start-when-btn primary" onClick={() => beginChallenge(pendingStart.letter, dateOffsetFromToday(1))}>
-                <span className="start-when-title">Start Tomorrow</span>
-                <span className="start-when-sub">Day 1 is {formatDateLong(dateOffsetFromToday(1))}</span>
-              </button>
-              <label className="start-when-btn choose">
-                <span className="start-when-title">Choose Date</span>
-                <input
-                  type="date"
-                  className="inline-input"
-                  min={getTodayStr()}
-                  value={pendingStart.customDate || ''}
-                  onChange={e => setPendingStart(p => ({ ...p, customDate: e.target.value }))}
-                />
-              </label>
-              {pendingStart.customDate && pendingStart.customDate >= getTodayStr() && (
-                <button className="btn btn-primary btn-full" onClick={() => beginChallenge(pendingStart.letter, pendingStart.customDate)}>
-                  Begin {startsInWords(pendingStart.customDate) === 'today' ? 'today' : `on ${formatDateLong(pendingStart.customDate)}`}
-                </button>
-              )}
-            </div>
-            <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setPendingStart(p => ({ ...p, step: 'letter' }))}>← Back</button>
-            </div>
+      {supportMeta ? (
+        <section className="f4c-card">
+          <h3 className="f4c-card-h">Support Challenge</h3>
+          <div className="f4c-review-id">
+            <span className="f4c-active-emoji" aria-hidden="true">{supportMeta.emoji}</span>
+            <span className="f4c-active-id">
+              <span className="f4c-active-name">{supportMeta.name}</span>
+              <span className="f4c-active-meta">
+                {isSupportScheduled?.()
+                  ? `Starts ${formatDateLong(getSupportStart?.())}`
+                  : `Day ${getSupportDayNumber?.()} of ${supportMeta.durationDays}`}
+              </span>
+            </span>
           </div>
-        </div>
+          <p className="f4c-note">
+            Ending this stops only the Support Challenge and archives its progress. Your Primary
+            Challenge continues unchanged.
+          </p>
+          <button type="button" className="f4c-btn danger wide" onClick={onEndSupport}>
+            {isSupportScheduled?.() ? 'Cancel Support Challenge' : 'End Support Challenge'}
+          </button>
+        </section>
+      ) : profile?.challengeStart && !isForgeDaily() && (
+        <section className="f4c-card">
+          <h3 className="f4c-card-h">Support Challenge</h3>
+          {era.ok ? (
+            <>
+              <p className="f4c-note">
+                Run a second, compatible challenge alongside this one. A habit both require appears
+                once and is logged once.
+              </p>
+              <button type="button" className="f4c-btn wide" onClick={onAddSupport}>
+                Add a Support Challenge
+              </button>
+            </>
+          ) : (
+            <p className="f4c-note">{era.reason}</p>
+          )}
+        </section>
       )}
 
-      {/* 75-day start confirmation → leads into the Future Self Letter */}
-      {showStartConfirm && (
-        <div className="modal-overlay" onClick={() => setShowStartConfirm(false)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h3>Start 75-Day Discipline Challenge?</h3>
-            <p>You&apos;ll write your Future Self Letter, then choose when Day 1 begins. Your daily tasks and progress are tracked from that date.</p>
-            <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setShowStartConfirm(false)}>Cancel</button>
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setShowStartConfirm(false);
-                  setPendingStart({ template: getTemplateById(DISCIPLINE_75_META.templateId), variant: null, durationDays: 75, step: 'letter', legacy75: true });
-                }}
-              >
-                Next: Your Why →
+      {isChallengeTemplateOutdated?.() && (
+        <section className="f4c-card">
+          <h3 className="f4c-card-h">Template update available</h3>
+          <p className="f4c-note">
+            A newer version of this challenge&apos;s template exists. Updating refreshes its template
+            tasks and keeps your custom tasks and saved progress.
+          </p>
+          <button type="button" className="f4c-btn wide" onClick={onSync}>Update template tasks</button>
+        </section>
+      )}
+
+      {isMT && !scheduled && (
+        <section className="f4c-card">
+          <h3 className="f4c-card-h">Cold Exposure Upgrade</h3>
+          {isColdExposureEnabled(meta) ? (
+            <p className="f4c-note">
+              Active{meta.coldExposureUpgradeStartDate
+                ? ` — required since ${formatDateLong(meta.coldExposureUpgradeStartDate)}`
+                : ''}.
+            </p>
+          ) : (
+            <>
+              <p className="f4c-note">
+                Add a 30–60 second cold finish to the remaining days. Once added it becomes a
+                required task and cannot be removed from this attempt.
+              </p>
+              <p className="f4c-warn">
+                ⚠️ Skip cold exposure if you feel dizzy, hypoglycemic, sick or unusually weak.
+              </p>
+              <button type="button" className="f4c-btn wide" onClick={onCold}>
+                Add to current challenge
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          )}
+        </section>
       )}
     </div>
   );

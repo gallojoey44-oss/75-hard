@@ -15,8 +15,11 @@ import { XPSummaryCard } from './XPPreview';
  * The one thing it insists on is that the user has read what this challenge
  * does and does not claim, and what to do if symptoms are severe.
  */
-export default function HormoneHealthSetup({ onCancel, onSubmit }) {
-  const [s, setS] = useState(HH.defaultSetup());
+export default function HormoneHealthSetup({ onCancel, onSubmit, initialSetup = null }) {
+  // The browsing screen may already have settled on a length; it is used
+  // as the starting point here so the same question is not asked twice with
+  // two different answers.
+  const [s, setS] = useState(() => ({ ...HH.defaultSetup(), ...(initialSetup || {}) }));
   const [showTargets, setShowTargets] = useState(false);
   const [showSupplements, setShowSupplements] = useState(false);
 

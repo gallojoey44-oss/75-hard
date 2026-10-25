@@ -13,8 +13,11 @@ import { XPSummaryCard } from './XPPreview';
  *
  * Every string and number rendered here comes from lockInConfig.
  */
-export default function LockInSetup({ onCancel, onSubmit }) {
-  const [s, setS] = useState(LI.defaultSetup());
+export default function LockInSetup({ onCancel, onSubmit, initialSetup = null }) {
+  // The browsing screen may already have settled on a length; it is used
+  // as the starting point here so the same question is not asked twice with
+  // two different answers.
+  const [s, setS] = useState(() => ({ ...LI.defaultSetup(), ...(initialSetup || {}) }));
   const [showTargets, setShowTargets] = useState(false);
   const [showHabits, setShowHabits] = useState(false);
 

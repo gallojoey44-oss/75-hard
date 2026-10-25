@@ -165,6 +165,21 @@ export function getDefaultDuration(template) {
   return opts[Math.floor((opts.length - 1) / 2)];
 }
 
+/**
+ * A challenge's supported lengths as one short phrase ("7-30 days", "75 days").
+ *
+ * A range reads better than a list on a browsing tile, where the point is
+ * roughly how long a commitment this is; the setup flow still shows every
+ * individual option, because that is where one gets chosen.
+ */
+export function durationRangeText(template) {
+  const opts = getDurationOptions(template);
+  if (!opts.length) return '';
+  const lo = Math.min(...opts);
+  const hi = Math.max(...opts);
+  return lo === hi ? `${lo} days` : `${lo}\u2013${hi} days`;
+}
+
 /** Short name for a duration ("Kickstart", "Standard", …) or null. */
 export function getDurationLabel(template, days) {
   return template?.duration_labels?.[days] ?? null;

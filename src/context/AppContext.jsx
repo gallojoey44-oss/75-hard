@@ -33,6 +33,7 @@ import { stampAttempt, repriceTasks, archiveEraOf, ledgerDisplayAmount, forgiven
 import { reconciledSegmentBreakdown, toDisplay } from '../utils/xpBreakdown';
 import { CURRENT_ECONOMY_VERSION, economyVersionOf, displayScaleFor } from '../data/xpEconomy';
 import { displayXP, scaleOfMeta, scaleOfArchive } from '../utils/xpDisplay';
+import { checkStackEras } from '../utils/eraSafety';
 import { recentGap, shouldShowComeback, missedDayDetail, buildXPHistory } from '../utils/missedDays';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 
@@ -1445,6 +1446,11 @@ export function AppProvider({ children }) {
     const primaryId = prof.activeChallenge?.templateId;
     if (primaryId && primaryId === options.challenge.templateId) return false;
     if (!canStack(primaryId, options.challenge.templateId)) return false;
+    // Never stack across an economy boundary. The engine applies one rate card
+    // and one display scale per day, both the primary's, so an era-2 support
+    // habit inside an era-1 segment would be worth ten times its own value.
+    // Refused rather than repriced — see utils/eraSafety.js.
+    if (!checkStackEras(prof.activeChallenge, economyVersionOf(options.challenge)).ok) return false;
 
     const startDate = options.startDate || getTodayStr();
     const meta = { ...NEW_ATTEMPT_DEFAULTS, ...options.challenge };
@@ -1469,6 +1475,16 @@ export function AppProvider({ children }) {
     }));
     return true;
   }, [activeProfile, profiles, setProfiles]);
+
+  /**
+   * Whether this profile's primary can take a Support Challenge at all, and why
+   * not when it cannot. Read-only — the picker asks before it offers anything,
+   * so a refusal is explained up front instead of at the last tap.
+   */
+  const supportEraCheck = useCallback((profId = activeProfile) => {
+    const prof = profiles[profId];
+    return checkStackEras(prof?.activeChallenge, CURRENT_ECONOMY_VERSION);
+  }, [activeProfile, profiles]);
 
   /**
    * What adding a support challenge would do to the daily list — the shared
@@ -3122,6 +3138,7 @@ export function AppProvider({ children }) {
       getRankState, getRawLifetimeXP, getRankFloorXP, clearPendingRankUp,
       getXPBreakdown, previewXPReconciliation, applyXPReconciliation, undoXPReconciliation,
       getComeback, dismissComebackNotice, getCurrentMissedDays, getXPHistory,
+      supportEraCheck,
       getChallengeXPBreakdown,
       MENTAL_OPTIONS,
       // Quote

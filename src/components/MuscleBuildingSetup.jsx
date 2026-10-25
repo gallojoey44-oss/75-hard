@@ -12,8 +12,11 @@ import { PricedRequirements, PricedWeekly, XPSummaryCard } from './XPPreview';
  * choices (per-muscle set targets, measurement selection) are collapsed by
  * default so the common path is: pick a duration, pick training days, go.
  */
-export default function MuscleBuildingSetup({ onCancel, onSubmit }) {
-  const [s, setS] = useState(MB.defaultSetup());
+export default function MuscleBuildingSetup({ onCancel, onSubmit, initialSetup = null }) {
+  // The browsing screen may already have settled on a length; it is used
+  // as the starting point here so the same question is not asked twice with
+  // two different answers.
+  const [s, setS] = useState(() => ({ ...MB.defaultSetup(), ...(initialSetup || {}) }));
   const [showVolume, setShowVolume] = useState(false);
   const [showMeasurements, setShowMeasurements] = useState(false);
   const [customProtein, setCustomProtein] = useState(false);

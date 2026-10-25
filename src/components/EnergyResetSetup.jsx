@@ -14,8 +14,11 @@ import { XPSummaryCard } from './XPPreview';
  * Every string and number rendered here comes from energyResetConfig; this
  * component holds no challenge constants.
  */
-export default function EnergyResetSetup({ onCancel, onSubmit }) {
-  const [s, setS] = useState(ER.defaultSetup());
+export default function EnergyResetSetup({ onCancel, onSubmit, initialSetup = null }) {
+  // The browsing screen may already have settled on a length; it is used
+  // as the starting point here so the same question is not asked twice with
+  // two different answers.
+  const [s, setS] = useState(() => ({ ...ER.defaultSetup(), ...(initialSetup || {}) }));
   const [showBaseline, setShowBaseline] = useState(false);
   const [showTargets, setShowTargets] = useState(false);
   const [showNutrients, setShowNutrients] = useState(false);
