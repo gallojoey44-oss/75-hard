@@ -175,7 +175,12 @@ check('5: it is stored as ONE completion flag', await page.evaluate(() => {
   const rec = Object.values(d).find(x => x.tasks?.fl_sleep);
   return !!rec && Object.keys(rec.tasks).filter(k => rec.tasks[k]).length === 1;
 }));
-// Adherence-wise that one completion credits BOTH challenges.
+// Adherence-wise that one completion credits BOTH challenges. The support
+// challenge's scorecard sits with the primary's behind Today's grading
+// disclosure in Forge 4.0, so it is opened before being read.
+await page.locator('.f4-collapse', { hasText: /Performance/i }).first()
+  .locator('.f4-collapse-head').click();
+await page.waitForTimeout(400);
 check('5: the single completion credits the support challenge too',
   /\d+%/.test(await page.textContent('.support-perf')));
 await gotoTab('Home');
