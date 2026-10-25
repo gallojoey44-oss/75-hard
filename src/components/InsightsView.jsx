@@ -5,6 +5,7 @@ import { HABIT_LIBRARY, getHabit } from '../data/habitLibrary';
 import { computeAverages, computeAveragesFromEntries, generateSuggestions, assessExperiment, getCoachMessage, getPriorityBottleneck } from '../utils/insightsUtils';
 import { buildTimeline, entriesInLastNDays, activeChallengeEntries } from '../utils/archiveUtils';
 import { detectSetback, computeDayXP } from '../utils/gamification';
+import { dayRules } from '../data/xpEconomy';
 import BuildBanner from './BuildBanner';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -509,11 +510,15 @@ export default function InsightsView() {
   const setback      = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
   const comebackMode = profile?.comebackMode || {};
 
-  // XP trend for last 5 days (most recent first)
+  // XP trend for last 5 days (most recent first). Only the SIGN of each day is
+  // shown, so no conversion is needed — but the attempt's own rate card is,
+  // because without it an era-2 day is scored against era-1 flat bonuses and
+  // penalties and the trend can read the wrong way.
   const penaltiesOn = profiles[activeProfile]?.xpPenalties !== false;
+  const trendRules = dayRules(profile?.activeChallenge);
   const xpTrend = dayNum ? Array.from({ length: Math.min(5, dayNum) }, (_, i) => {
     const n = dayNum - i;
-    const { gained, lost } = computeDayXP(days[n], tasks, activeProfile, n, dayNum, penaltiesOn);
+    const { gained, lost } = computeDayXP(days[n], tasks, activeProfile, n, dayNum, penaltiesOn, dayNum, trendRules);
     return { day: n, net: gained - lost };
   }) : [];
 

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import * as LI from '../data/lockInConfig';
 import { previewConfigured } from '../data/challengeAttempt';
+import { displayXP } from '../utils/xpDisplay';
 import { XPSummaryCard } from './XPPreview';
 
 /**
@@ -28,6 +29,10 @@ export default function LockInSetup({ onCancel, onSubmit }) {
     ]),
   ), [s]);
   const tasks = preview.tasks;
+  // A new attempt is stamped with the current era, so this is 1 — applied all
+  // the same, so the setup screen prices habits by the same rule the task rows
+  // will once the challenge is running.
+  const xpd = (v) => displayXP(v, preview.displayScale).toLocaleString();
   const option = LI.durationOption(s.durationDays);
   const ramp = LI.rampFor(s.durationDays);
   const lighterDays = LI.lighterDaysFor(s.durationDays);
@@ -79,11 +84,11 @@ export default function LockInSetup({ onCancel, onSubmit }) {
             <span className="li-fact-label">daily habits</span>
           </div>
           <div className="li-fact">
-            <span className="li-fact-value">{preview.dailyTaskXP}</span>
+            <span className="li-fact-value">{xpd(preview.dailyTaskXP)}</span>
             <span className="li-fact-label">XP per day</span>
           </div>
           <div className="li-fact">
-            <span className="li-fact-value">{preview.completionBonus}</span>
+            <span className="li-fact-value">{xpd(preview.completionBonus)}</span>
             <span className="li-fact-label">on completion</span>
           </div>
         </div>
@@ -138,7 +143,7 @@ export default function LockInSetup({ onCancel, onSubmit }) {
                     </span>
                     <span className="li-habit-desc">{t.desc}</span>
                   </span>
-                  <span className="li-habit-xp">{t.xp} XP</span>
+                  <span className="li-habit-xp">{xpd(t.xp)} XP</span>
                 </div>
               ))}
               <p className="li-help">

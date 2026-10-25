@@ -20,6 +20,8 @@ import {
   getRankReward, getUnlockedRewards, computeGrowthSummary, buildFutureSelfMessage,
   DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, computeChallengeChanges, computeWithinChallengeTrend,
 } from '../utils/gamification';
+import { displayXP, scaleOfMeta } from '../utils/xpDisplay';
+import { displayScaleFor } from '../data/xpEconomy';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
 import { getTemplateById, getCompletionBonusForDuration } from '../data/challengeTemplates';
@@ -40,6 +42,13 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
   const energyCompletion = summary?.energySummary?.tracked
     ? energyCompletionMessage(summary.durationDays || summary.energySummary.durationDays)
     : null;
+  // The attempt's XP figures are stored in the units IT ran under; the screen
+  // quotes them on the lifetime ladder, which is the total they just added to.
+  // A summary written before the era was recorded is left exactly as it reads
+  // today rather than guessed at — an un-dismissed screen must not change
+  // underneath someone on the strength of an assumption.
+  const ccScale = summary.xpEconomyVersion == null ? 1 : displayScaleFor(summary.xpEconomyVersion);
+  const xpd = (v) => displayXP(v || 0, ccScale).toLocaleString();
   const badgeDefs = (summary.badges || []).map(id => BADGE_DEFS.find(b => b.id === id)).filter(Boolean);
   if (summary.badgeId && !badgeDefs.find(b => b.id === summary.badgeId)) {
     const b = BADGE_DEFS.find(x => x.id === summary.badgeId);
@@ -69,12 +78,12 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
               <div className="cc-perf-line"><span>Keystone adherence</span><strong>{summary.keystoneAdherence}% <em>(need {summary.keystoneRequirement}%)</em></strong></div>
             )}
             <div className="cc-xpbreak">
-              <div className="cc-xpline"><span>Task XP Earned</span><span>{(summary.taskXP || 0).toLocaleString()} XP</span></div>
-              <div className="cc-xpline"><span>Passing Bonus</span><span>{summary.bonusEarned ? `+${(summary.completionBonus || 0).toLocaleString()} XP` : 'Not Earned'}</span></div>
+              <div className="cc-xpline"><span>Task XP Earned</span><span>{xpd(summary.taskXP)} XP</span></div>
+              <div className="cc-xpline"><span>Passing Bonus</span><span>{summary.bonusEarned ? `+${xpd(summary.completionBonus)} XP` : 'Not Earned'}</span></div>
               {summary.bonusXP > 0 && (
-                <div className="cc-xpline"><span>Bonus Mission XP</span><span>+{summary.bonusXP.toLocaleString()} XP</span></div>
+                <div className="cc-xpline"><span>Bonus Mission XP</span><span>+{xpd(summary.bonusXP)} XP</span></div>
               )}
-              <div className="cc-xpline total"><span>Total Earned</span><span>{(summary.xpEarned || 0).toLocaleString()} XP</span></div>
+              <div className="cc-xpline total"><span>Total Earned</span><span>{xpd(summary.xpEarned)} XP</span></div>
             </div>
             {!passed && (
               <p className="cc-fail-msg">
@@ -640,7 +649,7 @@ function CurrentMissedDays({ missed }) {
             <div key={m.dayNum} className="cmd-row">
               <span>Day {m.dayNum}</span>
               <span className="cmd-date">{formatDateShort(m.date)}</span>
-              <span className="cmd-row-amount">−{m.penalty} XP</span>
+              <span className="cmd-row-amount">−{m.penalty.toLocaleString()} XP</span>
             </div>
           ))}
           <p className="cmd-note">
@@ -908,7 +917,15 @@ export default function Dashboard({ setView }) {
   const otherProfile = activeProfile === 'me' ? 'girlfriend' : 'me';
 
   const profileArchives = archives[activeProfile] || [];
-  const xpData     = dayNum ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum) : { total: 0, rawTotal: 0 };
+  // The live segment, converted to the ladder Lifetime XP is on. Era-1 attempts
+  // store XP in units a tenth the size, and `computeXPBreakdown` scales exactly
+  // this segment by exactly this factor on its way into Lifetime XP — so Challenge
+  // XP and today's movement now quote the same currency as the balance they move.
+  const xpScale    = scaleOfMeta(meta);
+  const xpd        = (stored) => displayXP(stored, xpScale);
+  const challengeXP = xpd(dayNum
+    ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum).total
+    : 0);
   // Rank and Lifetime XP come from the ONE normalized rank state (see
   // utils/rank.js): effective XP is the calculated total clamped up to the
   // permanent floor of the highest rank ever unlocked. Home never derives its
@@ -916,7 +933,12 @@ export default function Dashboard({ setView }) {
   // notification.
   const rankInfo   = getRankState();
   const lifetimeXP = rankInfo.xp;
-  const todayXP  = dayNum ? computeTodayXP(allDays, profiles, activeProfile, getDayCompletion, dayNum) : { gained: 0, lost: 0, streakBonus: 0 };
+  const rawTodayXP = dayNum ? computeTodayXP(allDays, profiles, activeProfile, getDayCompletion, dayNum) : { gained: 0, lost: 0, streakBonus: 0 };
+  const todayXP  = {
+    ...rawTodayXP,
+    gained: xpd(rawTodayXP.gained), lost: xpd(rawTodayXP.lost),
+    streakBonus: xpd(rawTodayXP.streakBonus),
+  };
 
   // Badges are lifetime achievements: current challenge + everything archived
   const rawBadges = dayNum ? computeBadges(allDays, profiles, activeProfile, getDayCompletion, dayNum) : [];
@@ -1000,7 +1022,7 @@ export default function Dashboard({ setView }) {
   useEffect(() => {
     if (prevXpRef.current !== null && lifetimeXP > prevXpRef.current) {
       const diff = lifetimeXP - prevXpRef.current;
-      setXpAnim({ key: Date.now(), text: `+${diff}` });
+      setXpAnim({ key: Date.now(), text: `+${diff.toLocaleString()}` });
     }
     prevXpRef.current = lifetimeXP;
   }, [lifetimeXP]);
@@ -1202,7 +1224,7 @@ export default function Dashboard({ setView }) {
       <div style={{ position: 'relative' }}>
         <XPWidget
           rankInfo={rankInfo}
-          challengeXP={xpData.total}
+          challengeXP={challengeXP}
           todayXP={todayXP}
           onToggleDetails={() => setShowRankDetails(v => !v)}
           showDetails={showRankDetails}
@@ -1228,7 +1250,7 @@ export default function Dashboard({ setView }) {
         <RankDetailsCard
           rankInfo={rankInfo}
           missed={getCurrentMissedDays()}
-          challengeXP={xpData.total}
+          challengeXP={challengeXP}
           archivedChallenges={profileArchives.length}
           longest={longest}
           totalDone={totalDone}
@@ -1260,7 +1282,7 @@ export default function Dashboard({ setView }) {
           days={days}
           duration={duration}
           totalDone={totalDone}
-          challengeXP={xpData.total}
+          challengeXP={challengeXP}
           getDayCompletion={getDayCompletion}
           meta={meta}
           profileId={activeProfile}

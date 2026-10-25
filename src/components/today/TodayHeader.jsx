@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { computeDayXP, getTaskXP } from '../../utils/gamification';
 import { dayRules } from '../../data/xpEconomy';
+import { displayXP } from '../../utils/xpDisplay';
 import ProgressRing from './ProgressRing';
 
 function capitalize(s) {
@@ -115,22 +116,25 @@ export default function TodayHeader({
   const total = isMWD ? mwdTotal : tasks.length;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
-  // Both figures come from the engine, under THIS attempt's rate card.
-  const earned = computeDayXP(dayData || {}, tasks, activeProfile, dayNum, dayNum, penaltiesOn, dayNum, rules).gained;
-  const ifComplete = computeDayXP(
+  // Both figures come from the engine, under THIS attempt's rate card, and are
+  // then converted to the one ladder Lifetime XP and the ranks are on — so what
+  // today says it paid is what the balance moved by.
+  const xp = (stored) => displayXP(stored, rules.displayScale);
+  const earned = xp(computeDayXP(dayData || {}, tasks, activeProfile, dayNum, dayNum, penaltiesOn, dayNum, rules).gained);
+  const ifComplete = xp(computeDayXP(
     { ...(dayData || {}), tasks: { ...(dayData?.tasks || {}), ...Object.fromEntries(tasks.map(t => [t.id, true])) } },
     tasks, activeProfile, dayNum, dayNum, penaltiesOn, dayNum, rules,
-  ).gained;
+  ).gained);
   const remaining = Math.max(0, ifComplete - earned);
 
   // The parts of "still available": the habits not yet ticked, and whatever
   // day-level award the day has not qualified for yet (the perfect-day bonus).
-  const habitsLeftXP = tasks
+  const habitsLeftXP = xp(tasks
     .filter(t => !dayData?.tasks?.[t.id])
-    .reduce((sum, t) => sum + getTaskXP(t, rules), 0);
+    .reduce((sum, t) => sum + getTaskXP(t, rules), 0));
   const bonusLeft = Math.max(0, remaining - habitsLeftXP);
   const reconciles = habitsLeftXP + bonusLeft === remaining;
-  const perfectEarned = total > 0 && done === total ? rules.perfectDay : 0;
+  const perfectEarned = total > 0 && done === total ? xp(rules.perfectDay) : 0;
 
   if (!profile?.challengeStart || !meta) return null;
 

@@ -245,13 +245,15 @@ await seed({
     { id: 'mt_reading', name: 'Read 5 pages', icon: '📚', xp: 40, keystone: 2 },
   ],
 });
+// Stored era-1 values are untouched; they are quoted on the single ladder
+// Lifetime XP and the ranks live on, so 100 stored reads 1,000.
 const era1Row = await page.locator('.check-item').first().locator('.check-xp').textContent();
-check('6: an era-1 attempt still shows the XP it was started with',
-  era1Row.trim() === '100 XP', era1Row.trim());
+check('6: an era-1 attempt still shows the XP it was started with, on the lifetime ladder',
+  era1Row.trim() === '1,000 XP', era1Row.trim());
 await page.locator('.check-item .check-box').first().click();
 await page.waitForTimeout(400);
-check('6: and the day pays era-1 rates — 100 plus the era-1 flat perfect day is not applied yet',
-  /\+100/.test(await page.locator('.f4-xp-pill.earned').textContent()),
+check('6: and the day pays era-1 rates — the stored 100, converted, with no perfect day yet',
+  /\+1,000/.test(await page.locator('.f4-xp-pill.earned').textContent()),
   await page.locator('.f4-xp-pill.earned .f4-xp-val').textContent());
 
 // ══ 7: a Support Challenge is shown, never hidden ═════════════════════════
@@ -492,7 +494,7 @@ const earnedNow = Number((await page.locator('.f4-xp-pill.earned .f4-xp-val').te
 // Earned plus outstanding has to equal what the habits on screen are worth —
 // the reconciliation a reader can actually perform from the page.
 const rowSum = await page.locator('.check-item .check-xp').evaluateAll(els =>
-  els.reduce((n, e) => n + Number((/(\d+)/.exec(e.textContent) || [0, 0])[1]), 0));
+  els.reduce((n, e) => n + Number((e.textContent || '').replace(/[^\d]/g, '') || 0), 0));
 check('14.3: earned plus the habits still outstanding equals what the rows are worth',
   earnedNow + nums[1] === rowSum, `${earnedNow} + ${nums[1]} = ${earnedNow + nums[1]} vs rows ${rowSum}`);
 check('14.3: and the only thing beyond that is the day-level bonus',

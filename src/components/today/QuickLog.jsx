@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import RatingSlider from '../RatingSlider';
-import { getTaskXP } from '../../utils/gamification';
-import { dayRules } from '../../data/xpEconomy';
+import { makeTaskXP } from '../../utils/xpDisplay';
 
 /**
  * 📊 The Daily Log.
@@ -20,7 +19,8 @@ import { dayRules } from '../../data/xpEconomy';
  * `daily_log` task complete exactly once (see DailyView.handleUpdate), and the
  * task row scrolls here rather than toggling — so its XP is earned once, by
  * actually logging, and never independently of this card. The XP shown is the
- * task's own, read from the attempt, not a constant.
+ * task's own, read from the attempt and converted to the ladder Lifetime XP is
+ * on, not a constant.
  */
 export default function QuickLog({ dayData, onUpdate, profile, activeProfile, logRef, meta }) {
   const [showMore, setShowMore] = useState(false);
@@ -30,7 +30,7 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
 
   const logged = !!dayData?.tasks?.daily_log;
   const logTask = (profile?.tasks || []).find(t => t.id === 'daily_log');
-  const logXP = logTask ? getTaskXP(logTask, dayRules(meta)) : null;
+  const logXP = logTask ? makeTaskXP(meta)(logTask) : null;
 
   // Saved feedback. Every edit here writes straight through to the store, so
   // the only honest thing to show is that it has been written — briefly, then

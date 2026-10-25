@@ -16,12 +16,12 @@ import BuildBanner from './BuildBanner';
 import { FutureSelfLetterView } from './FutureSelfLetter';
 import {
   MWD_TASKS, getMWDComplete, getWarriorMessage,
-  sortTasksByKeystone, getTaskKeystone, getTaskXP, isKeystone, requiredTasksForDay,
+  sortTasksByKeystone, getTaskKeystone, isKeystone, requiredTasksForDay,
   computeChallengeScore,
 } from '../utils/gamification';
 import { KEYSTONE_EXPLAINER, WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { getTemplateById } from '../data/challengeTemplates';
-import { dayRules } from '../data/xpEconomy';
+import { makeTaskXP } from '../utils/xpDisplay';
 import ScheduledStartCard from './ScheduledStart';
 import {
   alsoSupportsLabel, groupTasksForDisplay, hasSupportChallenge,
@@ -531,8 +531,10 @@ export default function DailyView({ editDayNum, setView }) {
   const faithEnabled = profile?.faithEnabled || false;
   const hasGratitudeTask = tasks.some(t => t.id === 'mt_gratitude');
   const meta = getChallengeMeta();
-  // This attempt's own rate card: an era-1 attempt still shows era-1 task XP.
-  const rules = dayRules(meta);
+  // This attempt's own rate card, read through the display layer: it converts
+  // the attempt's stored units to the single ladder Lifetime XP and the ranks
+  // live on, so a legacy task's row quotes the XP the balance actually moves by.
+  const taskXP = makeTaskXP(meta);
   const isFatLoss = meta.templateId === 'fat_loss_phase';
   // Muscle Building shows the same progress-tracking card, plus whichever extra
   // measurements the user opted into at setup. Nothing is required.
@@ -734,7 +736,7 @@ export default function DailyView({ editDayNum, setView }) {
                   checked={!!dayData?.tasks?.[task.id]}
                   onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
                   keystone={getTaskKeystone(task)}
-                  xp={getTaskXP(task, rules)}
+                  xp={taskXP(task)}
                   supports={supports}
                   onOpenGuide={guideForTask(task) ? () => setGuideTaskId(task.id) : null}
                 />
@@ -760,7 +762,7 @@ export default function DailyView({ editDayNum, setView }) {
         return (
           <HabitGuide
             guide={g}
-            xp={getTaskXP(task, rules)}
+            xp={taskXP(task)}
             checked={!!dayData?.tasks?.[task.id]}
             onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
             onClose={() => setGuideTaskId(null)}
@@ -800,7 +802,7 @@ export default function DailyView({ editDayNum, setView }) {
                   checked={!!dayData?.tasks?.[task.id]}
                   onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
                   keystone={getTaskKeystone(task)}
-                  xp={getTaskXP(task, rules)}
+                  xp={taskXP(task)}
                   supports={supports}
                   onOpenGuide={guideForTask(task) ? () => setGuideTaskId(task.id) : null}
                 />

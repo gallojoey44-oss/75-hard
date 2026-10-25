@@ -1,4 +1,5 @@
 import { guideForTask } from '../data/habitGuides';
+import { displayXP } from '../utils/xpDisplay';
 
 /**
  * Priced previews — the one place a challenge's XP is rendered.
@@ -7,6 +8,11 @@ import { guideForTask } from '../data/habitGuides';
  * a hand-written constant, so what the library and the setup screens advertise
  * is what starting the challenge installs. The Challenge Library used to carry
  * its own XP strings, and they went stale the moment the economy changed.
+ *
+ * A preview is always of a NEW attempt, so its era is the current one and its
+ * display scale is 1 — these numbers already read as the lifetime ladder. The
+ * scale is applied anyway, from the preview itself, so the advertised figure is
+ * produced by the same rule as the figure the task row will show.
  */
 
 function capitalize(s) {
@@ -25,12 +31,13 @@ function stars(keystone) {
  * the challenge installs. It replaced hand-written strings that carried their
  * own XP numbers and went stale the moment the economy was rebalanced.
  */
-export function PricedRequirements({ tasks, onGuide }) {
+export function PricedRequirements({ tasks, onGuide, scale = 1 }) {
   if (!tasks?.length) return null;
   return (
     <ul className="tpl-task-list priced">
       {tasks.map(t => {
-        const label = `${t.icon || '•'} ${t.name}${stars(t.keystone) ? ' ' + stars(t.keystone) : ''} (${t.xp} XP)`;
+        const xp = displayXP(t.xp, scale).toLocaleString();
+        const label = `${t.icon || '•'} ${t.name}${stars(t.keystone) ? ' ' + stars(t.keystone) : ''} (${xp} XP)`;
         return guideForTask(t) ? (
           <li key={t.id} className="tpl-task-guided">
             <button className="tpl-task-link" onClick={() => onGuide?.(t)}>
@@ -47,12 +54,12 @@ export function PricedRequirements({ tasks, onGuide }) {
 }
 
 /** Weekly requirements, priced from the attempt's repriced definitions. */
-export function PricedWeekly({ weekly }) {
+export function PricedWeekly({ weekly, scale = 1 }) {
   if (!weekly?.length) return null;
   return (
     <ul className="tpl-task-list weekly priced-weekly">
       {weekly.map(d => (
-        <li key={d.id}>{d.icon} {d.label} — {d.perWeek}× per week ({d.xp} XP each)</li>
+        <li key={d.id}>{d.icon} {d.label} — {d.perWeek}× per week ({displayXP(d.xp, scale).toLocaleString()} XP each)</li>
       ))}
     </ul>
   );
@@ -69,7 +76,8 @@ export function PricedWeekly({ weekly }) {
  */
 export function XPSummaryCard({ preview }) {
   if (!preview) return null;
-  const fmt = (n) => Number(n).toLocaleString();
+  const scale = preview.displayScale ?? 1;
+  const fmt = (n) => displayXP(n, scale).toLocaleString();
   const cap = (n) => (Number.isFinite(n) ? fmt(n) : 'no limit');
   return (
     <div className="xp-preview-card">

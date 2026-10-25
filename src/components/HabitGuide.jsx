@@ -96,12 +96,12 @@ export default function HabitGuide({ guide, xp, checked, onToggle, onClose }) {
             <span className="hg-check-label">
               {checked ? 'Completed today' : 'Mark complete for today'}
             </span>
-            {typeof xp === 'number' && <span className="hg-check-xp">{xp} XP</span>}
+            {typeof xp === 'number' && <span className="hg-check-xp">{xp.toLocaleString()} XP</span>}
           </button>
         )}
 
         <Section
-          id="how" title="How to complete it" meta={typeof xp === 'number' ? `${xp} XP` : null}
+          id="how" title="How to complete it" meta={typeof xp === 'number' ? `${xp.toLocaleString()} XP` : null}
           open={!!open.how} onToggle={toggle}
         >
           <p className="hg-req">{guide.how.requirement}</p>

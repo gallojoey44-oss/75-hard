@@ -1,6 +1,7 @@
 import { CATEGORY, PERSONAL_BY_ID, shortTaskName } from './reminderPlan';
 import { HABIT_KEYS, habitKeyOf } from './habitKeys';
 import { getTaskXP, topIncompleteKeystone } from '../utils/gamification';
+import { displayXP } from '../utils/xpDisplay';
 
 /**
  * What each reminder actually says.
@@ -87,7 +88,7 @@ function universalPayload(reminder, ctx) {
       if (ctx.dayData?.tasks?.[logTask.id]) return null;
       return {
         title: '📊 Daily Log', tag, view: 'today',
-        body: `Log how today went — one rating is enough. +${getTaskXP(logTask)} XP.`,
+        body: `Log how today went — one rating is enough. +${displayXP(getTaskXP(logTask), ctx.xpScale).toLocaleString()} XP.`,
       };
     }
     case 'u_encouragement': {
@@ -135,7 +136,9 @@ function challengePayload(reminder, ctx) {
   // Never remind someone about something they have already done.
   if (ctx.dayData?.tasks?.[task.id]) return null;
 
-  const xp = getTaskXP(task);
+  // The attempt's stored XP on the lifetime ladder, so a notification and the
+  // task row it is about never quote two different numbers.
+  const xp = displayXP(getTaskXP(task), ctx.xpScale).toLocaleString();
   const keystone = (task.keystone || 0) >= 3;
   const name = shortTaskName(task);
   // The target lives in the part of the name after the colon, which is the

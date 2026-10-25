@@ -32,6 +32,7 @@ import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLed
 import { stampAttempt, repriceTasks, archiveEraOf, ledgerDisplayAmount, forgivenDisplayAmount, toDisplayXP } from '../utils/xpAttempt';
 import { reconciledSegmentBreakdown, toDisplay } from '../utils/xpBreakdown';
 import { CURRENT_ECONOMY_VERSION, economyVersionOf, displayScaleFor } from '../data/xpEconomy';
+import { displayXP, scaleOfMeta, scaleOfArchive } from '../utils/xpDisplay';
 import { recentGap, shouldShowComeback, missedDayDetail, buildXPHistory } from '../utils/missedDays';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 
@@ -1689,6 +1690,9 @@ export function AppProvider({ children }) {
       emoji: entry.challenge?.emoji,
       variant: entry.challenge?.variant,
       templateId: entry.challenge?.templateId,
+      // The era this attempt ran under, so the result screen can quote its XP
+      // on the lifetime ladder rather than in the attempt's own stored units.
+      xpEconomyVersion: archiveEraOf(entry),
       coldExposureEnabled: !!entry.challenge?.coldExposureUpgradeEnabled,
       weeklyRequirements: entry.weeklyRequirements || { tracked: false },
       coldExposureStartDate: entry.challenge?.coldExposureUpgradeStartDate || null,
@@ -2682,13 +2686,22 @@ export function AppProvider({ children }) {
    *
    * Carries its own stable key, so the same gap is never announced twice, and
    * `show` already accounts for dismissal and for the notice ageing out.
+   *
+   * `penalty` crosses into DISPLAY units here, because this is read by a card
+   * and nothing else: a legacy attempt's 50 XP gap cost the balance 500, and the
+   * notice has to say 500.
    */
   const getComeback = useCallback((profId = activeProfile) => {
     const inputs = missedDayInputs(profId);
     if (!inputs.rawDay) return null;                 // scheduled or no challenge
     const gap = recentGap(inputs);
     if (!gap) return null;
-    return { ...gap, show: shouldShowComeback(gap, profiles[profId]?.xpLedger?.seenComeback) };
+    const scale = scaleOfMeta(inputs.meta);
+    return {
+      ...gap,
+      penalty: displayXP(gap.penalty, scale),
+      show: shouldShowComeback(gap, profiles[profId]?.xpLedger?.seenComeback),
+    };
   }, [activeProfile, profiles, missedDayInputs]);
 
   /** Record that this gap has been seen, so it is not announced again. */
@@ -2705,11 +2718,22 @@ export function AppProvider({ children }) {
     return true;
   }, [activeProfile, getComeback, setProfiles]);
 
-  /** Every missed day in the CURRENT challenge, for its optional breakdown. */
+  /**
+   * Every missed day in the CURRENT challenge, for its optional breakdown.
+   *
+   * Display units, like getComeback: this feeds a card that sits beside Lifetime
+   * XP, so the two have to be the same currency.
+   */
   const getCurrentMissedDays = useCallback((profId = activeProfile) => {
     const inputs = missedDayInputs(profId);
     if (!inputs.rawDay) return { missed: [], missedDays: 0, totalPenalty: 0 };
-    return missedDayDetail(inputs);
+    const detail = missedDayDetail(inputs);
+    const scale = scaleOfMeta(inputs.meta);
+    return {
+      ...detail,
+      totalPenalty: displayXP(detail.totalPenalty, scale),
+      missed: detail.missed.map(m => ({ ...m, penalty: displayXP(m.penalty, scale) })),
+    };
   }, [activeProfile, missedDayInputs]);
 
   /**
@@ -2717,6 +2741,12 @@ export function AppProvider({ children }) {
    *
    * Archived rows keep their own figures forever; the live row moves with the
    * current challenge and leaves the main card entirely once it is archived.
+   *
+   * Every row is converted to DISPLAY units by the era that produced it — each
+   * archive by its own stamp, the live row by the active attempt's — because the
+   * reconciliation printed underneath them is the lifetime balance. Rows in
+   * stored units under a total in display units is the one thing a history
+   * section must not do: it would read as a tenfold accounting error.
    */
   const getXPHistory = useCallback((profId = activeProfile) => {
     const prof = profiles[profId];
@@ -2724,7 +2754,12 @@ export function AppProvider({ children }) {
     const seg = dayNum
       ? computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum)
       : { gained: 0, lost: 0 };
-    const missed = getCurrentMissedDays(profId);
+    // The RAW per-day detail, because the whole live row is scaled once below.
+    // getCurrentMissedDays returns display units and would be scaled twice.
+    const inputs = missedDayInputs(profId);
+    const missed = inputs.rawDay
+      ? missedDayDetail(inputs)
+      : { missed: [], missedDays: 0, totalPenalty: 0 };
     const live = prof?.activeChallenge && prof?.challengeStart && dayNum ? {
       id: 'current',
       name: prof.activeChallenge.name || 'Current challenge',
@@ -2737,12 +2772,29 @@ export function AppProvider({ children }) {
       missedDays: missed.missedDays,
       detailAvailable: true,
     } : null;
+    // Each row's own scale, by id. An archive carries the era it ran under; the
+    // live row takes the active attempt's, which is the era computeXPBreakdown
+    // converts the live segment with.
+    const archiveScale = new Map((archives[profId] || []).map(a => [a.id, scaleOfArchive(a)]));
+    const liveScale = scaleOfMeta(prof?.activeChallenge);
+    const rows = buildXPHistory({ archives: archives[profId] || [], archiveDetail: archiveDeficit, current: live })
+      .map(r => {
+        const scale = r.archived ? (archiveScale.get(r.id) ?? 1) : liveScale;
+        return {
+          ...r,
+          scale,
+          banked: displayXP(r.banked, scale),
+          earned: displayXP(r.earned, scale),
+          penalties: displayXP(r.penalties, scale),
+          partialPenalties: displayXP(r.partialPenalties, scale),
+        };
+      });
     return {
-      rows: buildXPHistory({ archives: archives[profId] || [], archiveDetail: archiveDeficit, current: live }),
+      rows,
       breakdown: getXPBreakdown(profId),
       floor: rankFloorXP(prof?.highestRank ?? 0),
     };
-  }, [activeProfile, profiles, archives, allDays, getDayNumber, getDayCompletion, getCurrentMissedDays, getXPBreakdown]);
+  }, [activeProfile, profiles, archives, allDays, getDayNumber, getDayCompletion, missedDayInputs, getXPBreakdown]);
 
   /**
    * Where one challenge's XP came from — daily tasks, perfect days, streaks,

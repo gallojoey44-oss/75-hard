@@ -37,7 +37,7 @@ const challengeXP = () => page.evaluate(() => {
 const rows = () => page.evaluate(() => [...document.querySelectorAll('.check-item')].map(el => ({
   name: el.querySelector('.check-name')?.firstChild?.textContent?.trim() || el.textContent.trim(),
   stars: (el.querySelector('.keystone-stars')?.textContent.match(/⭐/g) || []).length,
-  xp: parseInt(el.querySelector('.check-xp')?.textContent || '0', 10),
+  xp: parseInt((el.querySelector('.check-xp')?.textContent || '0').replace(/[^\d]/g, ''), 10),
   cls: el.className,
 })));
 
@@ -156,8 +156,10 @@ await gotoTab('Home');
 const legacyXP = await challengeXP();
 await gotoTab('Today'); await page.waitForSelector('.daily-view', { timeout: 5000 });
 const legacyRows = await rows();
-check('19: active attempt keeps its OLD protein value (25 XP, ⭐⭐)', (r => r && r.xp === 25 && r.stars === 2)(legacyRows.find(r => r.name.includes('protein'))), JSON.stringify(legacyRows.find(r => r.name.includes('protein'))));
-check('19: active attempt keeps its OLD photo value (10 XP, no stars)', (r => r && r.xp === 10 && r.stars === 0)(legacyRows.find(r => r.name.includes('progress photo'))));
+// Stored 25 and 10 — era-1 values, unchanged on disk, quoted on the lifetime
+// ladder (x10) like every other XP figure the app shows.
+check('19: active attempt keeps its OLD protein value (stored 25, shown 250, ⭐⭐)', (r => r && r.xp === 250 && r.stars === 2)(legacyRows.find(r => r.name.includes('protein'))), JSON.stringify(legacyRows.find(r => r.name.includes('protein'))));
+check('19: active attempt keeps its OLD photo value (stored 10, shown 100, no stars)', (r => r && r.xp === 100 && r.stars === 0)(legacyRows.find(r => r.name.includes('progress photo'))));
 check('19: active attempt is NOT silently upgraded to the new hierarchy', !legacyRows.some(r => r.xp === 40));
 // Nothing about the attempt's rules or the user's logged work may change. (The
 // long-standing Daily Log metric backfill may still mark daily_log on days that

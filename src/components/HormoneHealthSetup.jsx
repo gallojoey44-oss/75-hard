@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import * as HH from '../data/hormoneHealthConfig';
 import { previewConfigured } from '../data/challengeAttempt';
+import { displayXP } from '../utils/xpDisplay';
 import { XPSummaryCard } from './XPPreview';
 
 /**
@@ -23,6 +24,8 @@ export default function HormoneHealthSetup({ onCancel, onSubmit }) {
   // Priced from the attempt these choices would start, so every figure on this
   // screen is the figure the challenge will award.
   const preview = useMemo(() => previewConfigured(HH.HORMONE_HEALTH_TEMPLATE_ID, s), [s]);
+  // Priced on the lifetime ladder, by the same rule every other XP figure uses.
+  const xpd = (v) => displayXP(v, preview.displayScale).toLocaleString();
   const weeklyNotes = Object.fromEntries(HH.weeklyRequirementDefs(s).map(d => [d.id, d.note]));
 
   return (
@@ -83,7 +86,7 @@ export default function HormoneHealthSetup({ onCancel, onSubmit }) {
           <ul className="tpl-task-list">
             {preview.tasks.map(t => (
               <li key={t.id}>
-                {t.icon} {t.name} ({t.xp} XP){t.keystoneHabit ? ' ⭐⭐⭐ Keystone' : ''}
+                {t.icon} {t.name} ({xpd(t.xp)} XP){t.keystoneHabit ? ' ⭐⭐⭐ Keystone' : ''}
               </li>
             ))}
           </ul>
@@ -95,7 +98,7 @@ export default function HormoneHealthSetup({ onCancel, onSubmit }) {
           <ul className="tpl-task-list weekly">
             {preview.weekly.map(d => (
               <li key={d.id}>
-                {d.icon} {d.label} — {d.perWeek}× per week ({d.xp} XP each)
+                {d.icon} {d.label} — {d.perWeek}× per week ({xpd(d.xp)} XP each)
                 <span className="hh-req-note">{weeklyNotes[d.id]}</span>
               </li>
             ))}

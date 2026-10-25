@@ -216,7 +216,7 @@ check('5: and they are still 1-10 scales, not a shorter one',
 const logTaskXP = await page.evaluate(() => {
   const row = [...document.querySelectorAll('.check-item')]
     .find(e => /Complete Daily Log/i.test(e.textContent || ''));
-  return Number((/(\d+)\s*XP/.exec(row?.querySelector('.check-xp')?.textContent || '') || [])[1]);
+  return Number((/([\d,]+)\s*XP/.exec(row?.querySelector('.check-xp')?.textContent || '') || [])[1]?.replace(/,/g, ''));
 });
 check('5: it advertises the XP the Daily Log task actually awards',
   Number.isFinite(logTaskXP) && new RegExp(`${logTaskXP} XP`).test(expanded),
@@ -279,8 +279,10 @@ const xpAfter = await page.evaluate(() => {
   const t = document.querySelector('.xp-split-row')?.textContent || '';
   return parseInt((t.match(/Challenge:\s*([\d,]+)/) || [])[1]?.replace(/,/g, '') || '0', 10);
 });
+// An era-1 attempt: the task's stored 10 is quoted on the lifetime ladder as
+// 100. What this guards is unchanged — it is paid once, by logging.
 check('6: the Daily Log paid its XP exactly once',
-  xpAfter - xpBefore === 10, `${xpBefore} → ${xpAfter} (task xp 10)`);
+  xpAfter - xpBefore === 100, `${xpBefore} → ${xpAfter} (stored task xp 10)`);
 
 // And tapping the row again cannot un-complete or re-award it.
 await gotoTab('Today');

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useApp, DISCIPLINE_75_META, discipline75Tasks } from '../context/AppContext';
 import { previewAttempt, buildAttemptPayload } from '../data/challengeAttempt';
 import { PricedRequirements, PricedWeekly, XPSummaryCard } from './XPPreview';
+import { displayXP } from '../utils/xpDisplay';
 import BuildBanner from './BuildBanner';
 import {
   METRIC_LABELS, visibleChallenges, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK,
@@ -90,11 +91,15 @@ function VariantPanel({ variant, template, preview, onGuide }) {
   // but unbuilt one has no attempt to price, so its prose is shown with no XP
   // figures rather than figures nothing will honour.
   const priced = !!preview?.tasks?.length;
+  // Bonus missions are priced in the attempt's own units like every other
+  // figure here. A preview is of a new attempt, so the scale is 1 — applied all
+  // the same, by the one rule.
+  const bmXP = (v) => displayXP(v, preview?.displayScale ?? 1).toLocaleString();
   return (
     <div className="tpl-variant-panel">
       <div className="tpl-variant-section-label">Daily requirements</div>
       {priced
-        ? <PricedRequirements tasks={preview.tasks} onGuide={onGuide} />
+        ? <PricedRequirements tasks={preview.tasks} onGuide={onGuide} scale={preview.displayScale} />
         : (
           <ul className="tpl-task-list">
             {(variant.required_daily_tasks || []).map((t, i) => (
@@ -110,7 +115,7 @@ function VariantPanel({ variant, template, preview, onGuide }) {
       {(preview?.weekly?.length > 0 || variant.weekly_requirements?.length > 0) && (
         <>
           <div className="tpl-variant-section-label">Weekly requirements</div>
-          {preview?.weekly?.length > 0 && <PricedWeekly weekly={preview.weekly} />}
+          {preview?.weekly?.length > 0 && <PricedWeekly weekly={preview.weekly} scale={preview.displayScale} />}
           {variant.weekly_requirements?.length > 0 && (
             <ul className="tpl-task-list weekly">
               {variant.weekly_requirements.map((t, i) => <li key={i}>{withoutXP(t)}</li>)}
@@ -145,9 +150,9 @@ function VariantPanel({ variant, template, preview, onGuide }) {
           <ul className="tpl-task-list optional">
             {template.bonus_missions.map(bm => (
               <li key={bm.id}>
-                {bm.icon} {bm.name} — +{bm.xp} bonus XP
+                {bm.icon} {bm.name} — +{bmXP(bm.xp)} bonus XP
                 {preview && Number.isFinite(preview.bonusPerDayCap) && bm.xp > preview.bonusPerDayCap
-                  ? ` (capped at ${preview.bonusPerDayCap} a day)`
+                  ? ` (capped at ${bmXP(preview.bonusPerDayCap)} a day)`
                   : ''}
               </li>
             ))}
@@ -155,7 +160,7 @@ function VariantPanel({ variant, template, preview, onGuide }) {
           <div className="tpl-panel-note">
             Bonus Missions are optional. They add bonus XP but are never required to complete the day
             {preview && Number.isFinite(preview.bonusPerDayCap)
-              ? `, and optional XP is capped at ${preview.bonusPerDayCap} a day`
+              ? `, and optional XP is capped at ${bmXP(preview.bonusPerDayCap)} a day`
               : ''}.
           </div>
         </>
@@ -421,7 +426,7 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
                 </div>
               )}
               <div className="tpl-variant-section-label">Daily requirements</div>
-              <PricedRequirements tasks={preview.tasks} onGuide={setGuideTask} />
+              <PricedRequirements tasks={preview.tasks} onGuide={setGuideTask} scale={preview.displayScale} />
               {preview.tasks.some(t => guideForTask(t)) && (
                 <p className="tpl-task-guide-note">
                   Tap any requirement above to read its full strategy guide. Reading one never
@@ -431,7 +436,7 @@ function ChallengeCard({ template, isActive, activeVariant, onStart, setView }) 
               {preview.weekly.length > 0 && (
                 <>
                   <div className="tpl-variant-section-label">Weekly requirements</div>
-                  <PricedWeekly weekly={preview.weekly} />
+                  <PricedWeekly weekly={preview.weekly} scale={preview.displayScale} />
                 </>
               )}
               {template.id === MB.MUSCLE_BUILDING_TEMPLATE_ID && (

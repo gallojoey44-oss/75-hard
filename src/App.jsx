@@ -13,6 +13,7 @@ import { getDueReminders, getNotificationSupport, showNotification, markFired, s
 import { challengeOf, isSharedTask, LANE } from './utils/challengeStack';
 import { getTimezone } from './utils/installId';
 import { computeTotalXP, getMWDComplete } from './utils/gamification';
+import { displayXP, scaleOfMeta } from './utils/xpDisplay';
 import { buildTimeline, entriesInLastNDays } from './utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from './utils/insightsUtils';
 
@@ -111,7 +112,10 @@ function NotificationScheduler() {
         challengeName: meta.name,
         lifetimeXP,
         rankState,
-        challengeXP: xpData.total,
+        // Display units, like lifetimeXP beside it: a notification quotes the
+        // same figures the app shows, on the one ladder.
+        xpScale: scaleOfMeta(meta),
+        challengeXP: displayXP(xpData.total, scaleOfMeta(meta)),
         bottleneckLabel: bottleneck?.bottleneck ? bottleneck.label : null,
       };
 

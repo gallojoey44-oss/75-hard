@@ -394,11 +394,11 @@ export default function MuscleBuildingSetup({ onCancel, onSubmit }) {
         {/* ── What this setup is worth ── */}
         <div className="mb-field">
           <label className="mb-label">Daily requirements</label>
-          <PricedRequirements tasks={preview.tasks} />
+          <PricedRequirements tasks={preview.tasks} scale={preview.displayScale} />
           {preview.weekly.length > 0 && (
             <>
               <label className="mb-label">Weekly requirements</label>
-              <PricedWeekly weekly={preview.weekly} />
+              <PricedWeekly weekly={preview.weekly} scale={preview.displayScale} />
             </>
           )}
           <XPSummaryCard preview={preview} />

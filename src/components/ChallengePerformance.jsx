@@ -5,6 +5,7 @@ import {
   computeChallengeScore, getPassingConfig, getPerformanceStatus, isChallengePassed,
   projectFinalScore, computeTaskBreakdown, getTaskXP, getBonusXP,
 } from '../utils/gamification';
+import { displayXP, scaleOfMeta } from '../utils/xpDisplay';
 
 const STATUS_COLOR = {
   excellent: '#ffd47a',
@@ -88,6 +89,11 @@ export default function ChallengePerformance({ setView }) {
   const passed = isChallengePassed(score, meta);
   const projection = projectFinalScore(score, meta);
 
+  // Every XP figure here is a sum over this attempt's stored day records, so it
+  // is converted on the attempt's own scale — the same one the lifetime balance
+  // counts this segment with.
+  const xpd = (v) => displayXP(v, scaleOfMeta(meta));
+
   const tasks = profile?.tasks || [];
   const todayData = (allDays[activeProfile] || {})[dayNum];
   const todayReq = dailyRequired(todayData, tasks);
@@ -161,8 +167,8 @@ export default function ChallengePerformance({ setView }) {
           </div>
           {projection.remainingDays > 0 && projection.needRemaining > 0 && (
             <div className="perf-proj-guide">
-              Estimate: to finish at {cfg.passingScore}%, earn at least {projection.needRemaining.toLocaleString()} of
-              the remaining {projection.remainingAvailable.toLocaleString()} required XP.
+              Estimate: to finish at {cfg.passingScore}%, earn at least {xpd(projection.needRemaining).toLocaleString()} of
+              the remaining {xpd(projection.remainingAvailable).toLocaleString()} required XP.
             </div>
           )}
         </div>
@@ -175,12 +181,12 @@ export default function ChallengePerformance({ setView }) {
       {expanded && (
         <div className="perf-breakdown">
           <div className="perf-grid">
-            <div className="perf-cell"><span>Required XP earned</span><strong>{score.requiredEarned.toLocaleString()}</strong></div>
-            <div className="perf-cell"><span>Required XP available</span><strong>{score.requiredAvailable.toLocaleString()}</strong></div>
+            <div className="perf-cell"><span>Required XP earned</span><strong>{xpd(score.requiredEarned).toLocaleString()}</strong></div>
+            <div className="perf-cell"><span>Required XP available</span><strong>{xpd(score.requiredAvailable).toLocaleString()}</strong></div>
             <div className="perf-cell"><span>Keystone adherence</span><strong>{score.keystoneAdherence}% <em>(need {cfg.keystoneRequirement}%)</em></strong></div>
             <div className="perf-cell"><span>Completed days</span><strong>{score.completedDays}</strong></div>
             <div className="perf-cell"><span>Missed days</span><strong>{score.missedDays}</strong></div>
-            <div className="perf-cell"><span>Bonus XP (separate)</span><strong className="perf-bonus">+{(Object.values(allDays[activeProfile] || {}).reduce((s, d) => s + getBonusXP(d), 0)).toLocaleString()}</strong></div>
+            <div className="perf-cell"><span>Bonus XP (separate)</span><strong className="perf-bonus">+{xpd(Object.values(allDays[activeProfile] || {}).reduce((s, d) => s + getBonusXP(d), 0)).toLocaleString()}</strong></div>
           </div>
 
           {/* Today's performance */}
@@ -189,7 +195,7 @@ export default function ChallengePerformance({ setView }) {
             <div className="perf-row"><span>Daily Score</span><strong>{todayReq.pct}%</strong></div>
             <div className="perf-row"><span>Challenge Score</span><strong>{score.score}%</strong></div>
             <div className="perf-row"><span>Passing Score</span><strong>{cfg.passingScore}%</strong></div>
-            <div className="perf-row"><span>Bonus XP earned today</span><strong className="perf-bonus">+{todayBonus}</strong></div>
+            <div className="perf-row"><span>Bonus XP earned today</span><strong className="perf-bonus">+{xpd(todayBonus).toLocaleString()}</strong></div>
             <div className="perf-note">Bonus XP does not affect your Daily or Challenge Score.</div>
           </div>
 

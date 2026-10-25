@@ -88,17 +88,19 @@ await page.waitForTimeout(400);
 check('5: tapping logs a lifting session', (await sessions()).filter(s => s.type === 'lifting').length === 1);
 check('5: the row updates to 1 / 3', /1 \/ 3 this week/.test(await page.textContent('.wr-card')));
 await gotoTab('Home');
-check('11: a lifting session awards exactly 25 XP', (await challengeXP()) - xp0 === 25, `+${(await challengeXP()) - xp0}`);
+// An era-1 attempt: the weekly definitions store 25 and 20, shown on the
+// lifetime ladder as 250 and 200.
+check('11: a lifting session awards exactly its stored 25 XP (shown 250)', (await challengeXP()) - xp0 === 250, `+${(await challengeXP()) - xp0}`);
 await gotoTab('Today');
 await z2Row().locator('.wr-log-btn').first().click();
 await page.waitForTimeout(400);
 await gotoTab('Home');
-check('12: a Zone 2 session awards exactly 20 XP', (await challengeXP()) - xp0 === 45, `+${(await challengeXP()) - xp0}`);
+check('12: a Zone 2 session awards exactly its stored 20 XP (shown 200)', (await challengeXP()) - xp0 === 450, `+${(await challengeXP()) - xp0}`);
 
 // 6: persists across reload, with no duplicate XP
 await page.reload(); await page.waitForSelector('.dashboard', { timeout: 5000 }); await page.waitForTimeout(300);
 check('6: sessions persist after reload', (await sessions()).length === 2);
-check('23: no duplicate XP after reload', (await challengeXP()) - xp0 === 45, `+${(await challengeXP()) - xp0}`);
+check('23: no duplicate XP after reload', (await challengeXP()) - xp0 === 450, `+${(await challengeXP()) - xp0}`);
 
 // ══ 7: undo + remove ════════════════════════════════════════════════════════
 await gotoTab('Today'); await page.waitForSelector('.daily-view', { timeout: 5000 });
@@ -116,7 +118,7 @@ await page.locator('.wr-history .wr-remove-btn').first().click();
 await page.waitForTimeout(300);
 check('7: removing from history deletes the session', (await sessions()).length === 1);
 await gotoTab('Home');
-check('7: removal immediately updates XP', (await challengeXP()) - xp0 === 20, `+${(await challengeXP()) - xp0}`);
+check('7: removal immediately updates XP', (await challengeXP()) - xp0 === 200, `+${(await challengeXP()) - xp0}`);
 
 // ══ 8: multiple sessions on one day, each with a unique id ══════════════════
 await gotoTab('Today');

@@ -229,6 +229,11 @@ export function previewAttempt(args = {}) {
 
     // Identity of the rate card in force
     era: rules.version,
+    // Every figure below is in the attempt's stored units. A new attempt is
+    // stamped with the current era, whose scale is 1, so a preview reads the
+    // same either way — but the scale travels with it so the screens that show
+    // these numbers apply the one rule the whole app applies.
+    displayScale: rules.displayScale,
     tier: meta.effortTier,
     tierLabel: TIER_LABELS[meta.effortTier] || null,
     mode: meta.variant || null,

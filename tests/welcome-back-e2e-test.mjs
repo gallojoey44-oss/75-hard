@@ -22,6 +22,10 @@ function check(name, cond, extra = '') {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${extra ? ' — ' + extra : ''}`);
 }
 
+// Every fixture here is an ERA-1 (unstamped) attempt: XP is stored in units a
+// tenth the size of the current economy's and quoted on the lifetime ladder.
+const ERA1_SCALE = 10;
+
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 const errors = [];
@@ -112,13 +116,14 @@ check('2: the notice appears after returning', (await page.locator('.wb-card').c
 const wb = await page.textContent('.wb-card');
 check('2: it says Welcome Back', /Welcome Back/i.test(wb));
 check('2: it states the number of missed days', /6\s*missed days/i.test(wb.replace(/\s+/g, ' ')), wb.replace(/\s+/g, ' ').slice(0, 120));
-check('2: it states the XP cost', /−150/.test(wb), wb.replace(/\s+/g, ' ').slice(0, 120));
+check('2: it states the XP cost', /−1,500/.test(wb), wb.replace(/\s+/g, ' ').slice(0, 120));
 check('2: it reassures about rank and achievements',
   /rank and achievements are protected/i.test(wb));
 check('2: it shows the dates of the gap', /\w{3,}\s+\d/.test(wb.replace(/\s+/g, ' ')));
 
-// The arithmetic: 6 missed days at the flat 25 XP miss penalty.
-check('2: the figures are the real ones — 6 × 25 = 150', /6/.test(wb) && /150/.test(wb));
+// The arithmetic: 6 missed days at era 1's flat 25 XP miss penalty — stored as
+// 150, quoted on the lifetime ladder (the one the balance moves on) as 1,500.
+check('2: the figures are the real ones — 6 × 25 stored = 1,500 shown', /6/.test(wb) && /1,500/.test(wb));
 
 // ══ 3: today is never counted as missed ════════════════════════════════════
 // Day 10 is today and unlogged, but the gap is days 3–8 only.
@@ -193,7 +198,7 @@ details = await openDetails();
 // Day 10 today, days 1, 2 and 9 logged, so days 3–8 are missed: 6 × 25 = 150.
 check('6: the current challenge reports its missed days', /This challenge: 6 missed days/.test(details.replace(/\s+/g, ' ')),
   details.replace(/\s+/g, ' ').match(/This challenge[^−]*−\d+ XP/)?.[0]);
-check('6: with the XP it cost', /−150 XP/.test(details));
+check('6: with the XP it cost', /−1,500 XP/.test(details));
 check('6: the per-day list is collapsed by default',
   (await page.locator('.cmd-row').count()) === 0);
 await page.locator('.cmd-toggle').click();
@@ -246,8 +251,8 @@ check('7: the period\'s own rows add up',
     - (livePeriod['Unfinished days'] || 0) === liveBanked,
   JSON.stringify(livePeriod));
 check('7: and the missed-day penalty matches the days missed',
-  livePeriod['Missed-day penalties'] === livePeriod['Days missed'] * 25,
-  `${livePeriod['Days missed']} × 25 vs ${livePeriod['Missed-day penalties']}`);
+  livePeriod['Missed-day penalties'] === livePeriod['Days missed'] * 25 * ERA1_SCALE,
+  `${livePeriod['Days missed']} × ${25 * ERA1_SCALE} vs ${livePeriod['Missed-day penalties']}`);
 
 // ══ 8: completing the challenge clears the notice from Rank Details ════════
 await page.evaluate((banked) => {
@@ -265,7 +270,11 @@ await page.evaluate((banked) => {
   p.me.tasks = [{ id: 'fd_sleep', name: 'Hit sleep goal', icon: '😴', xp: 8, keystone: 0, source: 'template', order: 0 }];
   localStorage.setItem('profiles', JSON.stringify(p));
   localStorage.setItem('allDays', JSON.stringify({ me: {}, girlfriend: {} }));
-}, liveBanked);
+// An archive stores the figure its own era computed. The UI reads in display
+// units, so the banked total is divided back down — storing the displayed
+// figure would make the archive irreproducible from its own day records, and
+// the breakdown would (correctly) report itself unavailable.
+}, liveBanked / ERA1_SCALE);
 await page.reload(); await page.waitForSelector('.dashboard', { timeout: 8000 });
 await gotoTab('Home');
 await page.waitForTimeout(500);

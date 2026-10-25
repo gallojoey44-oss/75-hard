@@ -151,7 +151,7 @@ export default function CheckItem({
           without a target an entire extra line. */}
       <span className="f4-task-aside">
         {typeof xp === 'number' && (
-          <span className={`check-xp${checked ? ' earned' : ''}`}>{xp} XP</span>
+          <span className={`check-xp${checked ? ' earned' : ''}`}>{xp.toLocaleString()} XP</span>
         )}
         {/* Stops propagation so opening the guide never toggles the task. */}
         {onOpenGuide && (

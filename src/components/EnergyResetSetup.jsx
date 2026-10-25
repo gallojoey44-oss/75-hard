@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import * as ER from '../data/energyResetConfig';
 import { previewConfigured } from '../data/challengeAttempt';
+import { displayXP } from '../utils/xpDisplay';
 import { XPSummaryCard } from './XPPreview';
 
 /**
@@ -35,6 +36,8 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
     ]),
   ), [s]);
   const tasks = preview.tasks;
+  // Priced on the lifetime ladder, by the same rule every other XP figure uses.
+  const xpd = (v) => displayXP(v, preview.displayScale).toLocaleString();
   const weeklyPriced = preview.weekly;
   const weeklyNotes = Object.fromEntries(ER.weeklyRequirementDefs(s).map(d => [d.id, d.note]));
   const option = ER.durationOption(s.durationDays);
@@ -145,7 +148,7 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
           <ul className="tpl-task-list">
             {tasks.map(t => (
               <li key={t.id}>
-                {t.icon} {t.name} ({t.xp} XP){t.keystoneHabit ? ' ⭐⭐⭐ Keystone' : ''}
+                {t.icon} {t.name} ({xpd(t.xp)} XP){t.keystoneHabit ? ' ⭐⭐⭐ Keystone' : ''}
               </li>
             ))}
           </ul>
@@ -157,7 +160,7 @@ export default function EnergyResetSetup({ onCancel, onSubmit }) {
           <ul className="tpl-task-list weekly">
             {weeklyPriced.map(d => (
               <li key={d.id}>
-                {d.icon} {d.label} — {d.perWeek}× per week ({d.xp} XP each)
+                {d.icon} {d.label} — {d.perWeek}× per week ({xpd(d.xp)} XP each)
                 <span className="er-req-note">{weeklyNotes[d.id]}</span>
               </li>
             ))}

@@ -372,6 +372,10 @@ export function dayRules(meta) {
     return {
       version,
       economy,
+      // Carried on the rate card because every figure the engine returns is in
+      // THIS era's stored units, and a screen showing one of them next to
+      // Lifetime XP has to put the two on the same ladder.
+      displayScale: displayScaleFor(version),
       dailyBudget: null,
       perfectDay: economy.perfectDayFlat,
       allRatings: economy.allRatingsFlat,
@@ -397,6 +401,7 @@ export function dayRules(meta) {
   return {
     version,
     economy,
+    displayScale: displayScaleFor(version),
     dailyBudget: budget,
     perfectDay: Math.round(budget * economy.perfectDayRate),
     // Era 2 removes both duplicate awards: the all-ratings bonus and the

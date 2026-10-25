@@ -1,5 +1,6 @@
 import { computeDayXP, hasAnyActivity, requiredTasksForDay } from './gamification';
 import { getDateForDayNumber } from './dateUtils';
+import { dayRules } from '../data/xpEconomy';
 
 /**
  * Missed days, as something a person can read.
@@ -18,8 +19,11 @@ import { getDateForDayNumber } from './dateUtils';
  * Two rules throughout:
  *   • The current day is never counted. It is not finished, so it cannot have
  *     been missed.
- *   • Penalties are read from computeDayXP, not recalculated here, so this can
- *     never disagree with the balance.
+ *   • Penalties are read from computeDayXP under the ATTEMPT'S OWN rate card,
+ *     not recalculated here, so this can never disagree with the balance.
+ *     Without the rate card the default era-1 rules applied, and an era-2
+ *     attempt's missed day was reported at the old flat 25 while the balance
+ *     was charged a share of that attempt's budget.
  */
 
 /** How many consecutive missed days make a gap worth announcing. */
@@ -60,12 +64,13 @@ function lastChargeableDay(rawDay, dayNum) {
 export function missedDayDetail({ days, tasks, meta, challengeStart, rawDay, dayNum, penaltiesEnabled = true, xpStartDay = 1 }) {
   const out = [];
   let totalPenalty = 0;
+  const rules = dayRules(meta);
   const last = lastChargeableDay(rawDay, dayNum);
   for (let i = Math.max(1, xpStartDay); i <= last; i++) {
     const rec = (days || {})[i];
     if (hasAnyActivity(rec)) continue;
     const dayTasks = requiredTasksForDay(tasks || [], meta, challengeStart, i);
-    const { lost } = computeDayXP(rec, dayTasks, null, i, last, penaltiesEnabled, rawDay);
+    const { lost } = computeDayXP(rec, dayTasks, null, i, last, penaltiesEnabled, rawDay, rules);
     out.push({ dayNum: i, date: getDateForDayNumber(challengeStart, i), penalty: lost });
     totalPenalty += lost;
   }
@@ -104,9 +109,10 @@ export function recentGap({ days, tasks, meta, challengeStart, rawDay, dayNum, p
   if (missedDays < MIN_GAP_DAYS) return null;
 
   let penalty = 0;
+  const rules = dayRules(meta);
   for (let i = gapStart; i <= gapEnd; i++) {
     const dayTasks = requiredTasksForDay(tasks || [], meta, challengeStart, i);
-    penalty += computeDayXP((days || {})[i], dayTasks, null, i, last, penaltiesEnabled, rawDay).lost;
+    penalty += computeDayXP((days || {})[i], dayTasks, null, i, last, penaltiesEnabled, rawDay, rules).lost;
   }
 
   return {

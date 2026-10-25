@@ -1,5 +1,6 @@
 import { HABIT_KEYS, habitKeyOf } from './habitKeys';
 import { getTaskXP, getTaskKeystone, keystoneHabitsOf } from '../utils/gamification';
+import { displayXP } from '../utils/xpDisplay';
 
 /**
  * The reminder plan — what Forge should remind THIS user about, right now.
@@ -159,13 +160,13 @@ export function shortTaskName(task) {
 }
 
 /** What requirement a challenge reminder supports, for the settings row. */
-export function supportsLabel(task, challengeName, shared) {
+export function supportsLabel(task, challengeName, shared, xpScale = 1) {
   const tier = getTaskKeystone(task);
   const bits = [];
   if (challengeName) bits.push(challengeName);
   if (tier >= 3) bits.push('Keystone habit');
   else if (tier > 0) bits.push(`${'⭐'.repeat(tier)} supporting habit`);
-  bits.push(`${getTaskXP(task)} XP`);
+  bits.push(`${displayXP(getTaskXP(task), xpScale).toLocaleString()} XP`);
   if (shared) bits.push('also covers your support challenge');
   return bits.join(' · ');
 }
@@ -233,10 +234,10 @@ export function buildReminderPlan(prefs, ctx = {}) {
         label: shortTaskName(task),
         fullName: task.name,
         icon: task.icon || '•',
-        supports: supportsLabel(task, ctx.challengeName, shared),
+        supports: supportsLabel(task, ctx.challengeName, shared, ctx.xpScale),
         task, habitKey: habitKeyOf(task),
         keystone: getTaskKeystone(task),
-        xp: getTaskXP(task),
+        xp: displayXP(getTaskXP(task), ctx.xpScale),
         shared,
         ...read(id, def),
       };

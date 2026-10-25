@@ -8,6 +8,7 @@ import XPReconciliation from './XPReconciliation';
 import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 import BuildBanner, { BUILD_VERSION } from './BuildBanner';
 import { computeTotalXP, BADGE_DEFS, LEGACY_PASSING_SCORE } from '../utils/gamification';
+import { displayXP, scaleOfMeta, scaleOfArchive } from '../utils/xpDisplay';
 
 const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints', 'archives', 'notifPrefs', 'weeklyReflections'];
 
@@ -463,6 +464,10 @@ export default function SettingsView({ setView }) {
             {[...(archives[activeProfile] || [])].reverse().map(arch => {
               const daysLogged = Object.keys(arch.days || {}).length;
               const isOpen = expandedArchive === arch.id;
+              // Each archive's figures are in the units ITS era stored, and sit
+              // beside a Lifetime XP total on the same screen. Quoted on the
+              // lifetime ladder, by that archive's own era.
+              const axp = (v) => displayXP(v || 0, scaleOfArchive(arch)).toLocaleString();
               return (
                 <div key={arch.id} className="archive-row">
                   <button className="archive-row-header" onClick={() => setExpandedArchive(isOpen ? null : arch.id)}>
@@ -481,11 +486,11 @@ export default function SettingsView({ setView }) {
                         <div className="archive-row-meta">
                           Ended Early on {formatDateShort(arch.endedOn || arch.archivedAt)}
                           {' · '}{arch.daysActive ?? arch.endDayNum} {(arch.daysActive ?? arch.endDayNum) === 1 ? 'day' : 'days'} active
-                          {' · '}{daysLogged} days logged · {(arch.xpEarned || 0).toLocaleString()} XP
+                          {' · '}{daysLogged} days logged · {axp(arch.xpEarned)} XP
                         </div>
                       ) : (
                         <div className="archive-row-meta">
-                          Day {arch.endDayNum} of {arch.challenge?.durationDays || 75} · {daysLogged} days logged · {(arch.xpEarned || 0).toLocaleString()} XP
+                          Day {arch.endDayNum} of {arch.challenge?.durationDays || 75} · {daysLogged} days logged · {axp(arch.xpEarned)} XP
                         </div>
                       )}
                       {arch.endedEarly ? (
@@ -498,7 +503,7 @@ export default function SettingsView({ setView }) {
                         <div className="archive-row-perf">
                           <span className="archive-perf-score">Final Score: {arch.finalScore}%</span>
                           <span className={`archive-perf-result ${arch.passed ? 'pass' : 'fail'}`}>{arch.passed ? 'Passed' : 'Did Not Pass'}</span>
-                          <span className="archive-perf-bonus">Completion Bonus: {arch.bonusEarned ? `+${(arch.completionBonus || 0).toLocaleString()} XP` : 'Not Earned'}</span>
+                          <span className="archive-perf-bonus">Completion Bonus: {arch.bonusEarned ? `+${axp(arch.completionBonus)} XP` : 'Not Earned'}</span>
                         </div>
                       ) : (
                         <div className="archive-row-perf muted">Performance score unavailable for this past challenge.</div>
@@ -512,7 +517,7 @@ export default function SettingsView({ setView }) {
                         <div className="archive-detail"><span>Started</span><strong>{formatDateShort(arch.challengeStart)}</strong></div>
                         <div className="archive-detail"><span>Archived</span><strong>{formatDateShort(arch.archivedAt)}</strong></div>
                         <div className="archive-detail"><span>Days logged</span><strong>{daysLogged}</strong></div>
-                        <div className="archive-detail"><span>Task XP</span><strong>{(arch.taskXP ?? arch.xpEarned ?? 0).toLocaleString()}</strong></div>
+                        <div className="archive-detail"><span>Task XP</span><strong>{axp(arch.taskXP ?? arch.xpEarned)}</strong></div>
                         <div className="archive-detail"><span>Tasks</span><strong>{(arch.tasks || []).length}</strong></div>
                         <div className="archive-detail"><span>Badges</span><strong>{(arch.badges || []).length}</strong></div>
                         {arch.challenge?.templateId === 'mental_training_phase' && (
@@ -530,9 +535,9 @@ export default function SettingsView({ setView }) {
                             {arch.keystoneAdherence != null && (
                               <div className="archive-detail"><span>Keystone adherence</span><strong>{arch.keystoneAdherence}%</strong></div>
                             )}
-                            <div className="archive-detail"><span>Completion bonus</span><strong>{arch.bonusEarned ? `+${(arch.completionBonus || 0).toLocaleString()}` : 'Not earned'}</strong></div>
+                            <div className="archive-detail"><span>Completion bonus</span><strong>{arch.bonusEarned ? `+${axp(arch.completionBonus)}` : 'Not earned'}</strong></div>
                             {arch.bonusXP > 0 && (
-                              <div className="archive-detail"><span>Bonus XP</span><strong>+{arch.bonusXP.toLocaleString()}</strong></div>
+                              <div className="archive-detail"><span>Bonus XP</span><strong>+{axp(arch.bonusXP)}</strong></div>
                             )}
                           </>
                         )}
@@ -568,6 +573,10 @@ export default function SettingsView({ setView }) {
         {(() => {
           const dayNum = getDayNumber();
           const xpData = dayNum ? computeTotalXP(allDays, profiles, activeProfile, getDayCompletion, dayNum, dayNum) : { total: 0, rawTotal: 0 };
+          // Challenge XP sits one row above Lifetime XP, so it is converted to
+          // the same ladder — exactly the factor computeXPBreakdown applies to
+          // this segment on its way into that total.
+          const challengeXP = displayXP(xpData.total, scaleOfMeta(getChallengeMeta()));
           // Same normalized rank state Home uses — effective Lifetime XP is
           // never below the permanent floor, so these two screens cannot
           // disagree about either the rank or the number beside it.
@@ -583,7 +592,7 @@ export default function SettingsView({ setView }) {
               </div>
               <div className="settings-row">
                 <span className="settings-row-label">Challenge XP</span>
-                <span className="settings-row-value">{xpData.total.toLocaleString()} XP</span>
+                <span className="settings-row-value">{challengeXP.toLocaleString()} XP</span>
               </div>
               <div className="settings-row" style={{ marginBottom: rankInfo.floorXP > 0 ? 4 : 12 }}>
                 <span className="settings-row-label">Lifetime XP</span>
@@ -832,7 +841,7 @@ export default function SettingsView({ setView }) {
             <h3>Delete This Archive?</h3>
             <p>
               The archived challenge from {formatDateShort(deleteArchTarget.challengeStart)} — including its
-              {' '}{(deleteArchTarget.xpEarned || 0).toLocaleString()} XP toward your lifetime total — will be permanently removed.
+              {' '}{displayXP(deleteArchTarget.xpEarned || 0, scaleOfArchive(deleteArchTarget)).toLocaleString()} XP toward your lifetime total — will be permanently removed.
               This cannot be undone.
             </p>
             <div className="modal-actions">

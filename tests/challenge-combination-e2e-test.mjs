@@ -161,11 +161,21 @@ await gotoTab('Today');
 const sharedRow = page.locator('.check-item.shared-habit').first();
 check('4: the shared sleep habit renders as a single row',
   (await page.locator('.check-item', { hasText: 'Sleep 8 hours' }).count()) === 1);
+// Read what the row advertises while it is on screen, so the gain is compared
+// against the app's own figure rather than a number copied into the test.
+const sharedShown = await page.evaluate(() => {
+  const row = [...document.querySelectorAll('.check-item')].find(e => /Sleep 8 hours/.test(e.textContent || ''));
+  return parseInt((row?.querySelector('.check-xp')?.textContent || '').replace(/[^\d]/g, ''), 10);
+});
 await sharedRow.click();
 await page.waitForTimeout(400);
 await gotoTab('Home');
 const xpGain = (await challengeXP()) - xp0;
-check('5: completing the shared habit awards its 25 XP exactly once — not 50', xpGain === 25, `+${xpGain}`);
+// The row is from an era-1 (unstamped) stack, so its stored 25 is quoted on the
+// lifetime ladder as 250 — and the point of the check is unchanged: the shared
+// habit pays that figure ONCE, not once per challenge.
+check('5: completing the shared habit awards its advertised XP exactly once — not twice',
+  xpGain === sharedShown && sharedShown === 250, `+${xpGain}, row says ${sharedShown}`);
 await gotoTab('Today');
 const sharedChecked = await page.evaluate(() =>
   [...document.querySelectorAll('.check-item.shared-habit .check-box')].every(b => b.classList.contains('checked')));

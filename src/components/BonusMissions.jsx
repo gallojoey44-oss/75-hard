@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { getTemplateById, isColdExposureRequiredForDate, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
 import { getDateForDayNumber } from '../utils/dateUtils';
 import { dayRules } from '../data/xpEconomy';
+import { displayXP } from '../utils/xpDisplay';
 
 // 🎯 Bonus Missions — an optional, interactive section shown below the required
 // daily tasks. Bonus Missions award bonus XP but never count toward required
@@ -40,10 +41,16 @@ export default function BonusMissions({ dayNumber, isEditable = true }) {
   // Optional XP is capped per day by this attempt's own rate card, so the
   // summary reports what the day will actually be credited rather than the sum
   // of the missions' nominal values.
-  const dailyCap = dayRules(meta).bonusPerDayCap ?? Infinity;
+  const rules = dayRules(meta);
+  const dailyCap = rules.bonusPerDayCap ?? Infinity;
   const nominalXP = missions.reduce((s, m) => s + (Number(bonusDone[m.id]) || 0), 0);
   const bonusXP = Math.min(nominalXP, dailyCap);
   const atCap = Number.isFinite(dailyCap) && nominalXP > dailyCap;
+  // Bonus XP is stored in the attempt's own units like everything else, and is
+  // shown on the lifetime ladder like everything else.
+  const scale = rules.displayScale;
+  const bxp = (v) => displayXP(v, scale);
+  const capShown = Number.isFinite(dailyCap) ? bxp(dailyCap) : dailyCap;
 
   // Challenge-specific suggestions not already in the list.
   const template = getTemplateById(meta.templateId);
@@ -64,16 +71,16 @@ export default function BonusMissions({ dayNumber, isEditable = true }) {
       <div className="section-title" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <span>🎯 Bonus Missions</span>
         <span className="bonus-summary">
-          {completedCount} completed · <span className="bonus-xp-label">+{bonusXP} Bonus XP</span>
+          {completedCount} completed · <span className="bonus-xp-label">+{bxp(bonusXP).toLocaleString()} Bonus XP</span>
         </span>
       </div>
       <p className="bonus-subtitle">
         Optional ways to go beyond today&apos;s mission.
-        {Number.isFinite(dailyCap) && ` Bonus XP is capped at ${dailyCap} a day.`}
+        {Number.isFinite(dailyCap) && ` Bonus XP is capped at ${capShown.toLocaleString()} a day.`}
       </p>
       {atCap && (
         <p className="bonus-subtitle">
-          You have reached today&apos;s {dailyCap} XP bonus cap — further missions still count as
+          You have reached today&apos;s {capShown.toLocaleString()} XP bonus cap — further missions still count as
           done, but add no more XP today.
         </p>
       )}
@@ -101,7 +108,7 @@ export default function BonusMissions({ dayNumber, isEditable = true }) {
                 <span className={`bonus-item-name${done ? ' done' : ''}`}>{m.name}</span>
                 {m.desc && <span className="bonus-item-desc">{m.desc}</span>}
               </div>
-              <span className="bonus-item-xp">+{m.xp}</span>
+              <span className="bonus-item-xp">+{bxp(m.xp).toLocaleString()}</span>
               {manage && (
                 <div className="bonus-item-manage">
                   {isRecurring && (
@@ -137,6 +144,7 @@ export default function BonusMissions({ dayNumber, isEditable = true }) {
 
       {showAdd && (
         <AddBonusMission
+          scale={scale}
           suggestions={suggestions}
           onAddSuggestion={(s) => addBonusMission(s, { recurring: true })}
           onAddCustom={(def, recurring) => addBonusMission(def, recurring ? { recurring: true } : { dayNumber })}
@@ -147,18 +155,25 @@ export default function BonusMissions({ dayNumber, isEditable = true }) {
   );
 }
 
-function AddBonusMission({ suggestions, onAddSuggestion, onAddCustom, onClose }) {
+/**
+ * `scale` is the attempt's display scale. The field is in DISPLAY units — the
+ * same units every other XP figure on the page is in — and the value is divided
+ * back down to the attempt's stored units on the way in, so a legacy attempt is
+ * never handed a mission worth ten times what was typed.
+ */
+function AddBonusMission({ suggestions, onAddSuggestion, onAddCustom, onClose, scale = 1 }) {
   const [name, setName] = useState('');
-  const [xp, setXp] = useState(15);
+  const [xp, setXp] = useState(15 * scale);
   const [icon, setIcon] = useState('🎯');
   const [recurring, setRecurring] = useState(true);
 
   function submit() {
     const trimmed = name.trim();
     if (!trimmed) return;
-    onAddCustom({ name: trimmed, xp: Math.max(0, Math.min(100, Number(xp) || 0)), icon }, recurring);
+    const stored = Math.round((Number(xp) || 0) / scale);
+    onAddCustom({ name: trimmed, xp: Math.max(0, Math.min(100, stored)), icon }, recurring);
     setName('');
-    setXp(15);
+    setXp(15 * scale);
     setIcon('🎯');
     onClose();
   }
@@ -171,7 +186,7 @@ function AddBonusMission({ suggestions, onAddSuggestion, onAddCustom, onClose })
           <div className="bonus-suggestions">
             {suggestions.map(s => (
               <button key={s.id} className="bonus-suggestion-chip" onClick={() => onAddSuggestion(s)}>
-                {s.icon} {s.name} <span className="bonus-suggestion-xp">+{s.xp}</span>
+                {s.icon} {s.name} <span className="bonus-suggestion-xp">+{Math.round((Number(s.xp) || 0) * scale).toLocaleString()}</span>
               </button>
             ))}
           </div>
@@ -206,7 +221,8 @@ function AddBonusMission({ suggestions, onAddSuggestion, onAddCustom, onClose })
               type="number"
               className="inline-input"
               min={0}
-              max={100}
+              max={100 * scale}
+              step={scale}
               value={xp}
               onChange={e => setXp(e.target.value)}
             />
