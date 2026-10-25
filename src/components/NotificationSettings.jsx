@@ -8,6 +8,7 @@ import {
   showTestNotification, backgroundTestPush, getPushStatus,
   scheduledTestPush, localSubscriptionState, timeInQuietHours, minutesOf,
 } from '../utils/notificationUtils';
+import { scaleOfMeta } from '../utils/xpDisplay';
 import {
   buildReminderPlan, CATEGORY, CATEGORY_META, PERSONAL_HABITS,
   BUSY_DAILY_THRESHOLD, TARGET_DAILY_MIN, TARGET_DAILY_MAX, CUSTOM_PREFIX,
@@ -179,6 +180,9 @@ export default function NotificationSettings() {
       // has finished.
       challengeActive: !!dayNum && !!meta?.templateId && meta.templateId !== 'forge_daily',
       supportChallengeName: challengeOf(profile, LANE.SUPPORT)?.name || null,
+      // The attempt's display scale, so the XP in a reminder's "supports" line
+      // reads on the same ladder as the task row the reminder is about.
+      xpScale: scaleOfMeta(meta),
       isSharedTask,
     };
   }, [activeProfile, profile, getChallengeMeta, getRawDayNumber, getDayData]);
