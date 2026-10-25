@@ -6935,10 +6935,11 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 .f4-task-title { display: block; }
 .f4-task .keystone-stars { white-space: nowrap; }
 
-/* One brief sentence is the brief. Anything longer is clamped and lives in
-   full inside the habit's guide. */
+/* The full guidance is in the DOM; three lines of it are on screen, which
+   covers all but the longest of them (median 90 characters, p90 147). The
+   habit's guide carries the rest. */
 .f4-task .check-desc {
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
@@ -7150,3 +7151,6 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
     --f4-accent-line: var(--accent-glow);
   }
 }
+
+/* The keystone footnote, after the habits rather than ahead of them. */
+.f4-tasks-card .keystone-explainer { margin: 10px 0 0; }

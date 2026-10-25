@@ -301,6 +301,8 @@ function TaskList({ tasks, profile, renderTask, hasKeystones, keystoneExplainer 
   const stacked = hasSupportChallenge(profile);
   const groups = groupTasksForDisplay(tasks, sortTasksByKeystone);
 
+  // A footnote, placed after the habits it explains. Above them it pushed the
+  // first habit further down the phone than the thing it was annotating.
   const explainer = hasKeystones
     ? <div className="keystone-explainer">⭐ {keystoneExplainer}</div>
     : null;
@@ -308,8 +310,8 @@ function TaskList({ tasks, profile, renderTask, hasKeystones, keystoneExplainer 
   if (!stacked) {
     return (
       <>
-        {explainer}
         {groups.primary.map(t => renderTask(t, null))}
+        {explainer}
       </>
     );
   }
@@ -326,8 +328,8 @@ function TaskList({ tasks, profile, renderTask, hasKeystones, keystoneExplainer 
           <span className="lane-kicker">⚔️ Primary Challenge</span>
           <span className="lane-name">{primaryEmoji} {primaryName}</span>
         </div>
-        {explainer}
         {groups.primary.map(t => renderTask(t, alsoSupportsLabel(t, profile)))}
+        {explainer}
       </div>
 
       <div className="lane-section support">
@@ -584,9 +586,6 @@ export default function DailyView({ editDayNum, setView }) {
   })();
 
   const displayPct = isMWD ? mwdPct : pct;
-  const taskCount  = isMWD
-    ? `${MWD_TASKS.filter(t => dayData?.mwdTasks?.[t.id]).length} of ${MWD_TASKS.length} complete`
-    : `${tasks.filter(t => dayData?.tasks?.[t.id]).length} of ${tasks.length} complete`;
 
   // SCHEDULED attempt: Day 1 has not arrived, so there is no day to show. Never
   // render a task list (which would look like — and could be checked off as —
@@ -683,7 +682,6 @@ export default function DailyView({ editDayNum, setView }) {
         <div className="section-card f4-tasks-card">
           <div className="section-title f4-tasks-head">
             <span className="f4-card-title">{isMWD ? '🛡️ Minimum Warrior Day' : 'Daily Tasks'}</span>
-            <span className="f4-tasks-count">{taskCount}</span>
             <span className="f4-tasks-tools">
               {isCurrentDay && (
                 <button
@@ -780,7 +778,6 @@ export default function DailyView({ editDayNum, setView }) {
           <div className="section-card f4-tasks-card">
           <div className="section-title f4-tasks-head">
             <span className="f4-card-title">Daily Tasks</span>
-            <span className="f4-tasks-count">{taskCount}</span>
             <span className="f4-tasks-tools">
               {setView && (
                 <button className="manage-tasks-link" onClick={() => setView('settings')} title="Manage tasks">

@@ -164,9 +164,17 @@ check('2: a double tap toggles, it never pays twice',
 const row = page.locator('.check-item').first();
 const rowText = await row.textContent();
 check('3: the row states the habit', /Sleep opportunity/.test(rowText));
-check('3: with one sentence of what qualifies',
-  /Time in bed and a consistent wake time\./.test(rowText) && !/The opportunity is what counts/.test(rowText),
-  'first sentence only');
+// The whole of a habit's guidance is on the row, not just its first sentence:
+// for some habits the point is in the second one ("no special salt, trace
+// minerals or electrolyte products required"). CSS clamps the display; the
+// text itself is never cut.
+check('3: with the habit\'s full guidance, not just its first sentence',
+  /Time in bed and a consistent wake time\./.test(rowText) &&
+  /The opportunity is what counts/.test(rowText),
+  'full desc present');
+check('3: and it is clamped for height rather than truncated in the text',
+  (await page.locator('.check-item .check-desc').first().evaluate(el =>
+    getComputedStyle(el).webkitLineClamp)) === '3');
 check('3: its real XP', (await row.locator('.check-xp').textContent()).trim() === '30 XP');
 check('3: a keystone marker', (await row.locator('.keystone-stars').count()) === 1);
 check('3: and its completion condition', /≥ 8 hours/.test(rowText));

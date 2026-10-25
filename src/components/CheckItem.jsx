@@ -25,20 +25,6 @@ const DIRECTION_PREFIX = {
   exactly: '',
 };
 
-/**
- * The first sentence of a habit's guidance.
- *
- * The row promises one brief sentence explaining what qualifies, so it takes
- * one rather than clamping mid-word and trailing off. The full text is always
- * a tap away in the habit's guide.
- */
-function firstSentence(text) {
-  const t = String(text || '').trim();
-  if (!t) return '';
-  const m = /^(.+?[.!?])(\s|$)/.exec(t);
-  return m ? m[1] : t;
-}
-
 /** A task's own completion condition, as a short readable chip. */
 function targetLabel(target) {
   if (!target || target.value == null) return null;
@@ -55,7 +41,13 @@ export default function CheckItem({
   task, checked, onToggle, disabled, keystone = 0, xp, supports = null,
   onOpenGuide = null, variant = 'row',
 }) {
-  const desc = firstSentence(task.desc);
+  // The WHOLE of the habit's guidance, clamped by CSS rather than cut here.
+  // Taking only the first sentence read tidily and quietly dropped the point:
+  // Hormone Health's hydration habit says "Your normal daily hydration target"
+  // and then, in the sentence that actually matters, that no special salt or
+  // electrolyte product is required. A row that answers "what counts?" cannot
+  // throw away the half that answers it.
+  const desc = task.desc;
   const card = variant === 'card';
   const target = targetLabel(task.target);
 
