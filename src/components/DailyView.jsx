@@ -612,15 +612,27 @@ export default function DailyView({ editDayNum, setView }) {
           <h1 className="f4-page-title">{isCurrentDay ? 'Today' : `Day ${selectedDayNum}`}</h1>
           <div className="f4-page-date">{formatDateLong(dateStr)}</div>
         </div>
-        <div className="daily-header-meta f4-page-flag">
-          {currentDayNum && selectedDayNum < currentDayNum ? (
-            <>
-              <span className="edit-other-label">✏️ Editing past day</span>
-              <span className="logged-late-badge">Logged late</span>
-            </>
-          ) : selectedDayNum > (currentDayNum || 0) ? (
-            <span className="edit-other-label">📋 Planning ahead</span>
-          ) : null}
+        {/* Day navigation lives in the header rather than between the summary
+            and the work. It is how another day is corrected — worth one row of
+            the page, not a band across it: on an iPhone that band was most of
+            the reason the first habit started below the fold. */}
+        <div className="f4-page-aside">
+          <DaySelector
+            selected={selectedDayNum}
+            current={currentDayNum}
+            onChange={setSelectedDayNum}
+            duration={getChallengeMeta().durationDays}
+          />
+          <div className="daily-header-meta f4-page-flag">
+            {currentDayNum && selectedDayNum < currentDayNum ? (
+              <>
+                <span className="edit-other-label">✏️ Editing past day</span>
+                <span className="logged-late-badge">Logged late</span>
+              </>
+            ) : selectedDayNum > (currentDayNum || 0) ? (
+              <span className="edit-other-label">📋 Planning ahead</span>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -644,14 +656,6 @@ export default function DailyView({ editDayNum, setView }) {
         isFuture={selectedDayNum > (currentDayNum || 0)}
       />
 
-      {/* Day navigation sits under the summary: it is how a past day is
-          corrected, not the first thing today is about. */}
-      <DaySelector
-        selected={selectedDayNum}
-        current={currentDayNum}
-        onChange={setSelectedDayNum}
-        duration={getChallengeMeta().durationDays}
-      />
 
       {/* Challenge coaching — repeatedly skipped keystone */}
       {isCurrentDay && coachingKeystone && (
@@ -680,22 +684,22 @@ export default function DailyView({ editDayNum, setView }) {
           <div className="section-title f4-tasks-head">
             <span className="f4-card-title">{isMWD ? '🛡️ Minimum Warrior Day' : 'Daily Tasks'}</span>
             <span className="f4-tasks-count">{taskCount}</span>
-          </div>
-          <div className="f4-tasks-tools">
-            {isCurrentDay && (
-              <button
-                className={`mwd-toggle-btn${isMWD ? ' active' : ''}`}
-                onClick={handleToggleMWD}
-                title={isMWD ? 'Switch to full challenge' : 'Switch to Minimum Warrior Day'}
-              >
-                {isMWD ? '↩ Full Mode' : '🛡️ MWD'}
-              </button>
-            )}
-            {setView && (
-              <button className="manage-tasks-link" onClick={() => setView('settings')}>
-                ✏️ Manage Tasks
-              </button>
-            )}
+            <span className="f4-tasks-tools">
+              {isCurrentDay && (
+                <button
+                  className={`mwd-toggle-btn${isMWD ? ' active' : ''}`}
+                  onClick={handleToggleMWD}
+                  title={isMWD ? 'Switch to full challenge' : 'Switch to Minimum Warrior Day'}
+                >
+                  {isMWD ? '↩ Full' : '🛡️ MWD'}
+                </button>
+              )}
+              {setView && (
+                <button className="manage-tasks-link" onClick={() => setView('settings')} title="Manage tasks">
+                  ✏️ Manage
+                </button>
+              )}
+            </span>
           </div>
 
           {isMWD ? (
@@ -770,16 +774,21 @@ export default function DailyView({ editDayNum, setView }) {
       {/* ── Girlfriend: colored task cards ── */}
       {!isMe && (
         <>
-          {setView && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
-              <button
-                className="manage-tasks-link"
-                onClick={() => setView('settings')}
-              >
-                ✏️ Manage Tasks
-              </button>
-            </div>
-          )}
+          {/* The same card the other profile gets — heading, count and tools.
+              One design means one of these, not a bare list on one profile and
+              a titled card on the other. */}
+          <div className="section-card f4-tasks-card">
+          <div className="section-title f4-tasks-head">
+            <span className="f4-card-title">Daily Tasks</span>
+            <span className="f4-tasks-count">{taskCount}</span>
+            <span className="f4-tasks-tools">
+              {setView && (
+                <button className="manage-tasks-link" onClick={() => setView('settings')} title="Manage tasks">
+                  ✏️ Manage
+                </button>
+              )}
+            </span>
+          </div>
 
           <div className="gf-tasks f4-task-list">
             <TaskList
@@ -801,6 +810,7 @@ export default function DailyView({ editDayNum, setView }) {
                 />
               )}
             />
+          </div>
           </div>
 
           <div className="validate-btn-wrap">

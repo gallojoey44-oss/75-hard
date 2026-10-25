@@ -100,12 +100,25 @@ export default function ChallengeHeaderCard({ onOpenChallenge }) {
         />
       )}
 
+      {/* Current XP and a rank threshold are different things, and a profile
+          sitting exactly on its floor shows the same number for both — so the
+          figure says what it is, and the distance to the next rank is stated
+          as a distance rather than another bare total. */}
       <div className="f4-challenge-foot">
         <div className="f4-rank">
           <span className="f4-rank-badge" aria-hidden="true">🛡️</span>
           <span className="f4-rank-text">
             <span className="f4-rank-name">{rank.current?.name}</span>
-            <span className="f4-rank-xp">{rank.xp.toLocaleString()} XP</span>
+            <span className="f4-rank-xp">
+              <strong>{rank.xp.toLocaleString()}</strong> XP now
+            </span>
+            {rank.next ? (
+              <span className="f4-rank-next">
+                {rank.xpToNext.toLocaleString()} more to {rank.next.name}
+              </span>
+            ) : (
+              <span className="f4-rank-next">Top rank — XP keeps accruing</span>
+            )}
           </span>
         </div>
         {onOpenChallenge && (

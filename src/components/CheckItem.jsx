@@ -83,7 +83,14 @@ export default function CheckItem({
         <span className="check-tick">✓</span>
       </div>
 
-      <span className="check-icon" aria-hidden="true">{task.icon || '•'}</span>
+      <span className="f4-task-mark">
+        <span className="check-icon" aria-hidden="true">{task.icon || '•'}</span>
+        {keystone > 0 && (
+          <span className="keystone-stars" title={`Keystone habit (${keystone} of 3)`}>
+            {'⭐'.repeat(keystone)}
+          </span>
+        )}
+      </span>
 
       <span className={`check-name${checked ? ' done' : ''}`}>
         <span className="f4-task-title">{task.name}</span>
@@ -93,35 +100,33 @@ export default function CheckItem({
             stays three columns wide. Giving the guide a column of its own
             squeezed the name into a word-per-line column on a phone. */}
         <span className="f4-task-chips">
-          {/* The keystone marker sits with the other chips rather than after
-              the name: inline, it pushed real habit names onto a third line. */}
-          {keystone > 0 && (
-            <span className="keystone-stars f4-chip f4-chip-key" title="Keystone habit">
-              {'⭐'.repeat(keystone)}
-            </span>
-          )}
           {target && <span className="f4-chip f4-chip-target">{target}</span>}
           {/* One behaviour, two challenges: this row satisfies both and pays XP once. */}
           {supports && (
             <span className={`check-supports f4-chip${card ? ' gf-task-supports' : ''}`}>🔗 {supports}</span>
           )}
-          {/* Stops propagation so opening the guide never toggles the task. */}
-          {onOpenGuide && (
-            <button
-              className={`check-guide${card ? ' gf-task-guide' : ''}`}
-              onClick={(e) => { e.stopPropagation(); onOpenGuide(); }}
-              aria-label={`Open the ${task.name} strategy guide`}
-              title="Strategy guide"
-            >
-              Guide
-            </button>
-          )}
         </span>
       </span>
 
-      {typeof xp === 'number' && (
-        <span className={`check-xp${checked ? ' earned' : ''}`}>{xp} XP</span>
-      )}
+      {/* The XP a habit is worth and the way into its guide share the right
+          column. The guide used to sit in the chip row, which cost every habit
+          without a target an entire extra line. */}
+      <span className="f4-task-aside">
+        {typeof xp === 'number' && (
+          <span className={`check-xp${checked ? ' earned' : ''}`}>{xp} XP</span>
+        )}
+        {/* Stops propagation so opening the guide never toggles the task. */}
+        {onOpenGuide && (
+          <button
+            className={`check-guide${card ? ' gf-task-guide' : ''}`}
+            onClick={(e) => { e.stopPropagation(); onOpenGuide(); }}
+            aria-label={`Open the ${task.name} strategy guide`}
+            title="Strategy guide"
+          >
+            Guide
+          </button>
+        )}
+      </span>
     </div>
   );
 }

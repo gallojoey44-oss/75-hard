@@ -7013,3 +7013,140 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 
 .f4-progress-kicker,
 .f4-lane-kicker { color: #8585AC; }
+
+/* ─── Forge 4.0: XP reconciliation line, rank clarity, density ───────────── */
+
+.f4-xp-note {
+  flex-basis: 100%; margin-top: 10px; padding-top: 9px;
+  border-top: 1px solid var(--f4-hairline);
+  font-size: var(--f4-fs-xs); color: var(--text2); line-height: 1.45;
+}
+.f4-xp-note strong { color: var(--text); font-weight: 700; }
+.f4-progress-card { flex-wrap: wrap; }
+
+.f4-rank-xp { font-size: var(--f4-fs-xs); color: var(--text2); }
+.f4-rank-xp strong { color: var(--text); font-weight: 800; font-size: var(--f4-fs-sm); }
+.f4-rank-next { font-size: 10.5px; color: var(--accent2); font-weight: 650; }
+
+/* ── Density: the first habits should be reachable without a long scroll ── */
+.f4-today { gap: var(--f4-gap); }
+.f4-page-head { padding: 8px 2px 0; }
+.f4-page-title { font-size: 23px; }
+.f4-card { padding: var(--f4-gap); }
+.f4-challenge-head { margin-bottom: 9px; }
+.f4-challenge-foot { margin-top: 11px; padding-top: 9px; }
+.f4-lane-title { font-size: 18px; }
+.f4-lane-bar { margin-top: 9px; height: 7px; }
+.f4-progress-card { gap: var(--f4-gap); }
+.f4-tasks-card { padding: var(--f4-gap); }
+.f4-tasks-tools { margin: 7px 0 10px; }
+
+/* Completed and outstanding habits read as different things at a glance:
+   a filled box, an accent border, a tinted surface and dimmed copy. */
+.check-item.f4-task.done {
+  background: var(--f4-accent-soft);
+  border-color: var(--f4-accent-line);
+}
+.check-item.f4-task.done .check-desc { color: var(--text3); }
+
+/* ─── Forge 4.0: the habit's own marker column ───────────────────────────── */
+
+/* The keystone rating belongs to the habit, not to its chips. Under the icon
+   it is recognisable at a glance and costs the row nothing: inline it pushed
+   long names onto a third line, and as a chip it crowded the target and the
+   guide onto a second. */
+.f4-task-mark {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: center;
+  gap: 2px; width: 22px; margin-top: 1px;
+}
+.f4-task .keystone-stars {
+  margin: 0; font-size: 7px; letter-spacing: -1.5px; line-height: 1;
+  white-space: nowrap; max-width: 24px; overflow: hidden;
+}
+
+/* ─── Forge 4.0: reclaiming the fold ─────────────────────────────────────── */
+
+.f4-page-head { align-items: center; gap: 10px; }
+.f4-page-aside { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+/* The day strip, as a compact control in the header. Same element, same
+   markup, same "Day N of M" — a quarter of the vertical cost. */
+.f4-today .f4-page-aside .day-selector {
+  display: flex; align-items: center; gap: 2px;
+  padding: 2px; background: var(--f4-surface); border: 1px solid var(--f4-hairline);
+  border-radius: 999px;
+}
+.f4-today .f4-page-aside .day-sel-btn {
+  width: 30px; height: 30px; min-height: 30px; font-size: 15px; border-radius: 999px;
+}
+.f4-today .f4-page-aside .day-sel-center { padding: 0 6px; }
+.f4-today .f4-page-aside .day-sel-num { font-size: 12px; white-space: nowrap; }
+.f4-today .f4-page-aside .day-sel-of { font-size: 11px; }
+.f4-today .f4-page-aside .day-sel-today-link { font-size: 10.5px; }
+
+/* Mode tools sit on the heading line. */
+.f4-tasks-head { flex-wrap: wrap; row-gap: 6px; }
+.f4-tasks-tools { display: flex; gap: 6px; align-items: center; margin: 0 0 0 auto; }
+.f4-tasks-count { margin-left: auto; }
+.f4-tasks-head .f4-tasks-tools { margin-left: 0; }
+
+/* The keystone note is a footnote, not a banner. */
+.f4-tasks-card .keystone-explainer { font-size: 11px; margin: 8px 0 10px; }
+
+/* One line where it fits. */
+.f4-xp-note { margin-top: 9px; padding-top: 8px; }
+
+/* ─── Forge 4.0: right column ────────────────────────────────────────────── */
+
+.f4-task-aside {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end;
+  gap: 5px; margin-top: 1px;
+}
+.f4-task .check-guide { margin: 0; }
+/* With the guide out of it, the chip row only exists when a habit actually
+   carries a condition or a shared-habit link. */
+.f4-task-chips { margin-top: 5px; }
+
+/* ─── Forge 4.0: lane headers ────────────────────────────────────────────── */
+
+/* The stacked-challenge lane bands predate this page and read as a second,
+   louder heading inside a card that already has one. Quieter: a kicker and the
+   challenge's name, on the card's own surface. */
+.f4-today .lane-list { display: flex; flex-direction: column; gap: var(--f4-gap); }
+.f4-today .lane-section { background: transparent; border: none; padding: 0; }
+.f4-today .lane-header {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  background: transparent; border: none; border-left: 3px solid var(--f4-accent-line);
+  border-radius: 0; padding: 0 0 0 9px; margin: 0 0 9px;
+}
+.f4-today .lane-kicker {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text2); background: transparent; padding: 0;
+}
+.f4-today .lane-name { font-size: var(--f4-fs-sm); font-weight: 700; color: var(--text); }
+.f4-today .lane-empty {
+  font-size: var(--f4-fs-xs); color: var(--text2); line-height: 1.45;
+  background: var(--f4-surface-2); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-sm); padding: 10px var(--f4-gap);
+}
+.f4-today .validate-btn-wrap { margin: 0; }
+
+/* ─── Forge 4.0: the accent has to follow the profile ────────────────────── */
+
+/* Declaring these on :root freezes them: the inner var(--accent) is
+   substituted where the declaration lives, so the value inherited by the pink
+   profile was still the purple one, and every new component — filled
+   checkboxes, completed rows, progress ring, XP pill — ignored the profile.
+   Re-declared on the element that carries the profile, so each one resolves
+   against its own accent. */
+[data-profile] {
+  --f4-accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --f4-accent-line: color-mix(in srgb, var(--accent) 40%, transparent);
+  --f4-accent-grad: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+}
+@supports not (color: color-mix(in srgb, red 10%, blue)) {
+  [data-profile] {
+    --f4-accent-soft: var(--accent-glow);
+    --f4-accent-line: var(--accent-glow);
+  }
+}

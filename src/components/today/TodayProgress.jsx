@@ -1,5 +1,5 @@
 import { useApp } from '../../context/AppContext';
-import { computeDayXP } from '../../utils/gamification';
+import { computeDayXP, getTaskXP } from '../../utils/gamification';
 import { dayRules } from '../../data/xpEconomy';
 import ProgressRing from './ProgressRing';
 
@@ -60,6 +60,33 @@ export default function TodayProgress({
   ).gained;
   const remaining = Math.max(0, ifComplete - earned);
 
+  // ── Where those two figures come from ───────────────────────────────────
+  //
+  // Earned and available are both engine figures, and together they exceed the
+  // daily TASK budget — because the day is worth more than its habits: a day
+  // with every habit ticked also pays a perfect-day bonus. Stating the two
+  // totals without saying that invites exactly the question it should answer,
+  // so the parts are itemised and have to add up.
+  const habitsLeftXP = tasks
+    .filter(t => !dayData?.tasks?.[t.id])
+    .reduce((sum, t) => sum + getTaskXP(t, rules), 0);
+  // Anything in `remaining` that is not an unticked habit is a day-level award
+  // the day has not qualified for yet — the perfect-day bonus, in practice.
+  const bonusLeft = Math.max(0, remaining - habitsLeftXP);
+  const parts = [];
+  if (habitsLeftXP > 0) {
+    const n = total - done;
+    parts.push(`${n} habit${n === 1 ? '' : 's'} left (${habitsLeftXP.toLocaleString()} XP)`);
+  }
+  if (bonusLeft > 0) parts.push(`${bonusLeft.toLocaleString()} XP perfect-day bonus`);
+  const breakdown = parts.length ? parts.join(' + ') : null;
+  // Reconciliation is a property, not a hope: if the parts ever stop summing
+  // to the total the line says so rather than quietly misleading.
+  const reconciles = habitsLeftXP + bonusLeft === remaining;
+
+  // The perfect-day bonus, once it has actually been awarded.
+  const perfectEarned = total > 0 && done === total ? rules.perfectDay : 0;
+
   const msg = encouragement({ done, total, isMWD, isPast, isFuture });
 
   return (
@@ -79,15 +106,28 @@ export default function TodayProgress({
       <div className="f4-xp-stack">
         <div className="f4-xp-pill earned">
           <span className="f4-xp-val">+{earned.toLocaleString()}</span>
-          <span className="f4-xp-lbl">XP earned</span>
+          <span className="f4-xp-lbl">earned today</span>
         </div>
         {remaining > 0 && (
           <div className="f4-xp-pill remaining">
             <span className="f4-xp-val">{remaining.toLocaleString()}</span>
-            <span className="f4-xp-lbl">still available</span>
+            <span className="f4-xp-lbl">left today</span>
           </div>
         )}
       </div>
+
+      {remaining > 0 && breakdown && (
+        <div className="f4-xp-note">
+          <strong>{remaining.toLocaleString()} XP left today</strong>
+          {reconciles ? ` = ${breakdown}` : ''}
+        </div>
+      )}
+      {remaining === 0 && earned > 0 && (
+        <div className="f4-xp-note">
+          <strong>{earned.toLocaleString()} XP earned today</strong>
+          {perfectEarned > 0 ? ` — every habit plus the ${perfectEarned.toLocaleString()} XP perfect-day bonus` : ''}
+        </div>
+      )}
     </section>
   );
 }

@@ -402,6 +402,192 @@ check('12b: every line of small copy clears WCAG AA (4.5:1)',
   contrast.length > 0 && contrast.every(c => c.r >= 4.5),
   contrast.map(c => `${c.sel} ${c.r}`).join(' · '));
 
+// ══ 14: the refinements asked for before deployment ══════════════════════
+await seed({ tasks: ERA2_TASKS, completeDays: 2 });
+
+// 14.1 — the first habits are reachable without a long scroll on an iPhone.
+await page.setViewportSize({ width: 390, height: 844 });
+await page.evaluate(() => {
+  const sc = document.querySelector('.main-content') || document.scrollingElement;
+  sc.scrollTop = 0;
+});
+await page.waitForTimeout(400);
+const fold = await page.evaluate(() => {
+  const nav = document.querySelector('.bottom-nav');
+  const navTop = nav ? nav.getBoundingClientRect().top : window.innerHeight;
+  const rows = [...document.querySelectorAll('.check-item')];
+  return {
+    navTop: Math.round(navTop),
+    firstTop: rows[0] ? Math.round(rows[0].getBoundingClientRect().top) : null,
+    fullyVisible: rows.filter(r => {
+      const b = r.getBoundingClientRect();
+      return b.top >= 0 && b.bottom <= navTop;
+    }).length,
+  };
+});
+check('14.1: the first habit is above the fold on an iPhone',
+  fold.firstTop != null && fold.firstTop < fold.navTop - 80, `first row at ${fold.firstTop}, nav at ${fold.navTop}`);
+check('14.1: at least two habits are fully visible without scrolling',
+  fold.fullyVisible >= 2, `${fold.fullyVisible} rows`);
+
+// 14.2 — Quick Log saves immediately and loses nothing when More Metrics moves.
+const notes = page.locator('.daily-log-card textarea.log-textarea');
+await notes.click();
+await notes.type('Half a thou', { delay: 10 });
+await page.waitForTimeout(400);
+check('14.2: a partial note is saved as it is typed, before any blur',
+  (await days())[3]?.notes === 'Half a thou', JSON.stringify((await days())[3]?.notes));
+await page.locator('.f4-log-more').click();
+await page.waitForTimeout(350);
+check('14.2: the partial note survives opening More Metrics',
+  (await notes.inputValue()) === 'Half a thou', await notes.inputValue());
+// Enter a metric that only exists inside the disclosure, then close it.
+await page.locator('.f4-log-rest .rating-row', { hasText: 'Stress' }).locator('.rating-bubble').nth(5).click();
+await page.waitForTimeout(350);
+check('14.2: a metric entered inside More Metrics is saved immediately',
+  (await days())[3]?.stress === 6, String((await days())[3]?.stress));
+await page.locator('.f4-log-more').click();
+await page.waitForTimeout(350);
+check('14.2: closing More Metrics keeps both the note and the hidden metric',
+  (await notes.inputValue()) === 'Half a thou' && (await days())[3]?.stress === 6);
+await notes.fill('Half a thought, finished.');
+await page.waitForTimeout(400);
+check('14.2: and editing afterwards still writes through',
+  (await days())[3]?.notes === 'Half a thought, finished.');
+check('14.2: the card confirms the save', /✓ Saved/.test(await page.textContent('.daily-log-card')));
+
+// 14.3 — the two XP figures itemise and add up.
+const xpNote = await page.locator('.f4-xp-note').textContent();
+const nums = [...xpNote.matchAll(/([\d,]+)\s*XP/g)].map(m => Number(m[1].replace(/,/g, '')));
+check('14.3: the XP line explains where the remaining total comes from',
+  /habits? left/.test(xpNote) && /perfect-day bonus/.test(xpNote), xpNote.replace(/\s+/g, ' ').trim());
+check('14.3: and the parts sum to the stated total',
+  nums.length >= 3 && nums[1] + nums[2] === nums[0], nums.join(' / '));
+const earnedNow = Number((await page.locator('.f4-xp-pill.earned .f4-xp-val').textContent()).replace(/[+,]/g, ''));
+// Earned plus outstanding has to equal what the habits on screen are worth —
+// the reconciliation a reader can actually perform from the page.
+const rowSum = await page.locator('.check-item .check-xp').evaluateAll(els =>
+  els.reduce((n, e) => n + Number((/(\d+)/.exec(e.textContent) || [0, 0])[1]), 0));
+check('14.3: earned plus the habits still outstanding equals what the rows are worth',
+  earnedNow + nums[1] === rowSum, `${earnedNow} + ${nums[1]} = ${earnedNow + nums[1]} vs rows ${rowSum}`);
+check('14.3: and the only thing beyond that is the day-level bonus',
+  nums[0] - nums[1] === nums[2], `${nums[0]} - ${nums[1]} = ${nums[0] - nums[1]} vs bonus ${nums[2]}`);
+
+// 14.4 — current XP is not confusable with a rank threshold.
+const rankText = await page.locator('.f4-rank').textContent();
+check('14.4: the current figure says it is current',
+  /XP now/i.test(rankText), rankText.replace(/\s+/g, ' ').trim());
+check('14.4: and the next rank is stated as a distance, not another total',
+  /more to \w+/i.test(rankText), (/[\d,]+ more to [A-Za-z ]+/.exec(rankText) || [''])[0]);
+
+// 14.5 — done and not-done are visually distinct; keystones readable.
+const visual = await page.evaluate(() => {
+  const rows = [...document.querySelectorAll('.check-item')];
+  const done = rows.find(r => r.classList.contains('done'));
+  const todo = rows.find(r => !r.classList.contains('done'));
+  const cs = (el) => getComputedStyle(el);
+  return {
+    doneBg: done ? cs(done).backgroundColor : null,
+    todoBg: todo ? cs(todo).backgroundColor : null,
+    doneBorder: done ? cs(done).borderColor : null,
+    todoBorder: todo ? cs(todo).borderColor : null,
+    boxFilled: done ? cs(done.querySelector('.check-box')).backgroundImage !== 'none' : false,
+    keystoneRows: rows.filter(r => r.querySelector('.keystone-stars')).length,
+    chipRows: rows.filter(r => r.querySelector('.f4-task-chips')?.children.length > 1).length,
+  };
+});
+check('14.5: a completed habit is a different surface from an outstanding one',
+  visual.doneBg !== visual.todoBg && visual.doneBorder !== visual.todoBorder,
+  `${visual.doneBg} vs ${visual.todoBg}`);
+check('14.5: and its box is filled', visual.boxFilled);
+check('14.5: keystone habits carry their marker', visual.keystoneRows >= 1, `${visual.keystoneRows} marked`);
+check('14.5: without crowding the row — at most one chip beside it',
+  visual.chipRows === 0, `${visual.chipRows} rows with multiple chips`);
+
+// 14.6 — the action panels stay on the page, not behind a disclosure.
+await seed({
+  templateId: 'fat_loss_phase', name: 'Fat Loss Challenge', variant: 'standard', durationDays: 30,
+  budget: 160, tasks: ERA2_TASKS,
+  meta: { weeklyRequirementDefs: [
+    { id: 'lifting', label: 'Lifting', icon: '🏋️', perWeek: 3, xp: 16, keystone: 2, logLabel: 'Log Lifting Session', unit: 'lift' },
+    { id: 'zone2', label: 'Zone 2 Cardio', icon: '❤️', perWeek: 2, xp: 16, keystone: 2, logLabel: 'Log Zone 2 Session', unit: 'Zone 2' },
+  ], weeklyRequirementsStartDate: offset(-2) },
+});
+check('14.6: the weekly requirements card is visible without opening anything',
+  (await page.locator('.wr-card').count()) === 1);
+check('14.6: and its session logging is reachable',
+  (await page.locator('.wr-card button').count()) >= 1);
+
+// 14.7 — nothing obscured by the bottom navigation, and no dead space.
+const chrome = await page.evaluate(() => {
+  const nav = document.querySelector('.bottom-nav');
+  const navRect = nav.getBoundingClientRect();
+  const sc = document.querySelector('.main-content') || document.scrollingElement;
+  sc.scrollTop = sc.scrollHeight;
+  const view = document.querySelector('.daily-view');
+  const viewRect = view.getBoundingClientRect();
+  const inputs = [...document.querySelectorAll('.daily-log-card input, .daily-log-card textarea')]
+    .map(el => parseFloat(getComputedStyle(el).fontSize));
+  return {
+    navHeight: Math.round(navRect.height),
+    lastContentBottom: Math.round(viewRect.bottom),
+    navTop: Math.round(navRect.top),
+    trailingGap: Math.round(navRect.top - viewRect.bottom),
+    minInputFont: inputs.length ? Math.min(...inputs) : null,
+  };
+});
+check('14.7: the last content is not hidden behind the bottom navigation',
+  chrome.lastContentBottom <= chrome.navTop + 1,
+  `content ends ${chrome.lastContentBottom}, nav starts ${chrome.navTop}`);
+check('14.7: and there is no excessive empty space at the end',
+  chrome.trailingGap >= 0 && chrome.trailingGap <= 80, `${chrome.trailingGap}px`);
+check('14.7: text inputs are 16px or larger, so iOS does not zoom the page',
+  chrome.minInputFont >= 16, `${chrome.minInputFont}px`);
+const focused = await page.evaluate(async () => {
+  const ta = document.querySelector('.daily-log-card textarea.log-textarea');
+  ta.focus();
+  await new Promise(r => setTimeout(r, 250));
+  const r = ta.getBoundingClientRect();
+  const nav = document.querySelector('.bottom-nav').getBoundingClientRect();
+  return { top: Math.round(r.top), bottom: Math.round(r.bottom), navTop: Math.round(nav.top), vh: window.innerHeight };
+});
+check('14.7: the notes field is on screen and clear of the navigation when focused',
+  focused.top >= 0 && focused.bottom <= focused.navTop + 1,
+  `field ${focused.top}–${focused.bottom}, nav at ${focused.navTop}`);
+
+// 14.8 — the profile accent reaches the new components.
+// Declaring the derived tokens on :root froze them at the default purple, so
+// the pink profile's checkboxes, completed rows, ring and XP pill all ignored
+// it. Checked as computed colour, not as a class name.
+await seed({ profile: 'girlfriend', tasks: ERA2_TASKS, completeDays: 1 });
+await page.locator('.check-item .check-box').first().click();
+await page.waitForTimeout(350);
+const accent = await page.evaluate(() => {
+  const host = document.querySelector('[data-profile]');
+  const cs = getComputedStyle(host);
+  const ring = document.querySelector('.f4-ring-fill');
+  const box = document.querySelector('.check-item.done .check-box.checked');
+  return {
+    profile: host.getAttribute('data-profile'),
+    accent: cs.getPropertyValue('--accent').trim(),
+    soft: cs.getPropertyValue('--f4-accent-soft').trim(),
+    grad: cs.getPropertyValue('--f4-accent-grad').trim(),
+    ringStroke: ring ? getComputedStyle(ring).stroke : null,
+    boxImage: box ? getComputedStyle(box).backgroundImage : null,
+  };
+});
+check('14.8: the second profile runs on its own accent',
+  accent.profile === 'girlfriend' && /EC4899/i.test(accent.accent), accent.accent);
+check('14.8: and the derived tokens follow it rather than the default',
+  /EC4899/i.test(accent.soft) && /EC4899/i.test(accent.grad), accent.grad);
+check('14.8: the progress ring is drawn in that accent',
+  /236, *72, *153/.test(accent.ringStroke || ''), accent.ringStroke);
+check('14.8: and so is a completed habit\'s checkbox',
+  /236, *72, *153/.test(accent.boxImage || ''), (accent.boxImage || '').slice(0, 60));
+check('14.8: the second profile gets the same titled task card',
+  (await page.locator('.f4-tasks-card .f4-card-title').count()) === 1 &&
+  /Daily Tasks/.test(await page.locator('.f4-tasks-card .f4-card-title').textContent()));
+
 // ══ 13: no page errors ════════════════════════════════════════════════════
 const real = errors.filter(e => !/favicon|manifest|ServiceWorker|sw\.js/i.test(e));
 check('13: no page errors across every state', real.length === 0, real.slice(0, 2).join(' | '));
