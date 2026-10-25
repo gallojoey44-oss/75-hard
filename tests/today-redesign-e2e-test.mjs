@@ -718,6 +718,195 @@ check('15.6: the reduced-day control is named, not abbreviated',
   /Minimum day/i.test(await page.textContent('.f4-tasks-card')) &&
   !/\bMWD\b/.test(await page.textContent('.f4-tasks-card')));
 
+// ══ 16: the pre-deployment functionality checks ══════════════════════════
+await seed({ tasks: ERA2_TASKS, completeDays: 2 });
+
+// 16.1 — every integer is selectable, and nothing is saved by arriving.
+const mood = page.locator('.daily-log-card .rating-row', { hasText: 'Mood' }).locator('.rating-track');
+check('16.1: an unrated metric starts unrated, not at 1',
+  (await mood.inputValue()) === '0' && (await days())[3]?.mood === undefined,
+  `control ${await mood.inputValue()}, stored ${JSON.stringify((await days())[3]?.mood)}`);
+check('16.1: and the card shows it as unrated rather than a number',
+  /–\s*\/\s*10/.test(await page.locator('.daily-log-card .rating-row', { hasText: 'Mood' }).textContent()));
+const missed = [];
+for (let n = 1; n <= 10; n++) {
+  await mood.fill(String(n));
+  await page.waitForTimeout(140);
+  const stored = (await days())[3]?.mood;
+  const shown = await page.locator('.daily-log-card .rating-row', { hasText: 'Mood' }).locator('.rating-val').textContent();
+  if (stored !== n || !new RegExp(`^${n}\\b`).test(shown.trim())) missed.push(`${n}→${stored}/${shown.trim()}`);
+}
+check('16.1: every integer 1–10 selects, stores and displays exactly itself',
+  missed.length === 0, missed.join(' ') || 'all ten exact');
+check('16.1: the scale is still 0–10 with integer steps',
+  (await mood.getAttribute('min')) === '0' && (await mood.getAttribute('max')) === '10' &&
+  (await mood.getAttribute('step')) === '1');
+check('16.1: a vertical scroll starting on the track does not set a rating',
+  (await mood.evaluate(el => getComputedStyle(el).touchAction)) === 'pan-y',
+  await mood.evaluate(el => getComputedStyle(el).touchAction));
+check('16.1: the thumb is a 44px-tall target',
+  (await mood.evaluate(el => Math.round(el.getBoundingClientRect().height))) >= 24,
+  `${await mood.evaluate(el => Math.round(el.getBoundingClientRect().height))}px track`);
+
+// 16.2 — one saved log, one completion, no double XP, immediate sync.
+await seed({ tasks: ERA2_TASKS });
+const logRow = page.locator('.check-item', { hasText: 'Complete Daily Log' });
+check('16.2: the Daily Log habit starts incomplete', (await days())[3]?.tasks?.daily_log !== true);
+const beforeXP = await page.locator('.f4-xp-pill.earned .f4-xp-val').textContent();
+await page.locator('.daily-log-card .rating-row', { hasText: 'Mood' }).locator('.rating-track').fill('6');
+await page.waitForTimeout(450);
+check('16.2: saving one metric completes the habit', (await days())[3]?.tasks?.daily_log === true);
+check('16.2: and the habit row shows it immediately, without a reload',
+  (await logRow.getAttribute('aria-checked')) === 'true');
+const afterOne = await page.locator('.f4-xp-pill.earned .f4-xp-val').textContent();
+check('16.2: the XP moved by exactly the habit\'s value',
+  Number(afterOne.replace(/[+,]/g, '')) - Number(beforeXP.replace(/[+,]/g, '')) === 10,
+  `${beforeXP} → ${afterOne}`);
+// More metrics must not complete it a second time or pay again.
+for (const [label, v] of [['Energy', '7'], ['Mood', '9']]) {
+  await page.locator('.daily-log-card .rating-row', { hasText: label }).locator('.rating-track').fill(v);
+  await page.waitForTimeout(300);
+}
+const afterMore = await page.locator('.f4-xp-pill.earned .f4-xp-val').textContent();
+check('16.2: further metrics never complete it again or pay twice',
+  afterMore === afterOne && (await days())[3]?.tasks?.daily_log === true,
+  `${afterOne} → ${afterMore}`);
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 10000 });
+await gotoTab('Today');
+await page.waitForTimeout(500);
+check('16.2: and it survives a reload as one completion',
+  (await days())[3]?.tasks?.daily_log === true &&
+  (await days())[3]?.mood === 9 && (await days())[3]?.energy === 7);
+
+// 16.3 — a clamped requirement can be read in place, guide or no guide.
+await seed({
+  tasks: [
+    { id: 'long_one', name: 'Hydration', icon: '💧', xp: 40, keystone: 1,
+      desc: 'Your normal daily hydration target. No special salt, trace minerals or electrolyte products are required for this, and nothing needs to be purchased.' },
+    { id: 'daily_log', name: 'Complete Daily Log', icon: '📊', xp: 20, keystone: 0 },
+  ],
+});
+const longRow = page.locator('.check-item', { hasText: 'Hydration' }).first();
+check('16.3: a habit with no guide still offers its full requirement',
+  (await longRow.locator('.check-guide').count()) === 0 &&
+  (await longRow.locator('.check-desc-more').count()) === 1);
+const clippedBefore = await longRow.locator('.check-desc').evaluate(el => el.scrollHeight > el.clientHeight + 1);
+check('16.3: its description is clamped to begin with', clippedBefore);
+await longRow.locator('.check-desc-more').click();
+await page.waitForTimeout(350);
+check('16.3: tapping it reveals the whole requirement, in place',
+  !(await longRow.locator('.check-desc').evaluate(el => el.scrollHeight > el.clientHeight + 1)) &&
+  /nothing needs to be purchased/.test(await longRow.textContent()));
+check('16.3: and expanding it never completes the habit',
+  (await days())[3]?.tasks?.long_one !== true);
+check('16.3: it is still on Today — nothing navigated away',
+  (await page.locator('.daily-view').count()) === 1);
+await longRow.locator('.check-desc-more').click();
+await page.waitForTimeout(250);
+check('16.3: and it collapses again', (await longRow.locator('.check-desc.expanded').count()) === 0);
+
+// 16.4 — both lanes' habits remain tickable, shared ones deduplicated.
+await seed({ tasks: ERA2_TASKS });
+await page.evaluate((start) => {
+  const p = JSON.parse(localStorage.getItem('profiles'));
+  p.me.supportChallenge = {
+    templateId: 'mental_training_phase', name: 'Mental Training Phase', emoji: '🧠',
+    variant: 'standard', durationDays: 14, xpEconomyVersion: 2, effortTier: 'medium', dailyBudget: 160,
+  };
+  p.me.supportChallengeStart = start;
+  p.me.tasks = [
+    ...p.me.tasks.map(t => t.id === 'daily_log'
+      ? { ...t, challenges: ['primary', 'support'], mergedFrom: { primary: 'daily_log', support: 'mt_log' } }
+      : { ...t, challenges: ['primary'] }),
+    { id: 'mt_mind', name: 'Mental Training — 5 minutes', icon: '🧘', xp: 40, keystone: 3,
+      source: 'template', order: 90, challenges: ['support'] },
+  ];
+  localStorage.setItem('profiles', JSON.stringify(p));
+}, offset(-1));
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 10000 });
+await gotoTab('Today');
+await page.waitForTimeout(600);
+// Matched on the habit's NAME, not the row's text: the shared Daily Log row
+// also names the support challenge in its "counts for both" badge, so a loose
+// text match finds two rows and both are correct.
+const mtRows = await page.locator('.check-item .f4-task-title').evaluateAll(els =>
+  els.map(e => e.textContent.trim()));
+check('16.4: the support challenge\'s own habit is present',
+  mtRows.filter(n => /^Mental Training/.test(n)).length === 1, JSON.stringify(mtRows));
+check('16.4: both lanes are labelled',
+  (await page.locator('.lane-section.primary').count()) === 1 &&
+  (await page.locator('.lane-section.support').count()) === 1);
+const names = await page.locator('.check-item .f4-task-title').evaluateAll(els => els.map(e => e.textContent.trim()));
+check('16.4: a shared habit is listed once across both lanes',
+  names.length === new Set(names).size, names.join(' | '));
+await page.locator('.check-item', { has: page.locator('.f4-task-title', { hasText: 'Mental Training —' }) })
+  .locator('.check-box').click();
+await page.waitForTimeout(350);
+check('16.4: and a support habit ticks normally', (await days())[3]?.tasks?.mt_mind === true);
+check('16.4: the shared habit names the other challenge it also counts for',
+  /Mental Training Phase/.test(await page.locator('.check-item.shared-habit').textContent()),
+  (await page.locator('.check-item.shared-habit .check-supports').textContent()).trim());
+
+// 16.5 — readability and touch targets at iPhone width.
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(350);
+const targets = await page.evaluate(() => {
+  const area = (el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height }; };
+  // Hit area includes an ::after overlay where one is used.
+  const hit = (el) => {
+    const cs = getComputedStyle(el, '::after');
+    const r = el.getBoundingClientRect();
+    const grow = (v) => Math.abs(parseFloat(v) || 0);
+    return cs.content && cs.content !== 'none'
+      ? { w: r.width + grow(cs.left) + grow(cs.right), h: r.height + grow(cs.top) + grow(cs.bottom) }
+      : area(el);
+  };
+  const out = [];
+  // `.check-box` is deliberately absent: it is aria-hidden decoration, and the
+  // whole ROW carries role="checkbox" and the tap handler — so the row is the
+  // target to measure, and it is in this list.
+  for (const sel of ['.check-item', '.check-guide', '.check-desc-more', 'button.f4-xp-stack', '.f4-log-more', '.f4-collapse-head', '.day-sel-btn']) {
+    const el = document.querySelector(sel);
+    if (el) out.push({ sel, ...hit(el) });
+  }
+  return out;
+});
+const small = targets.filter(t => t.h < 44 || t.w < 24);
+check('16.5: every interactive control has a 44px touch target',
+  small.length === 0, small.map(t => `${t.sel} ${Math.round(t.w)}x${Math.round(t.h)}`).join(' · ') || 'all ≥44px');
+const contrast2 = await page.evaluate(() => {
+  const lum = (c) => {
+    const [r, g, b] = c.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(v => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const bgOf = (el) => {
+    let n = el;
+    while (n && n !== document.documentElement) {
+      const c = getComputedStyle(n).backgroundColor;
+      if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) return c;
+      n = n.parentElement;
+    }
+    return 'rgb(13, 13, 20)';
+  };
+  const ratio = (fg, bg) => {
+    const a = lum(fg), b = lum(bg);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  };
+  const out = [];
+  for (const sel of ['.check-desc', '.f4-progress-msg', '.rating-hint', '.sleep-target-hint', '.f4-lane-day', '.check-desc-more']) {
+    const el = document.querySelector(sel);
+    if (!el) continue;
+    out.push({ sel, r: Math.round(ratio(getComputedStyle(el).color, bgOf(el)) * 100) / 100 });
+  }
+  return out;
+});
+check('16.5: every line of secondary copy clears WCAG AA',
+  contrast2.length > 0 && contrast2.every(c => c.r >= 4.5),
+  contrast2.map(c => `${c.sel} ${c.r}`).join(' · '));
+
 // ══ 13: no page errors ════════════════════════════════════════════════════
 const real = errors.filter(e => !/favicon|manifest|ServiceWorker|sw\.js/i.test(e));
 check('13: no page errors across every state', real.length === 0, real.slice(0, 2).join(' | '));

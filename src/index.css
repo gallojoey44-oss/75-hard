@@ -7301,3 +7301,29 @@ button.f4-lane-link {
 button.f4-lane-link:active { opacity: 0.7; }
 button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 .f4-lane.support button.f4-lane-link { font-size: 15px; }
+
+/* ─── Forge 4.0: reading a clamped requirement, without leaving Today ───── */
+
+.f4-task .check-desc.expanded { -webkit-line-clamp: unset; display: block; }
+.check-desc-more {
+  display: inline-block; margin-top: 3px; padding: 2px 0;
+  background: transparent; border: none;
+  color: var(--accent2); font-size: 10.5px; font-weight: 700;
+  text-align: left; cursor: pointer; position: relative;
+}
+/* The visible control stays small; the touch area does not. */
+.check-desc-more::after { content: ''; position: absolute; inset: -11px -8px; }
+.check-desc-more:active { opacity: 0.7; }
+
+/* Same treatment for the guide chip: 22px of ink, 44px of target. */
+.f4-task .check-guide { position: relative; }
+.f4-task .check-guide::after { content: ''; position: absolute; inset: -11px -9px; }
+
+/* A horizontal slider inside a vertically scrolling page: let the browser own
+   vertical panning so a scroll that starts on the track scrolls the page
+   instead of silently setting a rating. */
+.rating-track { touch-action: pan-y; }
+
+/* The compact day chevrons keep their 30px of ink and get a 44px target. */
+.f4-today .f4-page-aside .day-sel-btn { position: relative; }
+.f4-today .f4-page-aside .day-sel-btn::after { content: ''; position: absolute; inset: -7px; }

@@ -37,6 +37,8 @@ function targetLabel(target) {
   return `${prefix}${prefix ? ' ' : ''}${shown}${unit ? ' ' + unit : ''}`;
 }
 
+import { useState, useRef, useLayoutEffect } from 'react';
+
 export default function CheckItem({
   task, checked, onToggle, disabled, keystone = 0, xp, supports = null,
   onOpenGuide = null, variant = 'row',
@@ -58,6 +60,25 @@ export default function CheckItem({
       .test(`${task.name || ''} ${desc || ''}`)
     : false;
   const target = stated ? null : rawTarget;
+
+  // ── Reading the rest of a clamped description ───────────────────────────
+  //
+  // The row shows two lines. Habits that carry a strategy guide have the full
+  // text one tap away, but a habit WITHOUT a guide had its requirement cut off
+  // with nowhere to read the remainder — and whether a line is cut depends on
+  // the device's width, not on anything knowable here. So it is measured: when
+  // the text does not fit, the row offers to expand it in place.
+  const descRef = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  useLayoutEffect(() => {
+    const el = descRef.current;
+    if (!el) { setClamped(false); return; }
+    // Measured against the clamped box, so expanding does not immediately
+    // report itself as un-clamped and hide the control.
+    if (expanded) return;
+    setClamped(el.scrollHeight > el.clientHeight + 1);
+  }, [desc, expanded]);
 
   return (
     <div
@@ -94,8 +115,25 @@ export default function CheckItem({
 
       <span className={`check-name${checked ? ' done' : ''}`}>
         <span className="f4-task-title">{task.name}</span>
-        {/* What actually qualifies, in one line, so the guide is optional. */}
-        {desc && <span className="check-desc">{desc}</span>}
+        {/* What actually qualifies, so the guide is optional. */}
+        {desc && (
+          <span
+            className={`check-desc${expanded ? ' expanded' : ''}`}
+            ref={descRef}
+          >
+            {desc}
+          </span>
+        )}
+        {desc && (clamped || expanded) && (
+          <button
+            type="button"
+            className="check-desc-more"
+            aria-expanded={expanded}
+            onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+          >
+            {expanded ? 'Show less' : 'Show full requirement'}
+          </button>
+        )}
         {/* Chips and the guide share one line under the habit, so the row
             stays three columns wide. Giving the guide a column of its own
             squeezed the name into a word-per-line column on a phone. */}
