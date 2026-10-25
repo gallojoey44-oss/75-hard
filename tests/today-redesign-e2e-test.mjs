@@ -30,7 +30,7 @@ function offset(n) { const d = new Date(); d.setDate(d.getDate() + n); return ds
 
 async function gotoTab(name) {
   await page.evaluate((n) => {
-    const b = [...document.querySelectorAll('.bottom-nav .nav-tab, button')]
+    const b = [...document.querySelectorAll('.bottom-nav .nav-tab')]
       .find(x => new RegExp(`^${n}$`, 'i').test((x.getAttribute('aria-label') || x.textContent || '').trim()));
     if (b) b.click();
   }, name);

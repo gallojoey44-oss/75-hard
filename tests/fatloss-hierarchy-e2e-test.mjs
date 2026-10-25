@@ -21,7 +21,7 @@ page.on('pageerror', e => errors.push(String(e)));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
 async function gotoTab(name) {
-  await page.evaluate((n) => { const b = [...document.querySelectorAll('.bottom-nav .nav-tab, button')].find(x => new RegExp(n, 'i').test(x.textContent)); if (b) b.click(); }, name);
+  await page.evaluate((n) => { const b = [...document.querySelectorAll('.bottom-nav .nav-tab')].find(x => new RegExp(n, 'i').test(x.getAttribute('aria-label') || x.textContent)); if (b) b.click(); }, name);
   await page.waitForTimeout(300);
 }
 async function init() {

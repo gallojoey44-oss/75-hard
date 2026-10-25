@@ -11,7 +11,7 @@
  * and that none of it overflows a phone screen.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
-import { openChallenge, passReview, pickStartDate, confirmStart, detailsText } from './helpers/challenges.mjs';
+import { openChallenge, beginSetup, passReview, pickStartDate, confirmStart, detailsText } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -30,7 +30,7 @@ page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
 async function gotoTab(name) {
   await page.evaluate((n) => {
-    const b = [...document.querySelectorAll('.bottom-nav .nav-tab, button')]
+    const b = [...document.querySelectorAll('.bottom-nav .nav-tab')]
       .find(x => new RegExp(n, 'i').test(x.textContent));
     if (b) b.click();
   }, name);
@@ -70,7 +70,7 @@ check('1: it is startable',
   (await page.locator('.f4c-btn.primary', { hasText: /Start LOCK IN/i }).count()) === 1);
 
 // ══ 2: setup screen ═══════════════════════════════════════════════════════
-await card.locator('button', { hasText: /Start LOCK IN/i }).first().click();
+await beginSetup(page);
 await page.waitForTimeout(500);
 check('2: the configured setup screen opens', (await page.locator('.li-setup').count()) === 1);
 let setupText = await page.textContent('.li-setup');

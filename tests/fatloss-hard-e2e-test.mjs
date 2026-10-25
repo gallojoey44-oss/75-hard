@@ -8,7 +8,7 @@
  * unaffected by any of it.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
-import { openChallenge, beginSetup, passReview, pickStartDate, confirmStart, detailsText } from './helpers/challenges.mjs';
+import { openChallenge, beginSetup, passReview, pickStartDate, confirmStart, detailsText, backToChallenges } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -86,16 +86,16 @@ async function uploadPhoto() {
 async function startFatLoss({ variant = 'hard', proteinMode = null, flags = ['none'] } = {}) {
   await gotoTab('Challenges');
   await page.waitForTimeout(400);
-    await openChallenge(page, 'Fat Loss Challenge');
+  await backToChallenges(page);
+  await openChallenge(page, 'Fat Loss Challenge');
   const tab = { beginner: /^Beginner/, standard: /^Standard/, hard: /^Hard/ }[variant];
-  await page.locator('button', { hasText: tab }).first().click();
+  await page.locator('.f4c-mode').filter({ hasText: tab }).first().click();
   await page.waitForTimeout(300);
   await beginSetup(page);
   await page.waitForTimeout(600);
   if (variant === 'hard') {
-    // The existing Hard warning, then the new Hard Mode setup.
-    const cont = page.locator('.modal-card button', { hasText: /continue|understand|i'm ready|start/i }).last();
-    if (await cont.count()) { await cont.click(); await page.waitForTimeout(500); }
+    // The Hard confirmation is a step in the flow now, not a modal over it.
+    await passReview(page);
     if (proteinMode === 'fixed') {
       await page.evaluate(() => {
         const b = [...document.querySelectorAll('.flh-mode')].find(x => /One fixed number/i.test(x.textContent));
@@ -151,17 +151,18 @@ check('the Fat Loss Challenge is still in the library',
   (await page.locator('.f4c-tile', { hasText: 'Fat Loss Challenge' }).count()) === 1);
 await openChallenge(page, 'Fat Loss Challenge');
 check('it still offers all three difficulty modes',
-  (await page.locator('button', { hasText: /^Beginner/ }).count()) === 1 &&
-  (await page.locator('button', { hasText: /^Standard/ }).count()) === 1 &&
-  (await page.locator('button', { hasText: /^Hard/ }).count()) === 1);
-await page.locator('button', { hasText: /^Hard/ }).first().click();
+  (await page.locator('.f4c-mode').filter({ hasText: /^Beginner/ }).count()) === 1 &&
+  (await page.locator('.f4c-mode').filter({ hasText: /^Standard/ }).count()) === 1 &&
+  (await page.locator('.f4c-mode').filter({ hasText: /^Hard/ }).count()) === 1);
+await page.locator('.f4c-mode').filter({ hasText: /^Hard/ }).first().click();
 await page.waitForTimeout(400);
 const hardText = await detailsText(page);
 check('Hard advertises 10,000 steps', /10,000\+ steps/.test(hardText));
 // Scoped to Hard's REQUIREMENTS. The card also carries the Fat Loss program's
 // shared education, which accurately says fat loss depends on energy balance —
 // that is not a Hard Mode requirement and is shared by all three variants.
-const hardReqs = await page.locator('.tpl-variant-panel .tpl-task-list').first().textContent();
+const hardReqs = (await page.locator('.f4c-details .tpl-task-list').first()
+  .locator('.f4c-req-name').allTextContents()).join(' | ');
 check('Hard requires the fullness habit', /Stop eating at ~90% full/.test(hardReqs));
 check('Hard requires NO calorie target',
   !/calorie|deficit|kcal/i.test(hardReqs), hardReqs.slice(0, 140));

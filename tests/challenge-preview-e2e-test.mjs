@@ -9,7 +9,7 @@
  * Run against a production build:  npx vite preview --port 4173
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
-import { openChallenge, passReview, pickStartDate, confirmStart, detailsText } from './helpers/challenges.mjs';
+import { openChallenge, beginSetup, advanceToStart, advanceToReview, backToStep, pickStartDate, confirmStart, detailsText, backToChallenges } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -26,7 +26,7 @@ page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
 async function gotoTab(name) {
   await page.evaluate((n) => {
-    const b = [...document.querySelectorAll('.bottom-nav .nav-tab, button')]
+    const b = [...document.querySelectorAll('.bottom-nav .nav-tab')]
       .find(x => new RegExp(n, 'i').test(x.textContent));
     if (b) b.click();
   }, name);
@@ -47,14 +47,16 @@ async function reset() {
 
 /** Every "(N XP)" the card renders for a daily requirement, in order. */
 async function renderedTaskXP(card) {
-  return card.locator('.tpl-task-list.priced').first().evaluate(ul =>
-    [...ul.querySelectorAll('li')]
-      .map(li => { const m = /\((\d+)\s*XP\)/.exec(li.textContent); return m ? Number(m[1]) : null; })
+  // Each requirement carries its price in its own element now, rather than in
+  // a parenthesised suffix on the label.
+  return card.locator('.tpl-task-list').first().locator('.f4c-req-xp')
+    .evaluateAll(els => els
+      .map(el => { const m = /([\d,]+)/.exec(el.textContent); return m ? Number(m[1].replace(/,/g, '')) : null; })
       .filter(x => x != null));
 }
-/** A labelled figure from the XP summary card. */
+/** A labelled figure from the XP summary. */
 async function summaryFigure(card, label) {
-  return card.locator('.xp-preview-row').evaluateAll((rows, lab) => {
+  return card.locator('.f4c-xp-row').evaluateAll((rows, lab) => {
     const row = rows.find(r => new RegExp(lab, 'i').test(r.querySelector('span')?.textContent || ''));
     if (!row) return null;
     const m = /([\d,]+)/.exec(row.querySelector('strong')?.textContent || '');
@@ -75,15 +77,15 @@ let mtText = await detailsText(page);
 check('1: Mental Training no longer advertises 100 XP for a single habit',
   !/\(100 XP\)/.test(mtText), (/\(100 XP\)[^]*/.exec(mtText) || [''])[0].slice(0, 40));
 check('1: nor a 270 XP daily total', !/270/.test(mtText));
-const mtRendered = await renderedTaskXP(mt);
+const mtRendered = await renderedTaskXP(page.locator('.f4c-details'));
 check('1: it renders a priced requirement for every habit', mtRendered.length === 7, `${mtRendered.length} priced rows`);
 check('1: and they sum to its standard-mode budget of 160',
   mtRendered.reduce((s, x) => s + x, 0) === 160, String(mtRendered.reduce((s, x) => s + x, 0)));
 
 // ══ 2: the summary states the same figures, and reconciles ════════════════
-const dailyShown = await summaryFigure(mt, 'Daily tasks');
-const perfectShown = await summaryFigure(mt, 'Perfect day');
-const totalShown = await summaryFigure(mt, 'Perfect .*total');
+const dailyShown = await summaryFigure(page.locator('.f4c-details'), 'Daily habits');
+const perfectShown = await summaryFigure(page.locator('.f4c-details'), 'Perfect day');
+const totalShown = await summaryFigure(page.locator('.f4c-details'), 'A perfect');
 check('2: the summary daily figure equals the sum of the priced rows',
   dailyShown === mtRendered.reduce((s, x) => s + x, 0), `${dailyShown}`);
 check('2: the perfect-day bonus is the approved 15% of the budget',
@@ -95,49 +97,62 @@ check('2: the optional-XP ceiling is stated',
 // ══ 3: switching mode reprices the whole panel ════════════════════════════
 await page.locator('.tpl-variant-tab', { hasText: 'Beginner' }).click();
 await page.waitForTimeout(400);
-const begRendered = await renderedTaskXP(mt);
+const begRendered = await renderedTaskXP(page.locator('.f4c-details'));
 check('3: Beginner mode reprices every requirement',
   begRendered.reduce((s, x) => s + x, 0) === 102, String(begRendered.reduce((s, x) => s + x, 0)));
 check('3: and the rating follows the mode it is priced from',
-  /Easy/.test(await page.locator('.tpl-level-value').first().textContent()),
-  await page.locator('.tpl-level-value').first().textContent());
+  /Easy/.test(await page.locator('.f4c-fact-v').first().textContent()),
+  await page.locator('.f4c-fact-v').first().textContent());
 await page.locator('.tpl-variant-tab', { hasText: 'Hard' }).click();
 await page.waitForTimeout(400);
-const hardRendered = await renderedTaskXP(mt);
+const hardRendered = await renderedTaskXP(page.locator('.f4c-details'));
 check('3: Hard mode reprices again',
   hardRendered.reduce((s, x) => s + x, 0) === 173, String(hardRendered.reduce((s, x) => s + x, 0)));
-check('3: the collapsed card states the RANGE, not one mode\'s rating',
-  /Easy–Medium/.test(await page.locator('.challenge-card-meta').first().textContent()),
+await backToChallenges(page);
+check('3: the library tile states the RANGE, not one mode\'s rating',
+  /Easy–Medium/.test(await page.locator('.f4c-tile', { hasText: 'Mental Training' })
+    .locator('.challenge-card-meta').first().textContent()),
   await page.locator('.challenge-card-meta').first().textContent());
 
 // ══ 4: the Cold Exposure Upgrade reprices the list it joins ═══════════════
-await page.locator('.tpl-variant-tab', { hasText: 'Standard' }).click();
-await page.waitForTimeout(400);
-const beforeCold = await renderedTaskXP(mt);
+// The upgrade is a choice about the ATTEMPT, so it is made in the setup flow
+// rather than while browsing — the priced list it joins is the review step's.
+await openChallenge(page, 'Mental Training');
+await page.locator('.tpl-variant-tab').filter({ hasText: 'Standard' }).first().click();
+await page.waitForTimeout(300);
+await beginSetup(page);
+// Walk to the Cold Exposure step.
+for (let i = 0; i < 5 && !(await page.locator('.toggle-btn').count()); i++) {
+  await page.locator('.f4c-setup .f4c-btn.primary').last().click();
+  await page.waitForTimeout(400);
+}
+check('4: the upgrade is offered during setup', (await page.locator('.toggle-btn').count()) === 1);
+await advanceToReview(page);
+const beforeCold = await renderedTaskXP(page.locator('.f4c-setup'));
+// Back to the upgrade step and turn it on.
+await backToStep(page, '.toggle-btn');
 await page.locator('.toggle-btn').first().click();
-await page.waitForTimeout(400);
-const afterCold = await renderedTaskXP(mt);
+await page.waitForTimeout(300);
+const coldXP = await page.locator('.cold-upgrade-xp').first().textContent();
+check('4: the upgrade row shows its allocated share, not a stale 20 XP',
+  !/^20 XP/.test(coldXP.trim()) && /\d+ XP/.test(coldXP), coldXP.trim());
+await advanceToReview(page);
+const afterCold = await renderedTaskXP(page.locator('.f4c-setup'));
 check('4: enabling it adds a requirement to the advertised list',
   afterCold.length === beforeCold.length + 1, `${beforeCold.length} → ${afterCold.length}`);
 check('4: the daily total is unchanged — it divides the budget, not adds to it',
   afterCold.reduce((s, x) => s + x, 0) === 160, String(afterCold.reduce((s, x) => s + x, 0)));
-const coldXP = await page.locator('.cold-upgrade-xp').first().textContent();
-check('4: the upgrade row shows its allocated share, not a stale 20 XP',
-  !/20 XP/.test(coldXP) && /\d+ XP/.test(coldXP), coldXP.trim());
+// Turn it back off for the next section.
+await backToStep(page, '.toggle-btn');
 await page.locator('.toggle-btn').first().click();
 await page.waitForTimeout(300);
+await advanceToReview(page);
 
 // ══ 5: what was advertised is what gets installed ═════════════════════════
-const advertised = await renderedTaskXP(mt);
-const advertisedTotal = await summaryFigure(mt, 'Daily tasks');
-const advertisedBonus = await summaryFigure(mt, 'Completion bonus');
-await page.locator('button', { hasText: /^Start / }).first().click();
-await page.waitForTimeout(500);
-await passReview(page);
-const tas = page.locator('textarea');
-for (let i = 0; i < await tas.count(); i++) await tas.nth(i).fill('Because I want a mind I can rely on.');
-await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
-await page.waitForTimeout(500);
+const advertised = await renderedTaskXP(page.locator('.f4c-setup'));
+const advertisedTotal = await summaryFigure(page.locator('.f4c-setup'), 'Daily habits');
+const advertisedBonus = await summaryFigure(page.locator('.f4c-setup'), 'Completion bonus');
+await advanceToStart(page, { letter: 'Because I want a mind I can rely on.' });
 await pickStartDate(page, 'today');
 await confirmStart(page);
 await page.waitForTimeout(900);
@@ -178,7 +193,7 @@ check('6: the task list on Today is the advertised one',
 await reset();
 await gotoTab('Challenges');
 await openChallenge(page, 'LOCK IN');
-const liRendered = await renderedTaskXP(li);
+const liRendered = await renderedTaskXP(page.locator('.f4c-details'));
 check('7: LOCK IN prices its requirements in the library',
   liRendered.length === 9 && liRendered.reduce((s, x) => s + x, 0) === 180,
   `${liRendered.length} rows summing ${liRendered.reduce((s, x) => s + x, 0)}`);

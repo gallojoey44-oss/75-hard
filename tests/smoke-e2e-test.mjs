@@ -10,6 +10,7 @@
  * is caught even without the full per-feature suites.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { openChallenge, backToChallenges } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -26,7 +27,7 @@ page.on('pageerror', e => errors.push(String(e)));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
 async function gotoTab(name) {
-  await page.evaluate((n) => { const b = [...document.querySelectorAll('.bottom-nav .nav-tab, button')].find(x => new RegExp(n, 'i').test(x.textContent)); if (b) b.click(); }, name);
+  await page.evaluate((n) => { const b = [...document.querySelectorAll('.bottom-nav .nav-tab')].find(x => new RegExp(n, 'i').test(x.getAttribute('aria-label') || x.textContent)); if (b) b.click(); }, name);
   await page.waitForTimeout(300);
 }
 const challengeXP = () => page.evaluate(() => {
@@ -119,11 +120,10 @@ await gotoTab('Challenges');
 await page.waitForSelector('.challenges-view', { timeout: 5000 });
 check('Challenges tab lists the library', (await page.locator('.challenge-card').count()) >= 5);
 check('Active challenge summary shown', (await page.locator('.active-challenge-card').count()) === 1);
-check('Fat Loss offers three durations', await page.evaluate(() => {
-  const h = [...document.querySelectorAll('.challenge-card-header')].find(x => /Fat Loss Challenge/.test(x.textContent));
-  if (h) h.click();
-  return true;
-}) && (await page.waitForTimeout(300), (await page.locator('.challenge-card', { hasText: 'Fat Loss Challenge' }).locator('.tpl-duration-card').count()) === 3));
+await openChallenge(page, 'Fat Loss Challenge');
+check('Fat Loss offers three durations',
+  (await page.locator('.f4c-details .tpl-duration-card').count()) === 3);
+await backToChallenges(page);
 
 // ── Insights ──
 await gotoTab('Insights');

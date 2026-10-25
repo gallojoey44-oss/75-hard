@@ -7779,3 +7779,19 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
   .f4c-bar-fill, .f4c-steps-fill { transition: none; }
   .f4c-btn:active, .f4c-tile:active { transform: none; }
 }
+
+/* The legacy class names the suite drives these elements by carry the OLD
+   layout's margins. Inside the Challenges tab the column's own gap is the only
+   spacing, so those margins are cleared rather than fought — otherwise an
+   alias quietly changes a layout it was only meant to label. */
+.f4c .active-challenge-card,
+.f4c .acc-add-support,
+.f4c .acc-support,
+.f4c .acc-actions,
+.f4c .challenge-card,
+.f4c .challenges-list,
+.f4c .habit-library-entry,
+.f4c .no-active-challenge,
+.f4c .tpl-task-list,
+.f4c .tpl-duration-card,
+.f4c .tpl-variant-tab { margin: 0; }

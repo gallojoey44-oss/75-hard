@@ -13,7 +13,7 @@
  * missing challenge silently becomes 75-Day.
  */
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
-import { openChallenge, beginSetup, passReview, pickStartDate, confirmStart } from './helpers/challenges.mjs';
+import { openChallenge, beginSetup, advanceToStart, passReview, pickStartDate, confirmStart, backToChallenges } from './helpers/challenges.mjs';
 
 const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
 const results = [];
@@ -99,7 +99,7 @@ async function seedMentalTraining({ profile = 'me', clear = true, meta = {}, tas
 /** Press Settings → Start New Challenge → confirm. */
 async function pressStartNewChallenge() {
   await gotoTab('Settings');
-  await beginSetup(page);
+  await page.locator('button', { hasText: 'Start New Challenge' }).first().click();
   await page.waitForTimeout(300);
   await page.locator('button', { hasText: /Archive .* Choose New/ }).first().click();
   await page.waitForTimeout(600);
@@ -179,11 +179,13 @@ check('6: Today does not show "of 75" between challenges', !/of 75/.test(todayTe
 async function startFromLibrary(cardName, variantRe = /^Standard/) {
   await gotoTab('Challenges');
   await page.waitForTimeout(400);
-    await openChallenge(page, cardName);
-  await page.locator('button', { hasText: variantRe }).first().click();
-  await page.waitForTimeout(300);
-  await page.locator('button', { hasText: new RegExp(`Start ${cardName}`) }).first().click();
-  await page.waitForTimeout(600);
+  await backToChallenges(page);
+  await openChallenge(page, cardName);
+  if (await page.locator('.f4c-mode').count()) {
+    await page.locator('.f4c-mode').filter({ hasText: variantRe }).first().click();
+    await page.waitForTimeout(300);
+  }
+  await beginSetup(page);
   await passReview(page);
   const tas = page.locator('textarea');
   const n = await tas.count();
@@ -233,22 +235,14 @@ check('14: Cold Exposure defaults OFF on a fresh attempt (not inherited)',
 await pressStartNewChallenge();
 await gotoTab('Challenges');
 await page.waitForTimeout(400);
+// 75-Day goes through the same flow as every other challenge now: its own
+// page, then the stepped setup. The separate "Next: Your Why" confirmation it
+// used to need is the flow's review step.
 await openChallenge(page, '75-Day Discipline Challenge');
-await page.locator('button', { hasText: /^Start Challenge$/ }).first().click();
-await page.waitForTimeout(500);
-await page.locator('button', { hasText: /Next: Your Why/i }).first().click();
-await page.waitForTimeout(600);
-{
-  await passReview(page);
-  const tas = page.locator('textarea');
-  const n = await tas.count();
-  for (let i = 0; i < n; i++) await tas.nth(i).fill('Because discipline is the promise I keep to myself.');
-}
-await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
-await page.waitForTimeout(500);
+await beginSetup(page);
+await advanceToStart(page, { letter: 'Because discipline is the promise I keep to myself.' });
 await pickStartDate(page, 'today');
 await confirmStart(page);
-await page.waitForTimeout(700);
 
 const p75 = await prof();
 check('9: selecting 75-Day Discipline and confirming creates it',
@@ -286,19 +280,14 @@ await pressStartNewChallenge();
 await gotoTab('Challenges');
 await page.waitForTimeout(400);
 {
-    await openChallenge(page, 'Mental Training Phase');
-  await page.locator('button', { hasText: /^Standard/ }).first().click();
+  await openChallenge(page, 'Mental Training Phase');
+  await page.locator('.f4c-mode').filter({ hasText: /^Standard/ }).first().click();
   await page.waitForTimeout(300);
   await beginSetup(page);
-  await page.waitForTimeout(600);
-  await passReview(page);
-  const tas = page.locator('textarea');
-  const n = await tas.count();
-  for (let i = 0; i < n; i++) await tas.nth(i).fill('Because I want to keep going.');
-  await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
-  await page.waitForTimeout(500);
-  await beginSetup(page);
-  await page.waitForTimeout(700);
+  await advanceToStart(page, { letter: 'Because I want to keep going.' });
+  // Day 1 tomorrow: the attempt is prepared but must not start today.
+  await pickStartDate(page, 'tomorrow');
+  await confirmStart(page);
 }
 const pSched = await prof();
 check('20: a future start is stored as scheduled, not started',

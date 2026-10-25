@@ -83,6 +83,37 @@ export async function advanceToStart(page, { letter = 'Because I said I would.' 
 }
 
 /**
+ * Step forward until the review of the commitment is on screen, and stop
+ * there. Unlike `passReview`, this leaves the review showing so its priced
+ * list can be read.
+ */
+export async function advanceToReview(page) {
+  for (let i = 0; i < 6; i++) {
+    if (await page.locator('.f4c-review-sec').count()) return true;
+    const btn = page.locator('.f4c-setup .f4c-btn.primary').last();
+    if (!(await btn.count())) return false;
+    await btn.click();
+    await page.waitForTimeout(450);
+  }
+  return (await page.locator('.f4c-review-sec').count()) > 0;
+}
+
+/**
+ * Step back until a given setup step is on screen, identified by a selector
+ * that only that step renders.
+ */
+export async function backToStep(page, selector) {
+  for (let i = 0; i < 6; i++) {
+    if (await page.locator(selector).count()) return true;
+    const back = page.locator('.f4c-setup .f4c-btn.ghost, .modal-card .btn-ghost').last();
+    if (!(await back.count())) return false;
+    await back.click();
+    await page.waitForTimeout(400);
+  }
+  return (await page.locator(selector).count()) > 0;
+}
+
+/**
  * Click past any setup step that is only showing information — the review of
  * the commitment, and the hard-mode confirmation. Stops as soon as a step
  * needs a real answer (the letter, the date, a configured setup screen).

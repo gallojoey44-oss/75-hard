@@ -84,6 +84,7 @@ export default function ChallengeDetails({
   const scale = preview?.displayScale ?? 1;
   const xp = (v) => displayXP(v || 0, scale).toLocaleString();
   const program = getProgramForDuration(template, duration);
+  const variantDef = isVariant ? template.variants?.[mode] : null;
   // Named lengths get the roomier row; a bare list of numbers stays compact.
   const labelled = !!template.duration_labels
     || template.duration_options_days?.some(d => isRecommendedDuration(template, d));
@@ -283,6 +284,35 @@ export default function ChallengeDetails({
         </section>
       )}
 
+      {/* ── What this mode adds in its own words ─────────────────────── */}
+      {variantDef && (variantDef.weekly_requirements?.length > 0
+        || variantDef.optional_tasks?.length > 0 || variantDef.expected_results) && (
+        <section className="f4c-card">
+          <h3 className="f4c-card-h">
+            {isVariant ? `${capitalize(mode)} mode` : 'This mode'}
+          </h3>
+          {variantDef.weekly_requirements?.length > 0 && (
+            <>
+              <div className="f4c-review-sec">Weekly</div>
+              <ul className="f4c-work">
+                {variantDef.weekly_requirements.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </>
+          )}
+          {variantDef.optional_tasks?.length > 0 && (
+            <>
+              <div className="f4c-review-sec">Optional</div>
+              <ul className="f4c-work">
+                {variantDef.optional_tasks.map((o, i) => <li key={i}>{o}</li>)}
+              </ul>
+            </>
+          )}
+          {variantDef.expected_results && (
+            <p className="f4c-note">{variantDef.expected_results}</p>
+          )}
+        </section>
+      )}
+
       {/* ── How to approach it ───────────────────────────────────────── */}
       {(template.training_quality || template.exercise_guidance || template.physical_examples?.length > 0) && (
         <section className="f4c-card">
@@ -342,6 +372,14 @@ export default function ChallengeDetails({
               </div>
             )}
           </div>
+          {/* The ceiling on optional XP, so Bonus Missions can add to a day but
+              never outweigh the work the challenge actually asks for. */}
+          <p className="f4c-note xp-preview-note">
+            Optional XP is capped at {Number.isFinite(preview.bonusPerDayCap)
+              ? `${xp(preview.bonusPerDayCap)} a day` : 'no limit'}
+            {Number.isFinite(preview.bonusAttemptCap)
+              ? ` and ${xp(preview.bonusAttemptCap)} for the whole challenge` : ''}.
+          </p>
         </section>
       )}
 
@@ -360,12 +398,57 @@ export default function ChallengeDetails({
           </button>
           {showProgram && (
             <div className="f4c-disclose-body">
-              {program?.why_it_works && <p className="f4c-phase-b">{program.why_it_works}</p>}
+              {/* The per-length copy: a template that describes what 14 days
+                  aims at differently from 60 says so, and the disclosure
+                  follows the chosen length. */}
+              {program?.emphasis && <p className="f4c-phase-b">{program.emphasis}</p>}
+              {typeof program?.goal === 'string' && <p className="f4c-phase-b">{program.goal}</p>}
+              {/* `progress` is { items, finish } on the templates that track
+                  one, and a plain sentence on the rest. */}
+              {typeof program?.progress === 'string' && (
+                <p className="f4c-phase-b">{program.progress}</p>
+              )}
+              {program?.progress && typeof program.progress === 'object' && (
+                <>
+                  {program.progress.items?.length > 0 && (
+                    <>
+                      <div className="f4c-phase-h">What you track</div>
+                      <ul className="f4c-work">
+                        {program.progress.items.map((it, i) => <li key={i}>{it}</li>)}
+                      </ul>
+                    </>
+                  )}
+                  {program.progress.finish && (
+                    <p className="f4c-phase-b">{program.progress.finish}</p>
+                  )}
+                </>
+              )}
+              {/* `why_it_works` is a list of { pillar, points } on the templates
+                  that have it, not a string — rendering it directly crashed the
+                  page with "objects are not valid as a React child". */}
+              {Array.isArray(program?.why_it_works) && program.why_it_works.length > 0 && (
+                <>
+                  <div className="f4c-phase-h">Why it works</div>
+                  {program.why_it_works.map((w, i) => (
+                    <div key={i}>
+                      <div className="f4c-phase-h">{w.pillar}</div>
+                      <ul className="f4c-work">
+                        {(w.points || []).map((pt, j) => <li key={j}>{pt}</li>)}
+                      </ul>
+                    </div>
+                  ))}
+                </>
+              )}
+              {typeof program?.why_it_works === 'string' && (
+                <p className="f4c-phase-b">{program.why_it_works}</p>
+              )}
               {program?.expected_results?.length > 0 && (
                 <>
                   <div className="f4c-phase-h">Expected Results ({duration} Days)</div>
                   <ul className="f4c-work">
-                    {program.expected_results.map((r, i) => <li key={i}>{r}</li>)}
+                    {program.expected_results.map((r, i) => (
+                      <li key={i}>{typeof r === 'string' ? r : (r?.label ?? r?.text ?? JSON.stringify(r))}</li>
+                    ))}
                   </ul>
                 </>
               )}

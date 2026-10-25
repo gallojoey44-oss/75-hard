@@ -30,7 +30,7 @@ page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
 async function gotoTab(name) {
   await page.evaluate((n) => {
-    const b = [...document.querySelectorAll('.bottom-nav .nav-tab, button')]
+    const b = [...document.querySelectorAll('.bottom-nav .nav-tab')]
       .find(x => new RegExp(n, 'i').test(x.textContent));
     if (b) b.click();
   }, name);

@@ -239,7 +239,7 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
               type="button"
               role="switch"
               aria-checked={coldUpgrade}
-              className={`f4c-switch${coldUpgrade ? ' on' : ''}`}
+              className={`f4c-switch toggle-btn${coldUpgrade ? ' on' : ''}`}
               onClick={() => setColdUpgrade(v => !v)}
             >
               {coldUpgrade ? 'On' : 'Off'}
@@ -252,7 +252,9 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
           {coldUpgrade && (
             <div className="f4c-xp-row">
               <span>{COLD_SHOWER_TASK.icon} Cold Shower</span>
-              <strong>{xp(preview?.tasks.find(t => t.id === COLD_SHOWER_TASK.id)?.xp)} XP</strong>
+              <strong className="cold-upgrade-xp">
+                {xp(preview?.tasks.find(t => t.id === COLD_SHOWER_TASK.id)?.xp)} XP
+              </strong>
             </div>
           )}
         </section>
@@ -281,7 +283,7 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
           </div>
 
           <div className="f4c-review-sec">Every day</div>
-          <ul className="f4c-reqs tight">
+          <ul className="f4c-reqs tight tpl-task-list">
             {preview.tasks.map(t => (
               <li key={t.id} className="f4c-req">
                 <span className="f4c-req-icon" aria-hidden="true">{t.icon || '•'}</span>
