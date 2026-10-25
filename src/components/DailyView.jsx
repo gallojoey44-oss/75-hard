@@ -35,8 +35,7 @@ import * as FLH from '../data/fatLossHardConfig';
 import HabitGuide from './HabitGuide';
 import LockInPanel from './LockInPanel';
 import { guideForTask } from '../data/habitGuides';
-import ChallengeHeaderCard from './today/ChallengeHeaderCard';
-import TodayProgress from './today/TodayProgress';
+import TodayHeader from './today/TodayHeader';
 import QuickLog from './today/QuickLog';
 import Collapsible from './today/Collapsible';
 
@@ -635,16 +634,8 @@ export default function DailyView({ editDayNum, setView }) {
         </div>
       </header>
 
-      {/* 1 — Understand today's challenge. */}
-      <ChallengeHeaderCard onOpenChallenge={setView ? () => setView('challenges') : null} />
-
-      {/* Comeback banner */}
-      {isMe && isCurrentDay && (
-        <MWDBanner comebackMode={comebackMode} dayNum={selectedDayNum} />
-      )}
-
-      {/* 2 — See daily progress. */}
-      <TodayProgress
+      {/* 1 & 2 — which challenge, and how today is going, in one card. */}
+      <TodayHeader
         tasks={tasks}
         dayData={dayData}
         dayNum={selectedDayNum}
@@ -653,7 +644,13 @@ export default function DailyView({ editDayNum, setView }) {
         mwdTotal={MWD_TASKS.length}
         isPast={!!currentDayNum && selectedDayNum < currentDayNum}
         isFuture={selectedDayNum > (currentDayNum || 0)}
+        onOpenChallenge={setView ? () => setView('challenges') : null}
       />
+
+      {/* Comeback banner */}
+      {isMe && isCurrentDay && (
+        <MWDBanner comebackMode={comebackMode} dayNum={selectedDayNum} />
+      )}
 
 
       {/* Challenge coaching — repeatedly skipped keystone */}
@@ -687,9 +684,11 @@ export default function DailyView({ editDayNum, setView }) {
                 <button
                   className={`mwd-toggle-btn${isMWD ? ' active' : ''}`}
                   onClick={handleToggleMWD}
-                  title={isMWD ? 'Switch to full challenge' : 'Switch to Minimum Warrior Day'}
+                  title={isMWD
+                    ? 'Switch back to the full challenge'
+                    : 'Minimum Warrior Day — a reduced day that keeps the chain intact'}
                 >
-                  {isMWD ? '↩ Full' : '🛡️ MWD'}
+                  {isMWD ? '↩ Full day' : '🛡️ Minimum day'}
                 </button>
               )}
               {setView && (

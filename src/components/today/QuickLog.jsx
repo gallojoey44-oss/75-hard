@@ -24,6 +24,7 @@ import { dayRules } from '../../data/xpEconomy';
  */
 export default function QuickLog({ dayData, onUpdate, profile, activeProfile, logRef, meta }) {
   const [showMore, setShowMore] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const firstRender = useRef(true);
 
@@ -47,15 +48,38 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
     return () => clearTimeout(t);
   }, [stamp]);
 
-  const sleepTarget = profile?.sleepTarget ?? 8;
+  // ── Hours slept, and what it is allowed to complete ─────────────────────
+  //
+  // "Hours slept" and "sleep opportunity" are different things, and this used
+  // to treat them as one. It ticked a hard-coded `sleep_target` id whatever
+  // challenge was running, which meant two wrong behaviours at once: on a
+  // challenge that has no such habit it wrote a completion flag for a task
+  // that is not in the list and silently did nothing useful, and on one whose
+  // sleep habit is an OPPORTUNITY habit it would have claimed time in bed from
+  // a figure that measures actual sleep. LOCK IN and Energy Reset both say so
+  // in as many words: "the opportunity is what counts — not whether every hour
+  // was perfect."
+  //
+  // So the habit is resolved from THIS attempt's own task list, and auto-
+  // completion applies only where the habit really is about hours slept. An
+  // opportunity habit is left for the user to tick, and the card says why.
+  const sleepHabit = (profile?.tasks || []).find(t => t.habitKey === 'sleep_target');
+  const isOpportunity = sleepHabit
+    ? /opportunity/i.test(`${sleepHabit.name || ''} ${sleepHabit.desc || ''}`)
+    : false;
   const sleepAuto = profile?.sleepAutoComplete !== false;
-  const sleepTaskId = activeProfile === 'me' ? 'sleep_target' : 'gf_sleep_target';
+  const canAutoComplete = sleepAuto && !!sleepHabit && !isOpportunity;
+  // The habit's OWN target when it carries one — a challenge asking for 7.5
+  // hours should not be judged against a profile default of 8.
+  const sleepTarget = (sleepHabit?.target?.unit === 'hours' && Number(sleepHabit.target.value))
+    || profile?.sleepTarget || 8;
 
   function setHours(raw) {
     const hrs = parseFloat(raw);
-    const updates = { hoursSlept: Number.isFinite(hrs) ? hrs : 0 };
-    if (sleepAuto) {
-      updates.tasks = { ...dayData?.tasks, [sleepTaskId]: (Number.isFinite(hrs) ? hrs : 0) >= sleepTarget };
+    const hours = Number.isFinite(hrs) ? hrs : 0;
+    const updates = { hoursSlept: hours };
+    if (canAutoComplete) {
+      updates.tasks = { ...dayData?.tasks, [sleepHabit.id]: hours >= sleepTarget };
     }
     onUpdate(updates);
   }
@@ -70,12 +94,19 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
           </span>
         ) : (
           <span className="daily-log-hint f4-badge">
-            Log one metric{logXP != null ? ` · ${logXP} XP` : ''}
+            {logXP != null ? `${logXP} XP` : 'Not logged'}
           </span>
         )}
       </header>
 
-      <p className="f4-card-sub">Track your mood, energy, sleep and more.</p>
+      {/* The completion condition, stated once. There is no button to press:
+          the habit completes itself from the log, which is what stops the
+          same action being paid for twice. */}
+      <p className="f4-card-sub">
+        {logged
+          ? 'Saved. Your “Complete Daily Log” habit is ticked for today.'
+          : 'Fill in any one of these and your “Complete Daily Log” habit completes itself.'}
+      </p>
 
       {/* ── The daily four ── */}
       <div className="f4-log-quick">
@@ -93,8 +124,13 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
         <div className="sleep-hours-row f4-log-hours">
           <div className="f4-log-hours-label">
             <div className="sleep-hours-label">😴 Hours Slept</div>
-            {sleepAuto && (
-              <div className="sleep-target-hint">≥ {sleepTarget}h auto-completes your sleep habit</div>
+            {canAutoComplete && (
+              <div className="sleep-target-hint">≥ {sleepTarget}h completes “{sleepHabit.name}”</div>
+            )}
+            {sleepAuto && isOpportunity && (
+              <div className="sleep-target-hint">
+                Tracked only — “{sleepHabit.name}” is about time in bed, so tick it yourself
+              </div>
             )}
           </div>
           <input
@@ -112,15 +148,20 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
           <span className="sleep-hours-unit">hrs</span>
         </div>
 
-        <textarea
-          className="log-textarea"
-          rows={2}
-          placeholder="How did today go? Any notes…"
-          value={dayData?.notes || ''}
-          aria-label="Notes for today"
-          onChange={e => onUpdate({ notes: e.target.value })}
-        />
       </div>
+
+      {/* Notes are optional, so they take one line until there is something to
+          say or somewhere to say it. */}
+      <textarea
+        className="log-textarea f4-log-notes"
+        rows={(dayData?.notes || '').length > 0 || notesOpen ? 3 : 1}
+        placeholder="Notes (optional)…"
+        value={dayData?.notes || ''}
+        aria-label="Notes for today"
+        onFocus={() => setNotesOpen(true)}
+        onBlur={() => setNotesOpen(false)}
+        onChange={e => onUpdate({ notes: e.target.value })}
+      />
 
       {/* ── Everything else, unchanged and one tap away ── */}
       <button

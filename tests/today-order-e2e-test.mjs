@@ -201,9 +201,16 @@ const expanded = await page.evaluate(() => document.querySelector('.daily-log-ca
 check('5: every other metric is one tap away, not removed',
   REST.every(m => new RegExp(m, 'i').test(expanded)),
   REST.filter(m => !new RegExp(m, 'i').test(expanded)).join(', ') || 'all present');
+// The control is a draggable 1-10 track rather than ten small buttons, which
+// is easier to hit on a phone. What matters is that the SCALE is unchanged:
+// every rating still writes a 1-10 integer to the same field, so stored days
+// and archives stay comparable.
+const scales = await page.locator('.daily-log-card .rating-track').evaluateAll(els =>
+  els.map(e => ({ min: e.min, max: e.max, step: e.step })));
 check('5: and they are still 1-10 scales, not a shorter one',
-  (await page.locator('.daily-log-card .rating-bubble').count()) === (QUICK.length + REST.length) * 10,
-  `${await page.locator('.daily-log-card .rating-bubble').count()} bubbles`);
+  scales.length === QUICK.length + REST.length &&
+  scales.every(s => s.max === '10' && s.step === '1'),
+  `${scales.length} controls, ${JSON.stringify(scales[0])}`);
 // The XP it advertises is the Daily Log task's OWN XP under this attempt's
 // economy, not a constant. It used to say 20 whatever the task was worth.
 const logTaskXP = await page.evaluate(() => {

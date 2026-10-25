@@ -7159,3 +7159,145 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
    recording the day rather than doing it — so it gets a little more air than
    the 12px rhythm the rest of the stack uses. */
 .f4-today .daily-log-card { margin-top: 4px; }
+
+/* ═══ Forge 4.0 (rev 2): one header, shorter rows, a compact log ═════════ */
+
+/* ── The merged header ── */
+.f4-today-head-card { padding: 12px 14px 10px; }
+.f4-today-head-card .f4-challenge-card,
+.f4-today-head-card .f4-progress-card {
+  background: transparent; border: none; box-shadow: none; padding: 0; border-radius: 0;
+}
+.f4-today-head-card .f4-progress-card {
+  display: flex; align-items: center; gap: 11px;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--f4-hairline);
+}
+.f4-challenge-head { margin-bottom: 7px; gap: 7px; }
+.f4-rank-chip {
+  font-size: 10px; font-weight: 700; color: var(--text2);
+  background: var(--f4-surface-3); border: 1px solid var(--f4-hairline);
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+}
+.f4-streak { margin-left: auto; padding: 2px 8px; font-size: 10px; }
+
+.f4-lane + .f4-lane { margin-top: 8px; padding-top: 8px; }
+.f4-lane-top { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.f4-lane-emoji { font-size: 16px; }
+.f4-lane-title { font-size: 16px; font-weight: 800; letter-spacing: -0.2px; }
+.f4-lane-mode { font-size: var(--f4-fs-sm); }
+.f4-lane-day { margin-left: auto; font-size: var(--f4-fs-xs); font-weight: 700; color: var(--text2); white-space: nowrap; }
+.f4-lane-bar { margin-top: 6px; height: 5px; }
+.f4-lane.support .f4-lane-title { font-size: 15px; }
+
+.f4-today-head-card .f4-progress-head {
+  font-size: var(--f4-fs-sm); font-weight: 700; margin: 0;
+}
+.f4-today-head-card .f4-progress-msg { font-size: 11px; margin-top: 1px; }
+
+/* The XP pills are one tap target. */
+button.f4-xp-stack {
+  display: flex; flex-direction: row; gap: 6px; align-items: stretch;
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  min-height: 44px;
+}
+button.f4-xp-stack:active { opacity: 0.8; }
+.f4-xp-pill { min-width: 0; padding: 5px 9px; align-items: center; justify-content: center; }
+.f4-xp-val { font-size: var(--f4-fs-sm); }
+.f4-xp-lbl { font-size: 9.5px; }
+.f4-xp-note {
+  margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--f4-hairline);
+  font-size: 11px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+}
+.f4-xp-link {
+  margin-left: auto; background: transparent; border: none;
+  color: var(--accent2); font-size: 11px; font-weight: 700; padding: 4px 0;
+}
+
+/* ── Shorter habit rows ── */
+.check-item.f4-task { padding: 10px 11px; gap: 9px; min-height: 56px; }
+.f4-task-title { font-size: 14px; }
+.f4-task .check-desc { font-size: 10.5px; -webkit-line-clamp: 2; margin-top: 1px; }
+.f4-task-chips { margin-top: 4px; }
+.f4-task-chips:empty { display: none; margin: 0; }
+.f4-task .check-xp { min-width: 48px; font-size: 10.5px; padding: 3px 6px; }
+.f4-task .check-guide { min-height: 20px; padding: 1px 6px; font-size: 9.5px; }
+.f4-task-aside { gap: 4px; }
+.f4-task .check-box { width: 23px; height: 23px; min-width: 23px; }
+.f4-task-mark { width: 20px; }
+.f4-task .check-icon { font-size: 16px; width: 20px; }
+
+/* Completed: clearly done, not shouting. */
+.check-item.f4-task.done {
+  background: var(--f4-surface);
+  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+@supports not (color: color-mix(in srgb, red 10%, blue)) {
+  .check-item.f4-task.done { border-color: var(--f4-accent-line); }
+}
+
+/* ── The compact rating control ── */
+.rating-row { display: flex; flex-direction: column; gap: 3px; }
+.rating-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.rating-label-left { display: flex; align-items: center; gap: 6px; font-size: var(--f4-fs-sm); font-weight: 650; color: var(--text); }
+.rating-val { font-size: var(--f4-fs-sm); font-weight: 800; color: var(--accent2); }
+.rating-val.empty { color: var(--text3); font-weight: 600; }
+.rating-val-max { font-size: 10px; font-weight: 600; color: var(--text3); }
+.rating-hint { font-size: 10px; color: var(--text2); }
+
+.rating-track-wrap { position: relative; padding: 2px 0 6px; }
+.rating-track {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 30px;
+  background: transparent; margin: 0; display: block; cursor: pointer;
+}
+.rating-track::-webkit-slider-runnable-track {
+  height: 8px; border-radius: 999px;
+  background: linear-gradient(to right,
+    var(--accent) 0 var(--rating-pct, 0%), var(--f4-surface-3) var(--rating-pct, 0%) 100%);
+}
+.rating-track::-moz-range-track { height: 8px; border-radius: 999px; background: var(--f4-surface-3); }
+.rating-track::-moz-range-progress { height: 8px; border-radius: 999px; background: var(--accent); }
+.rating-track::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 24px; height: 24px; border-radius: 50%; margin-top: -8px;
+  background: #fff; border: 3px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+.rating-track::-moz-range-thumb {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+.rating-track:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 999px; }
+.rating-ticks {
+  position: absolute; left: 12px; right: 12px; bottom: 0;
+  display: flex; justify-content: space-between; pointer-events: none;
+}
+.rating-tick { width: 2px; height: 3px; border-radius: 1px; background: var(--f4-hairline-2); }
+.rating-tick.on { background: var(--f4-accent-line); }
+
+/* ── Log density ── */
+.f4-log-quick { gap: 9px; margin-top: 9px; }
+.f4-log-rest { gap: 9px; }
+.f4-log-hours { padding: 8px var(--f4-gap); }
+.f4-log-notes { margin-top: 9px; transition: none; }
+.f4-today .log-textarea { min-height: 0; }
+.f4-log-more { margin-top: 9px; padding: 9px var(--f4-gap); min-height: 42px; }
+.f4-saved { height: 14px; margin-top: 6px; }
+
+/* The rating row is a label and a track; it does not need the height of a
+   two-row control to say so. */
+.rating-row { gap: 1px; }
+.rating-track-wrap { padding: 0; margin-top: 1px; }
+.rating-track { height: 26px; }
+.rating-track::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -7px; }
+.rating-track::-moz-range-thumb { width: 22px; height: 22px; }
+.rating-ticks { bottom: 2px; }
+
+/* The challenge name doubles as the way into it. */
+button.f4-lane-link {
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  color: var(--text); text-align: left; font: inherit;
+  font-size: 16px; font-weight: 800; letter-spacing: -0.2px;
+}
+button.f4-lane-link:active { opacity: 0.7; }
+button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.f4-lane.support button.f4-lane-link { font-size: 15px; }

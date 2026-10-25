@@ -108,19 +108,25 @@ const p1 = await prof();
 check('1: it names the real challenge and mode',
   cardText.includes(p1.activeChallenge.name) && /Standard/i.test(cardText), cardText.slice(0, 60));
 check('1: it reports the real day and duration',
-  /Day 3/.test(cardText) && /of 14/.test(cardText), (/Day \d+ of \d+/.exec(cardText) || [''])[0]);
-check('1: it reports the real streak', /🔥 2 days/.test(cardText), (/🔥[^·]*/.exec(cardText) || [''])[0]);
-check('1: it shows challenge progress as a percentage',
-  /21%/.test(cardText), (/\d+%/.exec(cardText) || [''])[0]);
-check('1: it shows the rank and its XP',
-  /True Warrior/.test(cardText) && /75,000 XP/.test(cardText),
-  (/True Warrior[\s\S]{0,20}/.exec(cardText) || [''])[0].replace(/\s+/g, ' '));
+  /Day 3/.test(cardText) && /\/ 14/.test(cardText), (/Day \d+ \/ \d+/.exec(cardText) || [''])[0]);
+check('1: it reports the real streak', /🔥\s*2\b/.test(cardText), (/🔥\s*\d+/.exec(cardText) || [''])[0]);
+// Challenge progression is the bar, which carries its value for assistive
+// technology rather than spending a line of the card on a number.
+check('1: it shows challenge progression',
+  (await page.locator('.f4-lane-bar').first().getAttribute('aria-valuenow')) === '21',
+  await page.locator('.f4-lane-bar').first().getAttribute('aria-valuenow'));
+// The rank's NAME is identity and stays; the XP arithmetic moved to Home,
+// where there is room to explain it and nothing to confuse it with.
+check('1: it names the rank', /True Warrior/.test(cardText));
+check('1: and leaves the rank XP arithmetic to Home',
+  !/75,000 XP/.test(cardText) && !/more to Unbreakable/.test(cardText),
+  (/True Warrior[\s\S]{0,24}/.exec(cardText) || [''])[0].replace(/\s+/g, ' '));
 check('1: none of the mockup\'s placeholder figures appear',
   !/8,295|3 of 8 tasks|\+60 XP\b/.test(await page.textContent('.daily-view')));
 check('1: there is no "Log Today" button — this IS today',
   (await page.locator('.daily-view button', { hasText: /^Log Today/i }).count()) === 0);
-check('1: the challenge card offers a way into the challenge itself',
-  (await card.locator('button', { hasText: /View Challenge/i }).count()) === 1);
+check('1: the challenge name is the way into the challenge itself',
+  (await card.locator('button.f4-lane-link', { hasText: 'LOCK IN' }).count()) === 1);
 
 // ══ 2: progress and XP are the engine's, and move immediately ═════════════
 const ring = page.locator('.f4-progress-card');
@@ -173,11 +179,15 @@ check('3: with the habit\'s full guidance, not just its first sentence',
   /The opportunity is what counts/.test(rowText),
   'full desc present');
 check('3: and it is clamped for height rather than truncated in the text',
-  (await page.locator('.check-item .check-desc').first().evaluate(el =>
-    getComputedStyle(el).webkitLineClamp)) === '3');
+  Number(await page.locator('.check-item .check-desc').first().evaluate(el =>
+    getComputedStyle(el).webkitLineClamp)) >= 2);
 check('3: its real XP', (await row.locator('.check-xp').textContent()).trim() === '30 XP');
 check('3: a keystone marker', (await row.locator('.keystone-stars').count()) === 1);
-check('3: and its completion condition', /≥ 8 hours/.test(rowText));
+// The condition is on the row — and NOT twice. "Sleep opportunity: 8+ hours"
+// already states it, so the separate target badge is suppressed.
+check('3: and its completion condition, stated once',
+  /8\+ hours/.test(rowText) && (await row.locator('.f4-chip-target').count()) === 0,
+  rowText.replace(/\s+/g, ' ').slice(0, 60));
 check('3: every row is at least 44px tall for a reliable tap',
   (await page.locator('.check-item').evaluateAll(els => els.every(e => e.getBoundingClientRect().height >= 44))));
 check('3: the row is reachable by keyboard', (await row.getAttribute('tabindex')) === '0');
@@ -316,7 +326,7 @@ for (let i = 0; i < await allBoxes.count(); i++) {
   await allBoxes.nth(i).click();
   await page.waitForTimeout(150);
 }
-await page.locator('.daily-log-card .rating-bubble').first().click();
+await page.locator('.daily-log-card .rating-track').first().fill('7');
 await page.waitForTimeout(500);
 const fullText = await page.locator('.f4-progress-card').textContent();
 check('10: completing everything reads as complete',
@@ -450,7 +460,7 @@ await page.waitForTimeout(350);
 check('14.2: the partial note survives opening More Metrics',
   (await notes.inputValue()) === 'Half a thou', await notes.inputValue());
 // Enter a metric that only exists inside the disclosure, then close it.
-await page.locator('.f4-log-rest .rating-row', { hasText: 'Stress' }).locator('.rating-bubble').nth(5).click();
+await page.locator('.f4-log-rest .rating-row', { hasText: 'Stress' }).locator('.rating-track').fill('6');
 await page.waitForTimeout(350);
 check('14.2: a metric entered inside More Metrics is saved immediately',
   (await days())[3]?.stress === 6, String((await days())[3]?.stress));
@@ -465,6 +475,13 @@ check('14.2: and editing afterwards still writes through',
 check('14.2: the card confirms the save', /✓ Saved/.test(await page.textContent('.daily-log-card')));
 
 // 14.3 — the two XP figures itemise and add up.
+// The arithmetic is available on demand rather than permanently on screen.
+check('14.3: the XP breakdown is not shown until it is asked for',
+  (await page.locator('.f4-xp-note').count()) === 0);
+check('14.3: and the XP figures are the way to ask',
+  (await page.locator('button.f4-xp-stack').getAttribute('aria-expanded')) === 'false');
+await page.locator('button.f4-xp-stack').click();
+await page.waitForTimeout(350);
 const xpNote = await page.locator('.f4-xp-note').textContent();
 const nums = [...xpNote.matchAll(/([\d,]+)\s*XP/g)].map(m => Number(m[1].replace(/,/g, '')));
 check('14.3: the XP line explains where the remaining total comes from',
@@ -481,12 +498,20 @@ check('14.3: earned plus the habits still outstanding equals what the rows are w
 check('14.3: and the only thing beyond that is the day-level bonus',
   nums[0] - nums[1] === nums[2], `${nums[0]} - ${nums[1]} = ${nums[0] - nums[1]} vs bonus ${nums[2]}`);
 
-// 14.4 — current XP is not confusable with a rank threshold.
-const rankText = await page.locator('.f4-rank').textContent();
-check('14.4: the current figure says it is current',
-  /XP now/i.test(rankText), rankText.replace(/\s+/g, ' ').trim());
-check('14.4: and the next rank is stated as a distance, not another total',
-  /more to \w+/i.test(rankText), (/[\d,]+ more to [A-Za-z ]+/.exec(rankText) || [''])[0]);
+// 14.4 — the rank cannot be confused with a threshold, because the header
+// carries no XP totals at all now: it names the rank, and the arithmetic
+// lives on Home where there is room to explain it.
+const rankText = await page.locator('.f4-rank-chip').textContent();
+check('14.4: the header names the rank', /True Warrior/.test(rankText), rankText.trim());
+check('14.4: and states no XP total that could be read as a threshold',
+  !/\d/.test(rankText), rankText.trim());
+await gotoTab('Home');
+await page.waitForTimeout(500);
+const homeText = await page.textContent('.dashboard');
+check('14.4: the rank detail is on Home instead',
+  /75,000/.test(homeText), (/[\d,]+ XP/.exec(homeText) || [''])[0]);
+await gotoTab('Today');
+await page.waitForTimeout(500);
 
 // 14.5 — done and not-done are visually distinct; keystones readable.
 const visual = await page.evaluate(() => {
@@ -534,7 +559,10 @@ const chrome = await page.evaluate(() => {
   sc.scrollTop = sc.scrollHeight;
   const view = document.querySelector('.daily-view');
   const viewRect = view.getBoundingClientRect();
+  // Only TEXT-ENTRY fields can trigger the iOS zoom; a range input carries no
+  // text and is exempt.
   const inputs = [...document.querySelectorAll('.daily-log-card input, .daily-log-card textarea')]
+    .filter(el => el.tagName === 'TEXTAREA' || ['text', 'number', 'search', 'email', 'tel', 'url', 'password'].includes(el.type))
     .map(el => parseFloat(getComputedStyle(el).fontSize));
   return {
     navHeight: Math.round(navRect.height),
@@ -595,6 +623,100 @@ check('14.8: and so is a completed habit\'s checkbox',
 check('14.8: the second profile gets the same titled task card',
   (await page.locator('.f4-tasks-card .f4-card-title').count()) === 1 &&
   /Daily Tasks/.test(await page.locator('.f4-tasks-card .f4-card-title').textContent()));
+
+// ══ 15: the merged header, and the sleep distinction ═════════════════════
+await seed({ tasks: ERA2_TASKS, completeDays: 2 });
+
+check('15.1: the challenge and today\'s progress are one card',
+  (await page.locator('.f4-today-head-card').count()) === 1 &&
+  (await page.locator('.f4-today-head-card .f4-challenge-card').count()) === 1 &&
+  (await page.locator('.f4-today-head-card .f4-progress-card').count()) === 1);
+const headH = await page.locator('.f4-today-head-card').evaluate(el => Math.round(el.getBoundingClientRect().height));
+check('15.1: and it is compact — under 200px at phone width', headH < 200, `${headH}px`);
+
+// Shared habits are merged into one row, never shown per lane.
+await page.evaluate((start) => {
+  const p = JSON.parse(localStorage.getItem('profiles'));
+  p.me.supportChallenge = {
+    templateId: 'mental_training_phase', name: 'Mental Training Phase', emoji: '🧠',
+    variant: 'standard', durationDays: 14, xpEconomyVersion: 2, effortTier: 'medium', dailyBudget: 160,
+  };
+  p.me.supportChallengeStart = start;
+  p.me.tasks = p.me.tasks.map(t => t.id === 'daily_log'
+    ? { ...t, challenges: ['primary', 'support'], mergedFrom: { primary: 'daily_log', support: 'mt_log' } }
+    : { ...t, challenges: ['primary'] });
+  localStorage.setItem('profiles', JSON.stringify(p));
+}, offset(-1));
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 10000 });
+await gotoTab('Today');
+await page.waitForTimeout(600);
+check('15.2: both challenges are named, with their own day counts',
+  /Primary/i.test(await page.textContent('.f4-today-head-card')) &&
+  /Support/i.test(await page.textContent('.f4-today-head-card')) &&
+  (await page.locator('.f4-lane').count()) === 2);
+check('15.2: each lane has its own progression',
+  (await page.locator('.f4-lane-bar').count()) === 2);
+const dupRows = await page.locator('.check-item').evaluateAll(els => {
+  const names = els.map(e => e.querySelector('.f4-task-title')?.textContent?.trim());
+  return names.length - new Set(names).size;
+});
+check('15.2: a shared habit appears once, not once per challenge', dupRows === 0, `${dupRows} duplicates`);
+check('15.2: and it is marked as counting for both',
+  (await page.locator('.check-item.shared-habit').count()) === 1);
+
+// Hours slept must not silently complete a sleep-OPPORTUNITY habit.
+await seed({
+  tasks: [
+    { id: 'li_sleep', name: 'Sleep opportunity: 8+ hours', icon: '😴', xp: 30, keystone: 3, habitKey: 'sleep_target',
+      desc: 'Time in bed and a consistent wake time. The opportunity is what counts.',
+      target: { value: 8, unit: 'hours', direction: 'atLeast' } },
+    { id: 'daily_log', name: 'Complete Daily Log', icon: '📊', xp: 10, keystone: 0 },
+  ],
+});
+await page.locator('.daily-log-card .sleep-hours-input').fill('9');
+await page.waitForTimeout(500);
+check('15.3: nine hours slept does NOT tick a sleep-opportunity habit',
+  (await days())[3]?.tasks?.li_sleep !== true,
+  JSON.stringify((await days())[3]?.tasks || {}));
+check('15.3: and the card explains why rather than failing silently',
+  /time in bed/i.test(await page.textContent('.daily-log-card')));
+check('15.3: the hours are still recorded', (await days())[3]?.hoursSlept === 9);
+
+// Where the habit really is about hours slept, it still auto-completes —
+// against the HABIT's own target, not a profile default.
+await seed({
+  tasks: [
+    { id: 'fl_sleep', name: 'Sleep 7.5+ hours', icon: '😴', xp: 30, keystone: 2, habitKey: 'sleep_target',
+      target: { value: 7.5, unit: 'hours', direction: 'atLeast' } },
+    { id: 'daily_log', name: 'Complete Daily Log', icon: '📊', xp: 10, keystone: 0 },
+  ],
+});
+await page.locator('.daily-log-card .sleep-hours-input').fill('7.5');
+await page.waitForTimeout(500);
+check('15.4: an hours-slept habit auto-completes at its own target',
+  (await days())[3]?.tasks?.fl_sleep === true, JSON.stringify((await days())[3]?.tasks || {}));
+await page.locator('.daily-log-card .sleep-hours-input').fill('6');
+await page.waitForTimeout(500);
+check('15.4: and un-completes below it', (await days())[3]?.tasks?.fl_sleep === false);
+check('15.4: no phantom task id is written for a habit the attempt does not have',
+  !('sleep_target' in ((await days())[3]?.tasks || {})),
+  JSON.stringify(Object.keys((await days())[3]?.tasks || {})));
+
+// The Daily Log habit and the Daily Log card are one action.
+check('15.5: saving a metric completes the habit exactly once',
+  (await days())[3]?.tasks?.daily_log === true);
+const logRowXP = await page.locator('.check-item', { hasText: 'Complete Daily Log' })
+  .locator('.check-xp').textContent();
+check('15.5: and the card advertises the same XP the habit row does',
+  new RegExp(logRowXP.trim().replace(/\s+/g, '\\s*')).test(await page.textContent('.daily-log-card')),
+  logRowXP.trim());
+check('15.5: with no separate button to press',
+  (await page.locator('.daily-log-card button', { hasText: /mark|complete|save/i }).count()) === 0);
+
+// "MWD" is not a word.
+check('15.6: the reduced-day control is named, not abbreviated',
+  /Minimum day/i.test(await page.textContent('.f4-tasks-card')) &&
+  !/\bMWD\b/.test(await page.textContent('.f4-tasks-card')));
 
 // ══ 13: no page errors ════════════════════════════════════════════════════
 const real = errors.filter(e => !/favicon|manifest|ServiceWorker|sw\.js/i.test(e));

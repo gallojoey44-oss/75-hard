@@ -49,7 +49,15 @@ export default function CheckItem({
   // throw away the half that answers it.
   const desc = task.desc;
   const card = variant === 'card';
-  const target = targetLabel(task.target);
+  // A target badge beside "Sleep opportunity: 8+ hours" or "Attention
+  // training: 10+ minutes" says the same thing twice. It is shown only when
+  // the row does not already state the figure.
+  const rawTarget = targetLabel(task.target);
+  const stated = rawTarget
+    ? new RegExp(`\\b${String(task.target.value).replace('.', '\\.')}\\b`)
+      .test(`${task.name || ''} ${desc || ''}`)
+    : false;
+  const target = stated ? null : rawTarget;
 
   return (
     <div
