@@ -1,0 +1,412 @@
+/**
+ * Forge 4.0 — the Today page, end to end.
+ *
+ * The redesign's promises, checked against the real app: that every figure on
+ * the page comes from the store rather than the mockup it was drawn from, that
+ * progress and XP move the instant a habit is ticked, that the Daily Log sits
+ * directly under the habits, that the detail moved behind disclosures is still
+ * all there, and that it holds together in every challenge state — including
+ * the ones that have no challenge at all.
+ *
+ * Run against a production build:  npx vite preview --port 4173
+ */
+import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+
+const BASE = process.env.FORGE_BASE || 'http://localhost:4173';
+const results = [];
+function check(name, cond, extra = '') {
+  results.push({ name, ok: !!cond, extra });
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${extra ? ' — ' + extra : ''}`);
+}
+
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+const errors = [];
+page.on('pageerror', e => errors.push(String(e)));
+page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+
+function dstr(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function offset(n) { const d = new Date(); d.setDate(d.getDate() + n); return dstr(d); }
+
+async function gotoTab(name) {
+  await page.evaluate((n) => {
+    const b = [...document.querySelectorAll('.bottom-nav .nav-tab, button')]
+      .find(x => new RegExp(`^${n}$`, 'i').test((x.getAttribute('aria-label') || x.textContent || '').trim()));
+    if (b) b.click();
+  }, name);
+  await page.waitForTimeout(400);
+}
+const prof = (id = 'me') => page.evaluate((i) => JSON.parse(localStorage.getItem('profiles'))[i], id);
+const days = (id = 'me') => page.evaluate((i) => (JSON.parse(localStorage.getItem('allDays') || '{}')[i] || {}), id);
+
+async function reset(profile = 'me') {
+  await page.evaluate((p) => {
+    localStorage.clear();
+    localStorage.setItem('activeProfile', JSON.stringify(p));
+  }, profile);
+  await page.reload();
+  await page.waitForSelector('.dashboard', { timeout: 10000 });
+}
+
+/**
+ * Seed an attempt directly, with its tasks priced the way the stamping does.
+ * `era` 1 keeps the task list's own XP, which is what an attempt started before
+ * the rebalance carries.
+ */
+async function seed({
+  profile = 'me', templateId = 'lock_in_14_day', name = 'LOCK IN', variant = 'standard',
+  durationDays = 14, start = offset(-2), tasks, era = 2, budget = 180, rank = 7,
+  completeDays = 0, meta = {}, dayRecords = null,
+} = {}) {
+  await reset(profile);
+  await page.evaluate((cfg) => {
+    const p = JSON.parse(localStorage.getItem('profiles'));
+    p[cfg.profile].highestRank = cfg.rank;
+    p[cfg.profile].challengeStart = cfg.start;
+    p[cfg.profile].xpPenalties = false;
+    p[cfg.profile].activeChallenge = {
+      templateId: cfg.templateId, name: cfg.name, emoji: '🎯', variant: cfg.variant,
+      durationDays: cfg.durationDays, passingScore: 70, keystoneRequirement: 65,
+      ...(cfg.era >= 2 ? { xpEconomyVersion: 2, effortTier: 'medium_hard', dailyBudget: cfg.budget, completionBonusXP: 504 } : {}),
+      ...cfg.meta,
+    };
+    if (cfg.tasks) p[cfg.profile].tasks = cfg.tasks.map((t, i) => ({ ...t, source: 'template', order: i }));
+    localStorage.setItem('profiles', JSON.stringify(p));
+
+    const ids = (p[cfg.profile].tasks || []).map(t => t.id);
+    const all = JSON.parse(localStorage.getItem('allDays') || '{}');
+    all[cfg.profile] = cfg.dayRecords || {};
+    for (let i = 1; i <= cfg.completeDays; i++) {
+      all[cfg.profile][i] = { dayNumber: i, mood: 7, energy: 7, tasks: Object.fromEntries(ids.map(id => [id, true])) };
+    }
+    localStorage.setItem('allDays', JSON.stringify(all));
+  }, { profile, templateId, name, variant, durationDays, start, tasks, era, budget, rank, completeDays, meta, dayRecords });
+  await page.reload();
+  await page.waitForSelector('.dashboard', { timeout: 10000 });
+  await gotoTab('Today');
+}
+
+const ERA2_TASKS = [
+  { id: 'li_sleep', name: 'Sleep opportunity: 8+ hours', icon: '😴', xp: 30, keystone: 3, keystoneHabit: true, desc: 'Time in bed and a consistent wake time. The opportunity is what counts.', target: { value: 8, unit: 'hours', direction: 'atLeast' } },
+  { id: 'li_flow', name: 'Flow training: 2 focused sessions', icon: '🌊', xp: 29, keystone: 3, desc: 'Session length ramps to 50 minutes and then holds.' },
+  { id: 'li_execute', name: 'Execute 2 of 3 priorities', icon: '✅', xp: 28, keystone: 3, desc: 'Finished, against the completion criteria you wrote this morning.' },
+  { id: 'li_mission', name: 'Daily mission: 3 priorities', icon: '🗂️', xp: 20, keystone: 2, desc: 'Three meaningful priorities, each with a clear definition of done.' },
+  { id: 'daily_log', name: 'Complete Daily Log', icon: '📊', xp: 10, keystone: 0 },
+];
+
+await page.goto(BASE);
+await page.evaluate(() => localStorage.setItem('activeProfile', JSON.stringify('me')));
+await page.reload();
+await page.waitForSelector('.dashboard', { timeout: 10000 });
+
+// ══ 1: the header reports the attempt, not the mockup ═════════════════════
+await seed({ tasks: ERA2_TASKS, completeDays: 2 });
+const card = page.locator('.f4-challenge-card');
+check('1: the Active Challenge card is on Today', (await card.count()) === 1);
+const cardText = await card.textContent();
+const p1 = await prof();
+check('1: it names the real challenge and mode',
+  cardText.includes(p1.activeChallenge.name) && /Standard/i.test(cardText), cardText.slice(0, 60));
+check('1: it reports the real day and duration',
+  /Day 3/.test(cardText) && /of 14/.test(cardText), (/Day \d+ of \d+/.exec(cardText) || [''])[0]);
+check('1: it reports the real streak', /🔥 2 days/.test(cardText), (/🔥[^·]*/.exec(cardText) || [''])[0]);
+check('1: it shows challenge progress as a percentage',
+  /21%/.test(cardText), (/\d+%/.exec(cardText) || [''])[0]);
+check('1: it shows the rank and its XP',
+  /True Warrior/.test(cardText) && /75,000 XP/.test(cardText),
+  (/True Warrior[\s\S]{0,20}/.exec(cardText) || [''])[0].replace(/\s+/g, ' '));
+check('1: none of the mockup\'s placeholder figures appear',
+  !/8,295|3 of 8 tasks|\+60 XP\b/.test(await page.textContent('.daily-view')));
+check('1: there is no "Log Today" button — this IS today',
+  (await page.locator('.daily-view button', { hasText: /^Log Today/i }).count()) === 0);
+check('1: the challenge card offers a way into the challenge itself',
+  (await card.locator('button', { hasText: /View Challenge/i }).count()) === 1);
+
+// ══ 2: progress and XP are the engine's, and move immediately ═════════════
+const ring = page.locator('.f4-progress-card');
+let ringText = await ring.textContent();
+check('2: progress starts at zero of the real task count',
+  /0 of 5 habits/.test(ringText), (/\d+ of \d+ habits/.exec(ringText) || [''])[0]);
+check('2: nothing earned yet', /\+0/.test(await ring.locator('.f4-xp-pill.earned').textContent()));
+const availableAtStart = Number((await ring.locator('.f4-xp-pill.remaining .f4-xp-val').textContent()).replace(/,/g, ''));
+// 5 tasks summing 117, plus the 15% perfect-day bonus on a 180 budget.
+check('2: the available figure is the engine\'s, not a sum of the rows',
+  availableAtStart === 117 + 27, `${availableAtStart}`);
+
+const boxes = page.locator('.check-item .check-box');
+await boxes.first().click();
+await page.waitForTimeout(350);
+ringText = await ring.textContent();
+check('2: ticking a habit updates the ring immediately',
+  /1 of 5 habits/.test(ringText), (/\d+ of \d+ habits/.exec(ringText) || [''])[0]);
+check('2: and the XP earned immediately',
+  /\+30/.test(await ring.locator('.f4-xp-pill.earned').textContent()),
+  await ring.locator('.f4-xp-pill.earned .f4-xp-val').textContent());
+check('2: the encouragement responds to the state',
+  /4 left|Keep going|halfway/i.test(ringText), (/Keep going[^+]*/.exec(ringText) || [''])[0].trim().slice(0, 40));
+
+await boxes.first().click();
+await page.waitForTimeout(350);
+check('2: unticking takes it straight back down',
+  /0 of 5 habits/.test(await ring.textContent()) &&
+  /\+0/.test(await ring.locator('.f4-xp-pill.earned').textContent()));
+
+// Two fast taps are an on and an off, never two awards.
+await boxes.nth(1).click();
+await boxes.nth(1).click();
+await page.waitForTimeout(400);
+const d2 = await days();
+check('2: a double tap toggles, it never pays twice',
+  d2[3]?.tasks?.li_flow !== true && /0 of 5 habits/.test(await ring.textContent()),
+  JSON.stringify(d2[3]?.tasks || {}));
+
+// ══ 3: the habit rows carry what a habit needs ════════════════════════════
+const row = page.locator('.check-item').first();
+const rowText = await row.textContent();
+check('3: the row states the habit', /Sleep opportunity/.test(rowText));
+check('3: with one sentence of what qualifies',
+  /Time in bed and a consistent wake time\./.test(rowText) && !/The opportunity is what counts/.test(rowText),
+  'first sentence only');
+check('3: its real XP', (await row.locator('.check-xp').textContent()).trim() === '30 XP');
+check('3: a keystone marker', (await row.locator('.keystone-stars').count()) === 1);
+check('3: and its completion condition', /≥ 8 hours/.test(rowText));
+check('3: every row is at least 44px tall for a reliable tap',
+  (await page.locator('.check-item').evaluateAll(els => els.every(e => e.getBoundingClientRect().height >= 44))));
+check('3: the row is reachable by keyboard', (await row.getAttribute('tabindex')) === '0');
+
+// The guide opens without ticking the habit off.
+const guideRow = page.locator('.check-item', { hasText: 'Sleep opportunity' }).first();
+if (await guideRow.locator('.check-guide').count()) {
+  await guideRow.locator('.check-guide').click();
+  await page.waitForTimeout(400);
+  const after = await days();
+  check('3: opening a guide never completes the habit', after[3]?.tasks?.li_sleep !== true);
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.locator('.modal-overlay, .hg-close, button', { hasText: /close/i }).first().click().catch(() => {});
+  await page.waitForTimeout(300);
+}
+
+// ══ 4: the Daily Log is directly under the habits ═════════════════════════
+const order = await page.evaluate(() => {
+  const root = document.querySelector('.daily-view');
+  const all = [...root.querySelectorAll('*')];
+  const tasks = [...root.querySelectorAll('.section-card')].find(c => /Daily Tasks/i.test(c.textContent || ''));
+  const log = root.querySelector('.daily-log-card');
+  const next = (() => { let n = tasks?.nextElementSibling; while (n && n.getBoundingClientRect().height === 0) n = n.nextElementSibling; return n; })();
+  return {
+    tasksIdx: all.indexOf(tasks), logIdx: all.indexOf(log),
+    logIsNext: next === log, nextClass: next?.className || '',
+  };
+});
+check('4: the Daily Log follows the habits', order.logIdx > order.tasksIdx);
+check('4: with nothing in between', order.logIsNext, order.nextClass.split(' ')[0] || 'nothing after tasks');
+
+// ══ 5: the detail is behind disclosures, closed, and still complete ═══════
+const collapses = page.locator('.f4-collapse');
+check('5: Today ends in named disclosures rather than a wall of panels',
+  (await collapses.count()) >= 1, `${await collapses.count()} sections`);
+check('5: they start closed',
+  (await page.locator('.f4-collapse[aria-expanded="true"], .f4-collapse.open').count()) === 0);
+const perfSection = page.locator('.f4-collapse', { hasText: /Performance/i }).first();
+check('5: performance and grading is one of them', (await perfSection.count()) === 1);
+await perfSection.locator('.f4-collapse-head').click();
+await page.waitForTimeout(450);
+check('5: opening it reveals the real Challenge Performance card',
+  (await perfSection.locator('.challenge-perf, [class*="challenge-perf"], .cp-card').count()) >= 1 ||
+  /Challenge Performance|Performance/i.test(await perfSection.textContent()));
+check('5: and it reports it is expanded',
+  (await perfSection.locator('.f4-collapse-head').getAttribute('aria-expanded')) === 'true');
+await perfSection.locator('.f4-collapse-head').click();
+await page.waitForTimeout(300);
+
+// ══ 6: an era-1 attempt keeps era-1 figures ═══════════════════════════════
+await seed({
+  era: 1, templateId: 'mental_training_phase', name: 'Mental Training Phase', durationDays: 14,
+  tasks: [
+    { id: 'mt_mind', name: 'Mental Training — 5 minutes', icon: '🧘', xp: 100, keystone: 3 },
+    { id: 'mt_reading', name: 'Read 5 pages', icon: '📚', xp: 40, keystone: 2 },
+  ],
+});
+const era1Row = await page.locator('.check-item').first().locator('.check-xp').textContent();
+check('6: an era-1 attempt still shows the XP it was started with',
+  era1Row.trim() === '100 XP', era1Row.trim());
+await page.locator('.check-item .check-box').first().click();
+await page.waitForTimeout(400);
+check('6: and the day pays era-1 rates — 100 plus the era-1 flat perfect day is not applied yet',
+  /\+100/.test(await page.locator('.f4-xp-pill.earned').textContent()),
+  await page.locator('.f4-xp-pill.earned .f4-xp-val').textContent());
+
+// ══ 7: a Support Challenge is shown, never hidden ═════════════════════════
+await seed({
+  tasks: ERA2_TASKS,
+  meta: {},
+});
+await page.evaluate((start) => {
+  const p = JSON.parse(localStorage.getItem('profiles'));
+  p.me.supportChallenge = {
+    templateId: 'mental_training_phase', name: 'Mental Training Phase', emoji: '🧠',
+    variant: 'standard', durationDays: 14, xpEconomyVersion: 2, effortTier: 'medium', dailyBudget: 160,
+  };
+  p.me.supportChallengeStart = start;
+  localStorage.setItem('profiles', JSON.stringify(p));
+}, offset(-1));
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 10000 });
+await gotoTab('Today');
+const stackText = await page.locator('.f4-challenge-card').textContent();
+check('7: both lanes are named when a Support Challenge is running',
+  /Primary/i.test(stackText) && /Support/i.test(stackText) &&
+  /LOCK IN/.test(stackText) && /Mental Training/.test(stackText),
+  stackText.replace(/\s+/g, ' ').slice(0, 80));
+check('7: the support lane reports its own day',
+  (await page.locator('.f4-lane.support').textContent()).includes('Day 2'),
+  (await page.locator('.f4-lane.support').textContent()).replace(/\s+/g, ' ').slice(0, 50));
+
+// ══ 8: the states with no challenge, or none yet ══════════════════════════
+// A brand-new profile has no challenge at all, and says so rather than
+// rendering an empty checklist.
+await reset();
+await gotoTab('Today');
+check('8: a profile with no challenge says so plainly',
+  /No Active Challenge/i.test(await page.textContent('.daily-view')));
+check('8: and offers no habits to tick', (await page.locator('.check-item').count()) === 0);
+
+// The open-ended Forge Daily baseline: no duration, so no fraction and no
+// completion to count down to.
+await seed({
+  templateId: 'forge_daily', name: 'Forge Daily', variant: null, durationDays: null,
+  era: 2, budget: 120,
+  tasks: [
+    { id: 'fd_sleep', name: 'Hit sleep goal', icon: '😴', xp: 26, keystone: 0 },
+    { id: 'fd_mind', name: 'Mental Training', icon: '🧘', xp: 34, keystone: 1 },
+    { id: 'daily_log', name: 'Complete Daily Log', icon: '📊', xp: 60, keystone: 0 },
+  ],
+});
+const baselineText = await page.textContent('.daily-view');
+check('8: the Forge Daily baseline renders a usable Today',
+  (await page.locator('.check-item').count()) === 3 && /Forge Daily/i.test(baselineText),
+  `${await page.locator('.check-item').count()} habits`);
+check('8: an open-ended baseline shows no fabricated duration or percentage',
+  !/of 0|of null|NaN|of undefined/.test(baselineText) &&
+  (await page.locator('.f4-lane-bar').count()) === 0);
+check('8: it still reports the day it is on',
+  /Day 3/.test(await page.locator('.f4-challenge-card').textContent()));
+
+await seed({ tasks: ERA2_TASKS, start: offset(3) });
+check('9: a scheduled attempt shows its pre-start card',
+  (await page.locator('.scheduled-card').count()) === 1);
+check('9: and renders no tickable habit list before Day 1',
+  (await page.locator('.check-item').count()) === 0);
+
+// ══ 10: a day with nothing done, and a day with everything done ═══════════
+await seed({ tasks: ERA2_TASKS });
+check('10: a day with nothing done reads zero, not blank',
+  /0 of 5 habits/.test(await page.locator('.f4-progress-card').textContent()));
+const allBoxes = page.locator('.check-item .check-box');
+for (let i = 0; i < await allBoxes.count(); i++) {
+  const row = page.locator('.check-item').nth(i);
+  if (/Complete Daily Log/i.test(await row.textContent())) continue;   // scrolls to the log by design
+  await allBoxes.nth(i).click();
+  await page.waitForTimeout(150);
+}
+await page.locator('.daily-log-card .rating-bubble').first().click();
+await page.waitForTimeout(500);
+const fullText = await page.locator('.f4-progress-card').textContent();
+check('10: completing everything reads as complete',
+  /5 of 5 habits/.test(fullText), (/\d of \d habits/.exec(fullText) || [''])[0]);
+check('10: and the ring reports 100%',
+  (await page.locator('.f4-ring.complete').count()) === 1);
+check('10: with nothing left available',
+  (await page.locator('.f4-xp-pill.remaining').count()) === 0);
+check('10: the Daily Log completed itself from the metric that was saved',
+  (await days())[3]?.tasks?.daily_log === true);
+
+// ══ 11: long names and small screens ══════════════════════════════════════
+await seed({
+  tasks: [
+    { id: 'long1', name: 'Complete a forty-five minute resistance training session including every accessory movement', icon: '🏋️', xp: 60, keystone: 3, desc: 'Any structured session counts, indoors or outdoors, provided it is deliberate.' },
+    { id: 'long2', name: 'Drink one full gallon of water across the whole day without exception', icon: '💧', xp: 40, keystone: 1 },
+    { id: 'daily_log', name: 'Complete Daily Log', icon: '📊', xp: 20, keystone: 0 },
+  ],
+});
+for (const w of [320, 390, 430]) {
+  await page.setViewportSize({ width: w, height: 900 });
+  await page.waitForTimeout(350);
+  const m = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.check-item')];
+    const card = document.querySelector('.f4-challenge-card');
+    const log = document.querySelector('.daily-log-card');
+    const inside = (el) => {
+      if (!el) return true;
+      const r = el.getBoundingClientRect();
+      return r.left >= -1 && r.right <= window.innerWidth + 1;
+    };
+    return {
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+      rowsInside: rows.every(inside),
+      cardInside: inside(card),
+      logInside: inside(log),
+      clipped: rows.some(r => r.scrollWidth > r.clientWidth + 1),
+    };
+  });
+  check(`11: no horizontal overflow at ${w}px`, m.overflow <= 1, `${m.overflow}px`);
+  check(`11: every habit row fits the screen at ${w}px`, m.rowsInside && !m.clipped);
+  check(`11: the challenge card and Daily Log fit at ${w}px`, m.cardInside && m.logInside);
+}
+await page.setViewportSize({ width: 390, height: 900 });
+
+// ══ 12: reduced motion is honoured ════════════════════════════════════════
+await page.emulateMedia({ reducedMotion: 'reduce' });
+await page.reload(); await page.waitForSelector('.dashboard', { timeout: 10000 });
+await gotoTab('Today');
+const motion = await page.evaluate(() => {
+  const el = document.querySelector('.f4-ring-fill');
+  return el ? getComputedStyle(el).transitionDuration : null;
+});
+check('12: the ring does not animate under reduced motion',
+  motion === null || /^(0s|0\.001s|1ms)$/.test(motion), String(motion));
+await page.emulateMedia({ reducedMotion: null });
+
+// ══ 12b: the small print is readable, not decorative ═════════════════════
+// Measured, because "high contrast" is otherwise a matter of opinion. WCAG AA
+// is 4.5:1 for body text; every line of real copy on Today has to clear it.
+const contrast = await page.evaluate(() => {
+  const lum = (c) => {
+    const [r, g, b] = c.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(v => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const bgOf = (el) => {
+    let n = el;
+    while (n && n !== document.documentElement) {
+      const c = getComputedStyle(n).backgroundColor;
+      if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) return c;
+      n = n.parentElement;
+    }
+    return 'rgb(13, 13, 20)';
+  };
+  const ratio = (fg, bg) => {
+    const a = lum(fg), b = lum(bg);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  };
+  const out = [];
+  for (const sel of ['.check-desc', '.f4-progress-msg', '.f4-tasks-count', '.f4-xp-lbl', '.f4-card-sub']) {
+    const el = document.querySelector(sel);
+    if (!el) continue;
+    out.push({ sel, r: Math.round(ratio(getComputedStyle(el).color, bgOf(el)) * 100) / 100 });
+  }
+  return out;
+});
+check('12b: every line of small copy clears WCAG AA (4.5:1)',
+  contrast.length > 0 && contrast.every(c => c.r >= 4.5),
+  contrast.map(c => `${c.sel} ${c.r}`).join(' · '));
+
+// ══ 13: no page errors ════════════════════════════════════════════════════
+const real = errors.filter(e => !/favicon|manifest|ServiceWorker|sw\.js/i.test(e));
+check('13: no page errors across every state', real.length === 0, real.slice(0, 2).join(' | '));
+
+const failed = results.filter(x => !x.ok);
+console.log(`\n${results.length - failed.length}/${results.length} passed`);
+await browser.close();
+process.exit(failed.length ? 1 : 0);

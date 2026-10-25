@@ -187,12 +187,35 @@ const fields = await page.evaluate(() => {
 check('5: the card keeps its title', fields.title);
 check('5: the notes field is still there', fields.notes);
 check('5: the hours-slept input is still there', fields.sleepHours);
-check('5: every metric is still there',
-  ['Mood', 'Confidence', 'Sleep Quality', 'Energy', 'Recovery', 'Workout Effort', 'Stress']
-    .every(m => new RegExp(m, 'i').test(fields.text)),
-  ['Mood', 'Confidence', 'Sleep Quality', 'Energy', 'Recovery', 'Workout Effort', 'Stress']
-    .filter(m => !new RegExp(m, 'i').test(fields.text)).join(', ') || 'all present');
-check('5: it advertises the 20 XP it awards', /20 XP/.test(fields.text));
+// The four logged every day lead; the rest are one tap away under "More
+// metrics". Every metric the app has ever stored is still here, on the same
+// 1-10 scales, writing to the same fields.
+const QUICK = ['Mood', 'Energy'];
+const REST = ['Confidence', 'Sleep Quality', 'Recovery', 'Workout Effort', 'Stress'];
+check('5: the daily four lead the card',
+  QUICK.every(m => new RegExp(m, 'i').test(fields.text)) && fields.sleepHours && fields.notes,
+  QUICK.filter(m => !new RegExp(m, 'i').test(fields.text)).join(', ') || 'all present');
+await page.locator('.f4-log-more').click();
+await page.waitForTimeout(300);
+const expanded = await page.evaluate(() => document.querySelector('.daily-log-card').textContent);
+check('5: every other metric is one tap away, not removed',
+  REST.every(m => new RegExp(m, 'i').test(expanded)),
+  REST.filter(m => !new RegExp(m, 'i').test(expanded)).join(', ') || 'all present');
+check('5: and they are still 1-10 scales, not a shorter one',
+  (await page.locator('.daily-log-card .rating-bubble').count()) === (QUICK.length + REST.length) * 10,
+  `${await page.locator('.daily-log-card .rating-bubble').count()} bubbles`);
+// The XP it advertises is the Daily Log task's OWN XP under this attempt's
+// economy, not a constant. It used to say 20 whatever the task was worth.
+const logTaskXP = await page.evaluate(() => {
+  const row = [...document.querySelectorAll('.check-item')]
+    .find(e => /Complete Daily Log/i.test(e.textContent || ''));
+  return Number((/(\d+)\s*XP/.exec(row?.querySelector('.check-xp')?.textContent || '') || [])[1]);
+});
+check('5: it advertises the XP the Daily Log task actually awards',
+  Number.isFinite(logTaskXP) && new RegExp(`${logTaskXP} XP`).test(expanded),
+  `task row says ${logTaskXP} XP`);
+await page.locator('.f4-log-more').click();
+await page.waitForTimeout(200);
 
 // ══ 6: "Complete Daily Log" reflects the real log, and cannot double-pay ══
 let d = await days();

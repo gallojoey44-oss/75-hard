@@ -12,64 +12,33 @@ import EnergyResetPanel from './EnergyResetPanel';
 import FatLossHardPanel from './FatLossHardPanel';
 import MentalTraining from './MentalTraining';
 import FaithReflection from './FaithReflection';
-import RatingSlider from './RatingSlider';
 import BuildBanner from './BuildBanner';
 import { FutureSelfLetterView } from './FutureSelfLetter';
 import {
   MWD_TASKS, getMWDComplete, getWarriorMessage,
   sortTasksByKeystone, getTaskKeystone, getTaskXP, isKeystone, requiredTasksForDay,
+  computeChallengeScore,
 } from '../utils/gamification';
 import { KEYSTONE_EXPLAINER, WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { getTemplateById } from '../data/challengeTemplates';
+import { dayRules } from '../data/xpEconomy';
 import ScheduledStartCard from './ScheduledStart';
 import {
   alsoSupportsLabel, groupTasksForDisplay, hasSupportChallenge,
   challengeOf, LANE,
 } from '../utils/challengeStack';
 import * as MB from '../data/muscleBuildingConfig';
+import * as HH from '../data/hormoneHealthConfig';
+import * as ER from '../data/energyResetConfig';
+import * as LI from '../data/lockInConfig';
+import * as FLH from '../data/fatLossHardConfig';
 import HabitGuide from './HabitGuide';
 import LockInPanel from './LockInPanel';
 import { guideForTask } from '../data/habitGuides';
-
-const TASK_COLORS = ['#FF6B6B','#4ECDC4','#74B9FF','#6BCB77','#FFB347','#DDA0DD','#F9E04B','#FF8FAB','#A8E6CF','#FFA07A'];
-
-function GfTaskCard({ task, checked, onToggle, index, supports = null, onOpenGuide = null }) {
-  const color = task.color || TASK_COLORS[index % TASK_COLORS.length];
-  return (
-    <div className={`gf-task-card${checked ? ' done-card' : ''}${supports ? ' shared-habit' : ''}`}>
-      <div className="gf-task-top" style={{ background: color }} />
-      <div className="gf-task-body">
-        <div className="gf-task-num" style={{ background: color + 'CC' }}>
-          {index + 1}
-        </div>
-        <span className={`gf-task-name${checked ? ' done' : ''}`}>
-          {task.name}
-          {/* A task's own guidance — what counts, what is optional, what is not
-              required. Without this the challenge's copy never reaches the user
-              on this layout. */}
-          {task.desc && <span className="gf-task-desc">{task.desc}</span>}
-          {/* One behaviour, two challenges: satisfies both, pays XP once. */}
-          {supports && <span className="gf-task-supports">🔗 {supports}</span>}
-          {/* Habits that carry a strategy guide are reachable from this layout
-              too, so the education is not a male-profile-only feature. */}
-          {onOpenGuide && (
-            <button className="gf-task-guide" onClick={onOpenGuide}>
-              Strategy guide →
-            </button>
-          )}
-        </span>
-        <button
-          className={`gf-task-check${checked ? ' done' : ''}`}
-          style={checked ? {} : { borderColor: color + '80' }}
-          onClick={onToggle}
-          aria-label={checked ? 'Uncheck' : 'Check'}
-        >
-          {checked ? '✓' : ''}
-        </button>
-      </div>
-    </div>
-  );
-}
+import ChallengeHeaderCard from './today/ChallengeHeaderCard';
+import TodayProgress from './today/TodayProgress';
+import QuickLog from './today/QuickLog';
+import Collapsible from './today/Collapsible';
 
 function DaySelector({ selected, current, onChange, duration = 75 }) {
   const isOtherDay = current && selected !== current;
@@ -379,117 +348,11 @@ function TaskList({ tasks, profile, renderTask, hasKeystones, keystoneExplainer 
   );
 }
 
-/**
- * 📊 The Daily Log — notes and the day's metric ratings.
- *
- * Extracted so it can sit directly under the daily tasks instead of below the
- * performance analytics: logging how the day went belongs with doing the day,
- * not after the scorecard.
- *
- * Completion is NOT a checkbox. Saving any one metric marks the shared
- * `daily_log` task complete exactly once (see handleUpdate), and the task row
- * in the list scrolls here rather than toggling — so the 20 XP can be earned
- * once, by actually logging, and never independently of this card.
- */
-function DailyLog({ dayData, onUpdate, profile, activeProfile, logRef }) {
-  return (
-    <div className="section-card daily-log-card" ref={logRef}>
-      <div className="section-title" style={{ justifyContent: 'space-between' }}>
-        <span>📊 Daily Log</span>
-        {dayData?.tasks?.daily_log ? (
-          <span className="daily-log-done" style={{ fontSize: 13, color: '#6BCB77', fontWeight: 600 }}>
-            ✓ Logged · +20 XP
-          </span>
-        ) : (
-          <span className="daily-log-hint" style={{ fontSize: 12, opacity: 0.6 }}>
-            Save one metric to complete · 20 XP
-          </span>
-        )}
-      </div>
-      <textarea
-        className="log-textarea"
-        rows={3}
-        placeholder="How did today go? Any notes…"
-        value={dayData?.notes || ''}
-        onChange={e => onUpdate({ notes: e.target.value })}
-      />
-
-      <RatingSlider
-        label="Mood" emoji="😊"
-        value={dayData?.mood || 0}
-        onChange={v => onUpdate({ mood: v })}
-      />
-      <RatingSlider
-        label="Confidence" emoji="💪"
-        value={dayData?.confidence || 0}
-        onChange={v => onUpdate({ confidence: v })}
-      />
-      <div className="sleep-hours-row">
-        <div style={{ flex: 1 }}>
-          <div className="sleep-hours-label">😴 Hours Slept</div>
-          {profile?.sleepAutoComplete !== false && (
-            <div className="sleep-target-hint">≥ {profile?.sleepTarget ?? 8}h auto-completes sleep task</div>
-          )}
-        </div>
-        <input
-          type="number"
-          className="sleep-hours-input"
-          value={dayData?.hoursSlept || ''}
-          min={0}
-          max={16}
-          step={0.5}
-          placeholder="0"
-          onChange={e => {
-            const hrs = parseFloat(e.target.value) || 0;
-            const updates = { hoursSlept: hrs };
-            const target = profile?.sleepTarget ?? 8;
-            const autoComplete = profile?.sleepAutoComplete !== false;
-            const sleepTaskId = activeProfile === 'me' ? 'sleep_target' : 'gf_sleep_target';
-            if (autoComplete) {
-              updates.tasks = { ...dayData?.tasks, [sleepTaskId]: hrs >= target };
-            }
-            onUpdate(updates);
-          }}
-        />
-        <span className="sleep-hours-unit">hrs</span>
-      </div>
-      <RatingSlider
-        label="Sleep Quality" emoji="⭐"
-        value={dayData?.sleep || 0}
-        onChange={v => onUpdate({ sleep: v })}
-      />
-      <RatingSlider
-        label="Energy" emoji="⚡"
-        value={dayData?.energy || 0}
-        onChange={v => onUpdate({ energy: v })}
-      />
-      <RatingSlider
-        label="Recovery / Soreness" emoji="🔋"
-        value={dayData?.recovery || 0}
-        onChange={v => onUpdate({ recovery: v })}
-        hint="1 = very sore · 10 = fully recovered"
-      />
-      <RatingSlider
-        label="Workout Effort" emoji="🏋️"
-        value={dayData?.workoutEffort || 0}
-        onChange={v => onUpdate({ workoutEffort: v })}
-        hint="1 = very easy · 10 = extremely hard"
-      />
-      <RatingSlider
-        label="Stress" emoji="🌡️"
-        value={dayData?.stress || 0}
-        onChange={v => onUpdate({ stress: v })}
-        hint="1 = very calm · 10 = very stressed"
-      />
-    </div>
-  );
-}
-
 export default function DailyView({ editDayNum, setView }) {
   const {
-    activeProfile, profile, allDays, todayStr,
-    getChallengeMeta, getDayNumber, getDayData, isChallengeScheduled,
-    updateDay, toggleTask,
+    activeProfile, profile, profiles, allDays, todayStr,
+    getChallengeMeta, getDayNumber, getRawDayNumber, getDayData, isChallengeScheduled,
+    updateDay, toggleTask, getWeeklyRequirements,
     weeklyReflections, saveWeeklyReflection,
   } = useApp();
 
@@ -667,6 +530,8 @@ export default function DailyView({ editDayNum, setView }) {
   const faithEnabled = profile?.faithEnabled || false;
   const hasGratitudeTask = tasks.some(t => t.id === 'mt_gratitude');
   const meta = getChallengeMeta();
+  // This attempt's own rate card: an era-1 attempt still shows era-1 task XP.
+  const rules = dayRules(meta);
   const isFatLoss = meta.templateId === 'fat_loss_phase';
   // Muscle Building shows the same progress-tracking card, plus whichever extra
   // measurements the user opted into at setup. Nothing is required.
@@ -708,8 +573,20 @@ export default function DailyView({ editDayNum, setView }) {
   const isCurrentDay = selectedDayNum === currentDayNum;
   const comebackMode = profile?.comebackMode || {};
 
+  // ── Disclosure summary ──────────────────────────────────────────────────
+  // A collapsed section still has to be worth opening, so it states its
+  // headline on the closed header — from the same scorer the card inside
+  // uses, and null rather than a guess when there is no data yet.
+  const scoreSummary = (() => {
+    const rawDay = getRawDayNumber?.() || currentDayNum || selectedDayNum;
+    const score = computeChallengeScore(allDays, profiles, activeProfile, rawDay);
+    return score?.hasData ? `${score.score}%` : null;
+  })();
+
   const displayPct = isMWD ? mwdPct : pct;
-  const taskCount  = isMWD ? `${MWD_TASKS.filter(t => dayData?.mwdTasks?.[t.id]).length}/${MWD_TASKS.length} MWD tasks` : `${tasks.filter(t => dayData?.tasks?.[t.id]).length}/${tasks.length} tasks`;
+  const taskCount  = isMWD
+    ? `${MWD_TASKS.filter(t => dayData?.mwdTasks?.[t.id]).length} of ${MWD_TASKS.length} complete`
+    : `${tasks.filter(t => dayData?.tasks?.[t.id]).length} of ${tasks.length} complete`;
 
   // SCHEDULED attempt: Day 1 has not arrived, so there is no day to show. Never
   // render a task list (which would look like — and could be checked off as —
@@ -723,62 +600,57 @@ export default function DailyView({ editDayNum, setView }) {
     );
   }
 
+  const mwdDoneCount = MWD_TASKS.filter(t => dayData?.mwdTasks?.[t.id]).length;
+
   return (
-    <div className="daily-view">
+    <div className="daily-view f4-today">
       <BuildBanner />
 
-      {/* Day Selector */}
-      <DaySelector
-        selected={selectedDayNum}
-        current={currentDayNum}
-        onChange={setSelectedDayNum}
-        duration={getChallengeMeta().durationDays}
-      />
+      {/* Page header — what day this is, before anything else. */}
+      <header className="f4-page-head">
+        <div>
+          <h1 className="f4-page-title">{isCurrentDay ? 'Today' : `Day ${selectedDayNum}`}</h1>
+          <div className="f4-page-date">{formatDateLong(dateStr)}</div>
+        </div>
+        <div className="daily-header-meta f4-page-flag">
+          {currentDayNum && selectedDayNum < currentDayNum ? (
+            <>
+              <span className="edit-other-label">✏️ Editing past day</span>
+              <span className="logged-late-badge">Logged late</span>
+            </>
+          ) : selectedDayNum > (currentDayNum || 0) ? (
+            <span className="edit-other-label">📋 Planning ahead</span>
+          ) : null}
+        </div>
+      </header>
+
+      {/* 1 — Understand today's challenge. */}
+      <ChallengeHeaderCard onOpenChallenge={setView ? () => setView('challenges') : null} />
 
       {/* Comeback banner */}
       {isMe && isCurrentDay && (
         <MWDBanner comebackMode={comebackMode} dayNum={selectedDayNum} />
       )}
 
-      <div className="daily-header">
-        <div className="daily-header-left">
-          <h2>{formatDateLong(dateStr)}</h2>
-          <div className="daily-header-meta">
-            {currentDayNum && selectedDayNum < currentDayNum ? (
-              <>
-                <span className="edit-other-label">✏️ Editing past day</span>
-                <span className="logged-late-badge">Logged late</span>
-              </>
-            ) : selectedDayNum > (currentDayNum || 0) ? (
-              <span className="edit-other-label">📋 Planning ahead</span>
-            ) : (
-              <span className="text-muted-sm">Log your day</span>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* 2 — See daily progress. */}
+      <TodayProgress
+        tasks={tasks}
+        dayData={dayData}
+        dayNum={selectedDayNum}
+        isMWD={isMWD}
+        mwdDone={mwdDoneCount}
+        mwdTotal={MWD_TASKS.length}
+        isPast={!!currentDayNum && selectedDayNum < currentDayNum}
+        isFuture={selectedDayNum > (currentDayNum || 0)}
+      />
 
-      {/* Progress bar */}
-      <div className="section-card">
-        <div className="prog-bar-wrap">
-          <div className="prog-bar-label">
-            <span>{isMWD ? '🛡️ MWD progress' : "Today's progress"}</span>
-            <span>{taskCount}</span>
-          </div>
-          <div className="prog-bar-track">
-            <div
-              className={`prog-bar-fill${displayPct === 100 ? ' success' : ''}${isMWD ? ' mwd' : ''}`}
-              style={{ width: `${displayPct}%` }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Read My Why / I'm struggling */}
-      <WhyBar
-        letter={letter}
-        onReadWhy={() => setShowLetter(true)}
-        onStruggling={() => setShowLetter(true)}
+      {/* Day navigation sits under the summary: it is how a past day is
+          corrected, not the first thing today is about. */}
+      <DaySelector
+        selected={selectedDayNum}
+        current={currentDayNum}
+        onChange={setSelectedDayNum}
+        duration={getChallengeMeta().durationDays}
       />
 
       {/* Challenge coaching — repeatedly skipped keystone */}
@@ -804,28 +676,26 @@ export default function DailyView({ editDayNum, setView }) {
 
       {/* ── Joey: standard checklist ── */}
       {isMe && (
-        <div className="section-card">
-          <div className="section-title" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <span>{isMWD ? '🛡️ Minimum Warrior Day' : '✅ Daily Tasks'}</span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {isCurrentDay && (
-                <button
-                  className={`mwd-toggle-btn${isMWD ? ' active' : ''}`}
-                  onClick={handleToggleMWD}
-                  title={isMWD ? 'Switch to full challenge' : 'Switch to Minimum Warrior Day'}
-                >
-                  {isMWD ? '↩ Full Mode' : '🛡️ MWD'}
-                </button>
-              )}
-              {setView && (
-                <button
-                  className="manage-tasks-link"
-                  onClick={() => setView('settings')}
-                >
-                  ✏️ Manage Tasks
-                </button>
-              )}
-            </div>
+        <div className="section-card f4-tasks-card">
+          <div className="section-title f4-tasks-head">
+            <span className="f4-card-title">{isMWD ? '🛡️ Minimum Warrior Day' : 'Daily Tasks'}</span>
+            <span className="f4-tasks-count">{taskCount}</span>
+          </div>
+          <div className="f4-tasks-tools">
+            {isCurrentDay && (
+              <button
+                className={`mwd-toggle-btn${isMWD ? ' active' : ''}`}
+                onClick={handleToggleMWD}
+                title={isMWD ? 'Switch to full challenge' : 'Switch to Minimum Warrior Day'}
+              >
+                {isMWD ? '↩ Full Mode' : '🛡️ MWD'}
+              </button>
+            )}
+            {setView && (
+              <button className="manage-tasks-link" onClick={() => setView('settings')}>
+                ✏️ Manage Tasks
+              </button>
+            )}
           </div>
 
           {isMWD ? (
@@ -850,6 +720,7 @@ export default function DailyView({ editDayNum, setView }) {
               </div>
             </>
           ) : (
+            <div className="f4-task-list">
             <TaskList
               tasks={tasks}
               profile={profile}
@@ -862,12 +733,13 @@ export default function DailyView({ editDayNum, setView }) {
                   checked={!!dayData?.tasks?.[task.id]}
                   onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
                   keystone={getTaskKeystone(task)}
-                  xp={getTaskXP(task)}
+                  xp={getTaskXP(task, rules)}
                   supports={supports}
                   onOpenGuide={guideForTask(task) ? () => setGuideTaskId(task.id) : null}
                 />
               )}
             />
+            </div>
           )}
         </div>
       )}
@@ -887,51 +759,13 @@ export default function DailyView({ editDayNum, setView }) {
         return (
           <HabitGuide
             guide={g}
-            xp={getTaskXP(task)}
+            xp={getTaskXP(task, rules)}
             checked={!!dayData?.tasks?.[task.id]}
             onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
             onClose={() => setGuideTaskId(null)}
           />
         );
       })()}
-
-      {/* ── Body metrics (Fat Loss Challenge) ── */}
-      {isMe && showBodyMetrics && !isMWD && (
-        <BodyMetrics
-          dayData={dayData}
-          dayNumber={selectedDayNum}
-          onUpdate={handleUpdate}
-          extraMeasurements={mbExtraMeasurements}
-        />
-      )}
-
-      {/* ── Joey: Gratitude / Prayer (Mental Training Phase) ── */}
-      {isMe && hasGratitudeTask && !isMWD && (
-        <GratitudePrayer
-          dayData={dayData}
-          onUpdate={handleUpdate}
-          onToggleComplete={() => handleToggleTask('mt_gratitude')}
-        />
-      )}
-
-      {/* ── Joey: mental training ── */}
-      {isMe && !isMWD && (
-        <MentalTraining
-          dayNumber={selectedDayNum}
-          dayData={dayData}
-          onUpdate={handleUpdate}
-          mentalTaskId={mentalTaskId}
-        />
-      )}
-
-      {/* ── Joey: faith reflection (optional) ── */}
-      {isMe && faithEnabled && !isMWD && (
-        <FaithReflection
-          dayNumber={selectedDayNum}
-          dayData={dayData}
-          onUpdate={handleUpdate}
-        />
-      )}
 
       {/* ── Girlfriend: colored task cards ── */}
       {!isMe && (
@@ -947,56 +781,27 @@ export default function DailyView({ editDayNum, setView }) {
             </div>
           )}
 
-          <div className="gf-tasks">
+          <div className="gf-tasks f4-task-list">
             <TaskList
               tasks={tasks}
               profile={profile}
-              hasKeystones={false}
+              hasKeystones={hasKeystones}
+              keystoneExplainer={KEYSTONE_EXPLAINER}
               renderTask={(task, supports) => (
-                <GfTaskCard
+                <CheckItem
                   key={task.id}
                   task={task}
-                  index={displayTasks.findIndex(t => t.id === task.id)}
+                  variant="card"
                   checked={!!dayData?.tasks?.[task.id]}
                   onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
+                  keystone={getTaskKeystone(task)}
+                  xp={getTaskXP(task, rules)}
                   supports={supports}
                   onOpenGuide={guideForTask(task) ? () => setGuideTaskId(task.id) : null}
                 />
               )}
             />
           </div>
-
-          {showBodyMetrics && (
-            <BodyMetrics
-              dayData={dayData}
-              dayNumber={selectedDayNum}
-              onUpdate={handleUpdate}
-              extraMeasurements={mbExtraMeasurements}
-            />
-          )}
-
-          {hasGratitudeTask && (
-            <GratitudePrayer
-              dayData={dayData}
-              onUpdate={handleUpdate}
-              onToggleComplete={() => handleToggleTask('mt_gratitude')}
-            />
-          )}
-
-          <MentalTraining
-            dayNumber={selectedDayNum}
-            dayData={dayData}
-            onUpdate={handleUpdate}
-            mentalTaskId={mentalTaskId}
-          />
-
-          {faithEnabled && (
-            <FaithReflection
-              dayNumber={selectedDayNum}
-              dayData={dayData}
-              onUpdate={handleUpdate}
-            />
-          )}
 
           <div className="validate-btn-wrap">
             {dayData?.validated ? (
@@ -1023,35 +828,90 @@ export default function DailyView({ editDayNum, setView }) {
         </>
       )}
 
-      {/* Daily Log — directly under the daily tasks, and above every analytics
-          section, so the day can be logged without scrolling past the
-          scorecard. Both profiles. */}
-      <DailyLog
+      {/* 4 — Record the Daily Log. DIRECTLY under the habits: nothing, not even
+          the other logging cards, comes between doing the day and recording
+          it. Both profiles. */}
+      <QuickLog
         dayData={dayData}
         onUpdate={handleUpdate}
         profile={profile}
         activeProfile={activeProfile}
         logRef={logRef}
+        meta={meta}
       />
 
-      {/* Weekly Requirements — real per-challenge-week tracking (Fat Loss).
-          Sits below the Daily Log and above Challenge Performance. */}
-      {isCurrentDay && <WeeklyRequirements />}
+      {/* The remaining LOGGING surfaces. These complete real tasks, so they
+          stay on the page rather than moving behind a disclosure — they are
+          actions, not analytics. */}
+      {showBodyMetrics && !isMWD && (
+        <BodyMetrics
+          dayData={dayData}
+          dayNumber={selectedDayNum}
+          onUpdate={handleUpdate}
+          extraMeasurements={mbExtraMeasurements}
+        />
+      )}
+      {hasGratitudeTask && !isMWD && (
+        <GratitudePrayer
+          dayData={dayData}
+          onUpdate={handleUpdate}
+          onToggleComplete={() => handleToggleTask('mt_gratitude')}
+        />
+      )}
+      {!isMWD && (
+        <MentalTraining
+          dayNumber={selectedDayNum}
+          dayData={dayData}
+          onUpdate={handleUpdate}
+          mentalTaskId={mentalTaskId}
+        />
+      )}
+      {faithEnabled && !isMWD && (
+        <FaithReflection
+          dayNumber={selectedDayNum}
+          dayData={dayData}
+          onUpdate={handleUpdate}
+        />
+      )}
 
-      {/* Bonus Missions — optional, below the required tasks and the Daily Log */}
+      {/* Optional extras — never required, never part of the challenge score. */}
       <BonusMissions dayNumber={selectedDayNum} isEditable />
 
-      {/* Challenge Performance — placed after the daily actions AND the Daily
-          Log, so the user first sees what to do and records how it went, then
-          how it affects their overall score. (Bonus Missions never affect the
-          required challenge score.) */}
+      {/* Support, kept within reach but out of the way of the work itself. */}
+      <WhyBar
+        letter={letter}
+        onReadWhy={() => setShowLetter(true)}
+        onStruggling={() => setShowLetter(true)}
+      />
+
+      {/* 5 — Explore deeper detail if desired.
+
+          Everything below is kept, in full, behind named disclosures. It is
+          the material that made Today hard to read daily: scoring breakdowns,
+          weekly targets and the per-challenge analytics panels. Closed by
+          default, so the daily flow above is the whole page until someone asks
+          for more. */}
+      {/* The challenge's own daily tooling — today's flow target, this week's
+          sessions, the energy ratings. These are things to DO today, so they
+          stay on the page; only the scoring moves behind a disclosure. */}
+      {isCurrentDay && <WeeklyRequirements />}
       <MuscleBuildingPanel />
       <HormoneHealthPanel />
       <EnergyResetPanel />
       <FatLossHardPanel />
       <LockInPanel dayNum={selectedDayNum} onOpenGuide={setGuideTaskId} />
-      <ChallengePerformance />
-      <SupportProgress />
+
+      {/* 5 — Explore deeper detail if desired.
+
+          The grading breakdown is the part that competed hardest with the
+          daily work: a scorecard, keystone adherence, pass thresholds and
+          projections, none of which change what to do today. It is kept in
+          full, behind a named disclosure that states the current score so it
+          is obvious whether opening it is worthwhile. */}
+      <Collapsible title="Performance & grading" icon="📊" summary={scoreSummary}>
+        <ChallengePerformance />
+        <SupportProgress />
+      </Collapsible>
 
 
       {/* Celebration modal */}

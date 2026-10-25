@@ -1048,14 +1048,22 @@ export function AppProvider({ children }) {
     if (!tasks.length) return 0;
     const meta = profiles[profId]?.activeChallenge;
     const cs = profiles[profId]?.challengeStart;
-    let streak = 0;
-    for (let i = dayNum; i >= 1; i--) {
+    const complete = (i) => {
       const d = profDays[i];
-      if (!d) break;
+      if (!d) return false;
       const dayTasks = requiredTasksForDay(tasks, meta, cs, i);
-      const done = dayTasks.filter(t => d.tasks[t.id]).length;
-      if (dayTasks.length && done === dayTasks.length) streak++;
-      else break;
+      return dayTasks.length > 0 && dayTasks.every(t => d.tasks?.[t.id]);
+    };
+    // The day in progress is NEUTRAL, exactly as it is for missed-day penalties
+    // and day XP: it has not been failed, it simply is not finished. Counting
+    // from it made the streak read 0 every morning until the last box was
+    // ticked, which is the opposite of what a streak is for.
+    let start = dayNum;
+    if (!complete(dayNum)) start = dayNum - 1;
+    let streak = 0;
+    for (let i = start; i >= 1; i--) {
+      if (!complete(i)) break;
+      streak++;
     }
     return streak;
   }, [activeProfile, allDays, profiles, getDayNumber]);

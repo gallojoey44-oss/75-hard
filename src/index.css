@@ -6531,3 +6531,485 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
   border-top: 1px solid var(--border); margin-top: 5px; padding-top: 6px;
 }
 .cxb-note { font-size: 10px; color: var(--text3); line-height: 1.5; margin-top: 7px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORGE 4.0 — Today
+   ───────────────────────────────────────────────────────────────────────────
+   A design-token layer plus the components built on it. Everything here reads
+   from the tokens below rather than literal colours, so the profile accent
+   (purple / pink) flows through automatically and a future surface can be
+   built from the same vocabulary instead of another one-off page.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Surfaces — a raised card, its inner wells, and the hairline between them */
+  --f4-surface:      #16161F;
+  --f4-surface-2:    #1C1C28;
+  --f4-surface-3:    #22222F;
+  --f4-hairline:     rgba(255,255,255,0.06);
+  --f4-hairline-2:   rgba(255,255,255,0.10);
+
+  /* Elevation */
+  --f4-shadow:       0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.28);
+  --f4-shadow-sm:    0 1px 2px rgba(0,0,0,0.35);
+
+  /* Radii */
+  --f4-r-lg:         20px;
+  --f4-r:            16px;
+  --f4-r-sm:         12px;
+  --f4-r-xs:         8px;
+
+  /* Rhythm — one scale, so spacing is a choice from a set rather than a guess */
+  --f4-gap-xs:       4px;
+  --f4-gap-sm:       8px;
+  --f4-gap:          12px;
+  --f4-gap-lg:       16px;
+  --f4-gap-xl:       20px;
+
+  /* Type */
+  --f4-fs-title:     26px;
+  --f4-fs-head:      17px;
+  --f4-fs-body:      15px;
+  --f4-fs-sm:        13px;
+  --f4-fs-xs:        11.5px;
+
+  /* Accent treatments derived from the profile accent */
+  --f4-accent-soft:  color-mix(in srgb, var(--accent) 16%, transparent);
+  --f4-accent-line:  color-mix(in srgb, var(--accent) 40%, transparent);
+  --f4-accent-grad:  linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+
+  /* Motion — one duration and one curve, honoured everywhere */
+  --f4-fast:         140ms;
+  --f4-ease:         cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* Older iOS Safari has no color-mix(): fall back to the existing glow token. */
+@supports not (color: color-mix(in srgb, red 10%, blue)) {
+  :root {
+    --f4-accent-soft: var(--accent-glow);
+    --f4-accent-line: var(--accent-glow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --f4-fast: 1ms; }
+  .f4-today *, .f4-today *::before, .f4-today *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+/* ─── Page shell ─────────────────────────────────────────────────────────── */
+
+.f4-today { padding: 0 14px 24px; display: flex; flex-direction: column; gap: var(--f4-gap-lg); }
+
+.f4-page-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--f4-gap); padding: 10px 2px 2px;
+}
+.f4-page-title {
+  font-size: var(--f4-fs-title); font-weight: 800; letter-spacing: -0.5px;
+  line-height: 1.1; color: var(--text);
+}
+.f4-page-date { font-size: var(--f4-fs-sm); color: var(--text2); margin-top: 2px; font-weight: 500; }
+.f4-page-flag { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+/* ─── Card primitive ─────────────────────────────────────────────────────── */
+
+.f4-card {
+  position: relative;
+  background: var(--f4-surface);
+  border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r);
+  box-shadow: var(--f4-shadow);
+  padding: var(--f4-gap-lg);
+  overflow: hidden;
+}
+.f4-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--f4-gap-sm); }
+.f4-card-title { font-size: var(--f4-fs-head); font-weight: 700; color: var(--text); }
+.f4-card-sub { font-size: var(--f4-fs-xs); color: var(--text3); margin-top: 2px; }
+
+.f4-badge {
+  font-size: var(--f4-fs-xs); font-weight: 600; color: var(--text2);
+  background: var(--f4-surface-3); border: 1px solid var(--f4-hairline);
+  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+}
+.f4-badge.success { color: var(--success); border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1); }
+
+.f4-btn {
+  font-size: var(--f4-fs-sm); font-weight: 600; border-radius: var(--f4-r-sm);
+  padding: 9px 14px; border: 1px solid var(--f4-hairline-2);
+  background: var(--f4-surface-3); color: var(--text);
+  min-height: 40px; cursor: pointer;
+  transition: opacity var(--f4-fast) var(--f4-ease), transform var(--f4-fast) var(--f4-ease);
+}
+.f4-btn:active { transform: scale(0.97); opacity: 0.85; }
+.f4-btn-quiet { background: transparent; color: var(--accent2); border-color: var(--f4-accent-line); }
+
+/* ─── Active Challenge ───────────────────────────────────────────────────── */
+
+.f4-challenge-card { padding-bottom: var(--f4-gap); }
+.f4-challenge-glow {
+  position: absolute; inset: -40% -30% auto auto; width: 70%; height: 150%;
+  background: radial-gradient(ellipse at top right, var(--f4-accent-soft), transparent 68%);
+  pointer-events: none;
+}
+.f4-challenge-head {
+  position: relative; display: flex; align-items: center; gap: var(--f4-gap-sm);
+  margin-bottom: var(--f4-gap);
+}
+.f4-live-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--success);
+  box-shadow: 0 0 0 3px rgba(16,185,129,0.18); flex-shrink: 0;
+}
+.f4-challenge-kicker {
+  font-size: var(--f4-fs-xs); font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--success);
+}
+.f4-streak {
+  margin-left: auto; font-size: var(--f4-fs-xs); font-weight: 700; color: var(--warn);
+  background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.25);
+  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+}
+
+.f4-lane { position: relative; }
+.f4-lane + .f4-lane { margin-top: var(--f4-gap); padding-top: var(--f4-gap); border-top: 1px solid var(--f4-hairline); }
+.f4-lane-kicker {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text3); margin-bottom: 3px;
+}
+.f4-lane-name { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.f4-lane-emoji { font-size: 20px; line-height: 1; }
+.f4-lane-title { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; color: var(--text); }
+.f4-lane-mode { font-size: var(--f4-fs-body); font-weight: 600; color: var(--accent2); }
+.f4-lane-meta { display: flex; align-items: center; gap: 10px; margin-top: 3px; font-size: var(--f4-fs-sm); color: var(--text2); }
+.f4-lane-day { font-weight: 600; }
+.f4-dim { color: var(--text3); font-weight: 500; }
+.f4-lane-diff { font-size: var(--f4-fs-xs); color: var(--text3); }
+.f4-lane-bar {
+  position: relative; margin-top: 10px; height: 8px; border-radius: 999px;
+  background: var(--f4-surface-3); overflow: visible;
+}
+.f4-lane-bar-fill {
+  height: 100%; border-radius: 999px; background: var(--f4-accent-grad);
+  transition: width 320ms var(--f4-ease);
+}
+.f4-lane-bar-pct {
+  position: absolute; right: 0; top: -19px; font-size: var(--f4-fs-xs);
+  font-weight: 700; color: var(--text2);
+}
+.f4-lane.support .f4-lane-title { font-size: 17px; }
+
+.f4-challenge-foot {
+  position: relative; display: flex; align-items: center; justify-content: space-between;
+  gap: var(--f4-gap); margin-top: var(--f4-gap-lg); padding-top: var(--f4-gap);
+  border-top: 1px solid var(--f4-hairline);
+}
+.f4-rank { display: flex; align-items: center; gap: var(--f4-gap-sm); min-width: 0; }
+.f4-rank-badge { font-size: 20px; }
+.f4-rank-text { display: flex; flex-direction: column; min-width: 0; }
+.f4-rank-name { font-size: var(--f4-fs-sm); font-weight: 700; color: var(--text); }
+.f4-rank-xp { font-size: var(--f4-fs-xs); color: var(--text2); }
+
+/* ─── Today's progress ───────────────────────────────────────────────────── */
+
+.f4-progress-card { display: flex; align-items: center; gap: var(--f4-gap-lg); }
+.f4-progress-body { flex: 1; min-width: 0; }
+.f4-progress-kicker {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text3);
+}
+.f4-progress-head { font-size: var(--f4-fs-head); font-weight: 700; color: var(--text); margin-top: 2px; }
+.f4-progress-msg { font-size: var(--f4-fs-xs); color: var(--text2); margin-top: 3px; line-height: 1.4; }
+
+.f4-ring { position: relative; flex-shrink: 0; }
+.f4-ring-track { stroke: var(--f4-surface-3); }
+.f4-ring-fill {
+  stroke: var(--accent);
+  transition: stroke-dashoffset 420ms var(--f4-ease), stroke 220ms var(--f4-ease);
+}
+.f4-ring.complete .f4-ring-fill { stroke: var(--success); }
+.f4-ring-center {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+}
+.f4-ring-num { font-size: 19px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; }
+.f4-ring-den { font-size: 12px; font-weight: 600; color: var(--text3); }
+
+.f4-xp-stack { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.f4-xp-pill {
+  display: flex; flex-direction: column; align-items: flex-end;
+  padding: 6px 10px; border-radius: var(--f4-r-sm);
+  background: var(--f4-surface-2); border: 1px solid var(--f4-hairline);
+  min-width: 84px;
+}
+.f4-xp-pill.earned { border-color: var(--f4-accent-line); background: var(--f4-accent-soft); }
+.f4-xp-val { font-size: var(--f4-fs-body); font-weight: 800; color: var(--text); line-height: 1.1; }
+.f4-xp-pill.earned .f4-xp-val { color: var(--accent2); }
+.f4-xp-lbl { font-size: 10px; color: var(--text3); font-weight: 600; white-space: nowrap; }
+
+/* ─── Task rows ──────────────────────────────────────────────────────────── */
+
+.f4-task-list { display: flex; flex-direction: column; gap: var(--f4-gap-sm); }
+
+.check-item.f4-task {
+  display: flex; align-items: flex-start; gap: var(--f4-gap);
+  padding: 13px var(--f4-gap-lg) 13px 13px;
+  background: var(--f4-surface-2);
+  border: 1px solid var(--f4-hairline);
+  border-bottom: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-sm);
+  min-height: 60px; cursor: pointer;
+  transition: background var(--f4-fast) var(--f4-ease), border-color var(--f4-fast) var(--f4-ease), transform var(--f4-fast) var(--f4-ease);
+}
+.check-item.f4-task:last-child { border-bottom: 1px solid var(--f4-hairline); }
+.check-item.f4-task:active { transform: scale(0.992); opacity: 1; }
+.check-item.f4-task:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.check-item.f4-task.done { background: var(--f4-surface); border-color: var(--f4-hairline); }
+.check-item.f4-task.keystone { border-left: 3px solid var(--f4-accent-line); }
+.check-item.f4-task.keystone-3 { border-left-color: #F9E04B; }
+.check-item.f4-task.keystone-2 { border-left-color: #FFB347; }
+.check-item.f4-task.shared-habit { border-left: 3px solid rgba(59,130,246,0.55); }
+
+.f4-task .check-box {
+  width: 26px; height: 26px; min-width: 26px; border-radius: 8px;
+  border: 2px solid var(--f4-hairline-2); background: transparent;
+  display: flex; align-items: center; justify-content: center; margin-top: 1px;
+  transition: background var(--f4-fast) var(--f4-ease), border-color var(--f4-fast) var(--f4-ease);
+}
+.f4-task .check-box .check-tick {
+  font-size: 15px; font-weight: 800; color: #fff; line-height: 1;
+  transform: scale(0); opacity: 0;
+  transition: transform 180ms var(--f4-ease), opacity 120ms linear;
+}
+.f4-task .check-box.checked { background: var(--f4-accent-grad); border-color: transparent; }
+.f4-task .check-box.checked .check-tick { transform: scale(1); opacity: 1; }
+
+.f4-task .check-icon { font-size: 19px; width: 24px; text-align: center; margin-top: 1px; }
+.f4-task .check-name { flex: 1; min-width: 0; display: block; }
+.f4-task .check-name.done { text-decoration: none; }
+.f4-task-title {
+  display: block; font-size: var(--f4-fs-body); font-weight: 650; color: var(--text);
+  line-height: 1.3; word-break: break-word;
+}
+.f4-task .check-name.done .f4-task-title { color: var(--text2); text-decoration: line-through; }
+.f4-task .check-desc {
+  display: block; font-size: var(--f4-fs-xs); color: var(--text3);
+  line-height: 1.4; margin-top: 2px;
+}
+.f4-task-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.f4-task-chips:empty { display: none; }
+.f4-chip {
+  font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+  background: var(--f4-surface-3); color: var(--text2); border: 1px solid var(--f4-hairline);
+}
+.f4-chip-target { color: var(--accent2); border-color: var(--f4-accent-line); }
+.f4-task .check-supports { display: inline-block; margin-top: 0; color: #60A5FA; }
+.f4-task .keystone-stars { margin-left: 5px; font-size: 10px; letter-spacing: -1px; }
+.f4-task .check-xp {
+  flex-shrink: 0; font-size: var(--f4-fs-xs); font-weight: 800; color: var(--text2);
+  background: var(--f4-surface-3); border: 1px solid var(--f4-hairline);
+  padding: 4px 9px; border-radius: 999px; margin-top: 1px; white-space: nowrap;
+}
+.f4-task .check-xp.earned { color: var(--accent2); border-color: var(--f4-accent-line); background: var(--f4-accent-soft); }
+.f4-task .check-guide {
+  flex-shrink: 0; align-self: center; font-size: 10.5px; font-weight: 700;
+  color: var(--text3); background: transparent; border: 1px solid var(--f4-hairline);
+  padding: 5px 8px; border-radius: var(--f4-r-xs); min-height: 32px;
+}
+
+/* ─── Daily Log ──────────────────────────────────────────────────────────── */
+
+.f4-card.daily-log-card { display: block; }
+.f4-log-quick { display: flex; flex-direction: column; gap: var(--f4-gap); margin-top: var(--f4-gap); }
+.f4-log-hours {
+  display: flex; align-items: center; gap: var(--f4-gap);
+  background: var(--f4-surface-2); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-sm); padding: 10px var(--f4-gap);
+}
+.f4-log-hours-label { flex: 1; min-width: 0; }
+.f4-log-rest { display: flex; flex-direction: column; gap: var(--f4-gap); margin-top: var(--f4-gap); }
+
+.f4-log-more {
+  display: flex; align-items: center; gap: var(--f4-gap-sm); flex-wrap: wrap;
+  width: 100%; margin-top: var(--f4-gap); padding: 11px var(--f4-gap);
+  background: var(--f4-surface-2); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-sm); color: var(--text2);
+  font-size: var(--f4-fs-sm); font-weight: 650; text-align: left;
+  min-height: 44px; cursor: pointer;
+}
+.f4-log-more:active { opacity: 0.8; }
+.f4-log-more-hint { font-size: 10.5px; font-weight: 500; color: var(--text3); margin-left: auto; }
+
+.f4-saved {
+  height: 16px; margin-top: var(--f4-gap-sm); text-align: right;
+  font-size: var(--f4-fs-xs); font-weight: 700; color: var(--success);
+  opacity: 0; transition: opacity 200ms var(--f4-ease);
+}
+.f4-saved.on { opacity: 1; }
+
+/* ─── Disclosures ────────────────────────────────────────────────────────── */
+
+.f4-collapse {
+  background: var(--f4-surface); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r); overflow: hidden;
+}
+.f4-collapse-head {
+  display: flex; align-items: center; gap: var(--f4-gap-sm); width: 100%;
+  padding: 14px var(--f4-gap-lg); background: transparent; border: none;
+  color: var(--text); font-size: var(--f4-fs-body); font-weight: 650;
+  text-align: left; min-height: 52px; cursor: pointer;
+}
+.f4-collapse-head:active { opacity: 0.8; }
+.f4-collapse-icon { font-size: 16px; }
+.f4-collapse-title { flex: 1; min-width: 0; }
+.f4-collapse-summary { font-size: var(--f4-fs-xs); font-weight: 700; color: var(--accent2); }
+.f4-collapse-chevron { color: var(--text3); font-size: 12px; }
+.f4-collapse-body { padding: 0 var(--f4-gap-lg) var(--f4-gap-lg); }
+.f4-collapse-body > .section-card { margin: 0 0 var(--f4-gap); }
+.f4-collapse-body > .section-card:last-child { margin-bottom: 0; }
+
+/* ─── Today-scoped refinements to shared components ──────────────────────── */
+
+.f4-today .section-card {
+  background: var(--f4-surface); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r); box-shadow: var(--f4-shadow); margin: 0;
+}
+.f4-today .day-selector {
+  background: var(--f4-surface); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-sm); margin: 0;
+}
+.f4-today .rating-bubble { min-width: 26px; min-height: 30px; }
+.f4-today .sleep-hours-input {
+  min-height: 44px; font-size: 17px; /* 16px+ stops iOS zooming the page on focus */
+}
+.f4-today .log-textarea { min-height: 64px; font-size: 16px; }
+
+@media (max-width: 360px) {
+  .f4-today { padding: 0 10px 24px; }
+  .f4-card { padding: var(--f4-gap); }
+  .f4-lane-title { font-size: 18px; }
+  .f4-xp-pill { min-width: 72px; }
+  .f4-progress-card { gap: var(--f4-gap); }
+}
+
+/* ─── Forge 4.0: task-section header, day strip, why bar ─────────────────── */
+
+.f4-tasks-card { padding: var(--f4-gap-lg); }
+.f4-tasks-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--f4-gap-sm); margin: 0;
+}
+.f4-tasks-count { font-size: var(--f4-fs-xs); font-weight: 700; color: var(--text3); white-space: nowrap; }
+.f4-tasks-tools { display: flex; gap: var(--f4-gap-sm); align-items: center; margin: 10px 0 var(--f4-gap); }
+.f4-tasks-tools:empty { display: none; }
+.f4-tasks-card .keystone-explainer { margin-bottom: var(--f4-gap); }
+
+/* A completed habit stays fully readable — it is a record of what was done,
+   not something to cross out and squint at. Colour and the filled box carry
+   the state instead of a line through the words. */
+.f4-task .check-name.done .f4-task-title { text-decoration: none; color: var(--text2); }
+.check-item.f4-task.done { border-color: var(--f4-accent-line); }
+.check-item.f4-task.done .check-icon { opacity: 0.75; }
+
+/* The day strip is navigation, not a headline: the card above already says
+   which day this is. */
+.f4-today .day-selector { padding: 6px 8px; }
+.f4-today .day-sel-num { font-size: var(--f4-fs-sm); font-weight: 650; color: var(--text2); }
+.f4-today .day-sel-of { font-size: var(--f4-fs-xs); color: var(--text3); }
+.f4-today .day-sel-btn { width: 40px; height: 40px; }
+
+.f4-today .why-bar { display: flex; gap: var(--f4-gap-sm); margin: 0; }
+.f4-today .why-bar .why-btn {
+  flex: 1; min-height: 42px; font-size: var(--f4-fs-sm); font-weight: 650;
+  background: var(--f4-surface); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-sm); color: var(--text2);
+}
+
+/* ─── Forge 4.0: task row corrections ────────────────────────────────────── */
+
+/* Three columns only — box, icon, and everything else. The XP pill is the
+   fourth and is held to a fixed width so the habit name always gets the
+   remaining space instead of wrapping one word per line. */
+.check-item.f4-task { align-items: flex-start; }
+.f4-task .check-name { flex: 1 1 auto; min-width: 0; }
+.f4-task-title { display: block; }
+.f4-task .keystone-stars { white-space: nowrap; }
+
+/* One brief sentence is the brief. Anything longer is clamped and lives in
+   full inside the habit's guide. */
+.f4-task .check-desc {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.f4-task .check-xp {
+  flex: 0 0 auto; align-self: flex-start; text-align: center;
+  min-width: 58px; padding: 4px 8px;
+}
+
+.f4-task .check-guide {
+  display: inline-flex; align-items: center; align-self: auto;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--accent2); background: transparent;
+  border: 1px solid var(--f4-accent-line); border-radius: 6px;
+  padding: 2px 8px; min-height: 24px; line-height: 1;
+}
+
+/* ─── Forge 4.0: section heading tone ────────────────────────────────────── */
+
+/* The shared .section-title shouts in caps; a page the user reads every day
+   should not. Sentence case, and the count sits beside it as a quiet figure. */
+.f4-tasks-head .f4-card-title {
+  text-transform: none; letter-spacing: -0.2px; font-size: var(--f4-fs-head); font-weight: 750;
+}
+.f4-tasks-count { text-transform: none; letter-spacing: 0; }
+
+/* Mode controls are tools, not headlines. */
+.f4-tasks-tools { justify-content: flex-end; margin: 8px 0 var(--f4-gap); }
+.f4-tasks-tools .mwd-toggle-btn,
+.f4-tasks-tools .manage-tasks-link {
+  font-size: 11px; font-weight: 650; padding: 5px 10px; min-height: 30px;
+  color: var(--text3); background: transparent; border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-xs);
+}
+.f4-tasks-tools .mwd-toggle-btn.active { color: var(--accent2); border-color: var(--f4-accent-line); }
+
+.f4-tasks-card .keystone-explainer {
+  background: transparent; border: none; padding: 0 0 2px;
+  font-size: var(--f4-fs-xs); color: var(--text3); text-align: left;
+}
+
+/* ─── Forge 4.0: task row density ────────────────────────────────────────── */
+
+/* Real habit names are long ("Sleep opportunity: 8+ hours"), so the name
+   column gets every pixel the other columns do not strictly need. */
+.check-item.f4-task { gap: 10px; padding: 12px 12px 12px 11px; }
+.f4-task .check-icon { font-size: 17px; width: 20px; }
+.f4-task .check-box { width: 24px; height: 24px; min-width: 24px; border-radius: 7px; }
+.f4-task-title { font-size: 14.5px; letter-spacing: -0.15px; line-height: 1.28; }
+.f4-task .check-desc { font-size: 11px; line-height: 1.38; margin-top: 3px; }
+.f4-task .check-xp { min-width: 52px; font-size: 11px; padding: 4px 7px; }
+.f4-task-chips { gap: 4px; margin-top: 6px; }
+.f4-task .keystone-stars.f4-chip {
+  margin-left: 0; padding: 2px 6px; font-size: 9px; letter-spacing: -0.5px;
+  background: rgba(249,224,75,0.1); border-color: rgba(249,224,75,0.25);
+}
+.f4-task .check-guide { padding: 2px 7px; min-height: 22px; font-size: 10px; }
+
+/* ─── Forge 4.0: contrast ────────────────────────────────────────────────── */
+
+/* --text3 (#5A5A80) sits at about 2.1:1 on these surfaces — fine for a hairline
+   or a chevron, not for anything anyone has to read. Every line of real copy
+   on Today uses --text2 (#9090B8), which clears 4.5:1 against the card and the
+   page, so the small print is legible rather than decorative. */
+.f4-task .check-desc,
+.f4-tasks-count,
+.f4-lane-diff,
+.f4-xp-lbl,
+.f4-log-more-hint,
+.f4-tasks-card .keystone-explainer,
+.f4-card-sub,
+.f4-progress-msg { color: var(--text2); }
+
+.f4-progress-kicker,
+.f4-lane-kicker { color: #8585AC; }

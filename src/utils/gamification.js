@@ -1009,29 +1009,32 @@ export function computeLifetimeXP(archiveList, currentRawTotal = 0) {
 
 /**
  * XP breakdown for today only — for the "XP gained/lost today" display.
+ *
+ * Read through the ATTEMPT'S OWN rate card, like every other XP figure. It used
+ * to call `computeDayXP` without rules, so it fell back to the era-1 defaults
+ * and reported an era-2 day under era-1 rates; and it re-armed a hard-coded
+ * era-1 streak ladder on every streak rather than using the attempt's, which
+ * era 2 awards once per attempt and caps. Both are now taken from `dayRules`
+ * and `computeStreakEvents`, so what Today shows is what the balance gets.
  */
 export function computeTodayXP(allDays, profiles, profId, getDayCompletion, dayNum) {
   if (!dayNum) return { gained: 0, lost: 0, streakBonus: 0 };
   const profDays    = allDays[profId] || {};
   const tasks       = profiles[profId]?.tasks || [];
+  const meta        = profiles[profId]?.activeChallenge;
+  const rules       = dayRules(meta);
   const penaltiesOn = profiles[profId]?.xpPenalties !== false;
-  const dayTasks    = requiredTasksForDay(tasks, profiles[profId]?.activeChallenge, profiles[profId]?.challengeStart, dayNum);
+  const dayTasks    = requiredTasksForDay(tasks, meta, profiles[profId]?.challengeStart, dayNum);
 
-  const { gained, lost } = computeDayXP(profDays[dayNum], dayTasks, profId, dayNum, dayNum, penaltiesOn);
+  const { gained, lost } = computeDayXP(profDays[dayNum], dayTasks, profId, dayNum, dayNum, penaltiesOn, dayNum, rules);
 
-  // Check if today hit a streak milestone
-  let streak = 0;
-  let streakBonus = 0;
-  for (let i = 1; i <= dayNum; i++) {
-    if (getDayCompletion(i, profId) === 100) {
-      streak++;
-      for (const m of STREAK_MILESTONES) {
-        if (streak === m.days && i === dayNum) streakBonus += m.bonus;
-      }
-    } else {
-      streak = 0;
-    }
-  }
+  // Milestones reached TODAY, under this attempt's ladder and its cap. Passing
+  // `dayNum` as the raw day keeps today unfinalised, so an unfinished day is
+  // never treated as a broken streak.
+  const streakBonus = computeStreakEvents(allDays, profId, getDayCompletion, dayNum, penaltiesOn, dayNum, rules)
+    .events
+    .filter(e => e.day === dayNum && e.type === 'streak_bonus')
+    .reduce((s, e) => s + e.xp, 0);
 
   return { gained: gained + streakBonus, lost, streakBonus };
 }
