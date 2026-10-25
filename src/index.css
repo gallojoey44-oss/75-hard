@@ -7154,3 +7154,8 @@ button { cursor: pointer; border: none; font-family: inherit; font-size: inherit
 
 /* The keystone footnote, after the habits rather than ahead of them. */
 .f4-tasks-card .keystone-explainer { margin: 10px 0 0; }
+
+/* The Daily Log is a different kind of thing from the habits above it —
+   recording the day rather than doing it — so it gets a little more air than
+   the 12px rhythm the rest of the stack uses. */
+.f4-today .daily-log-card { margin-top: 4px; }

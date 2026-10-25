@@ -67,7 +67,12 @@ check('3: Zone 2 shows 0 / 2 this week', /Zone 2 Cardio[\s\S]*?0 \/ 2 this week/
 check('4: header names the challenge week', /Week 1/.test(cardText));
 check('5: log buttons are present', (await page.locator('.wr-log-btn').count()) === 2);
 
-// Placement: below Daily Tasks, above Challenge Performance.
+// Placement: below Daily Tasks, above Challenge Performance. The grading
+// breakdown is behind a disclosure in Forge 4.0, so it is opened before the
+// comparison — the ordering it has always asserted is unchanged.
+await page.locator('.f4-collapse', { hasText: /Performance/i }).first()
+  .locator('.f4-collapse-head').click();
+await page.waitForTimeout(400);
 const order = await page.evaluate(() => {
   const top = el => el ? el.getBoundingClientRect().top : null;
   const daily = [...document.querySelectorAll('.section-card')].find(c => /Daily Tasks/.test(c.textContent));

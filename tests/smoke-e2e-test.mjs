@@ -71,6 +71,15 @@ await gotoTab('Today');
 await page.waitForSelector('.daily-view', { timeout: 5000 });
 check('Today renders the daily view', (await page.locator('.daily-view').count()) === 1);
 check('Today shows 4 required tasks', (await page.locator('.check-item').count()) >= 4);
+// Forge 4.0 keeps the grading breakdown on Today but behind a named
+// disclosure, so the daily work is the whole page until someone asks for the
+// scorecard. It is still exactly one card, still below the habits.
+const perfSection = page.locator('.f4-collapse', { hasText: /Performance/i }).first();
+check('the grading breakdown is on Today, behind a named disclosure',
+  (await perfSection.count()) === 1);
+check('and it is closed until asked for', (await page.locator('.perf-card').count()) === 0);
+await perfSection.locator('.f4-collapse-head').click();
+await page.waitForTimeout(400);
 const layout = await page.evaluate(() => {
   const perf = document.querySelector('.perf-card');
   const daily = [...document.querySelectorAll('.section-card')].find(c => /Daily Tasks/.test(c.textContent));
