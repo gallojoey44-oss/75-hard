@@ -215,6 +215,32 @@ check('and they are the ones the registry makes visible',
 const soonCount = expected.filter(t => !t.startable).length;
 eq('every Coming Soon challenge says so', await page.locator('.f4c-tile-state.soon').count(), soonCount);
 
+// A row has to be readable, not merely present. Two columns of 175px tiles cut
+// names mid-word and clipped "Medium/Hard" and "30–90 days"; these measure the
+// rendered boxes so a layout change that re-introduces that is caught here.
+const libRows = await page.evaluate(() => {
+  const clipped = (el) => !!el && (el.scrollWidth > el.clientWidth + 1
+    || el.scrollHeight > el.clientHeight + 1);
+  const tiles = [...document.querySelectorAll('.f4c-tile')];
+  return {
+    order: tiles.map(t => t.classList.contains('soon')),
+    clippedNames: tiles.filter(t => clipped(t.querySelector('.f4c-tile-name'))).length,
+    clippedFacts: tiles.filter(t => clipped(t.querySelector('.f4c-tile-diff'))
+      || clipped(t.querySelector('.f4c-tile-dur'))).length,
+    // Every row states both, or the library is not answering "how hard" and
+    // "how long" at all.
+    stated: tiles.filter(t => (t.querySelector('.f4c-tile-diff')?.textContent || '').trim()
+      && (t.querySelector('.f4c-tile-dur')?.textContent || '').trim()).length,
+    total: tiles.length,
+  };
+});
+eq('no challenge name is cut off', libRows.clippedNames, 0);
+eq('no difficulty or length label is truncated', libRows.clippedFacts, 0);
+eq('every row states its difficulty and its length', libRows.stated, libRows.total);
+check('challenges you can start come before the ones you cannot',
+  libRows.order.every((soon, i) => !soon || libRows.order.slice(i).every(Boolean)),
+  libRows.order.map(s => (s ? 'soon' : 'open')).join(','));
+
 // Filtering narrows without touching anything.
 const before = await snapshot();
 await page.locator('.f4c-chip', { hasText: 'Mental' }).click();
@@ -331,6 +357,41 @@ eq('and lands back on the Challenges home screen', await page.locator('.f4c-home
 
 await seed({ primary: true, era: 2 });
 eq('an era-2 primary is offered a Support Challenge', await page.locator('.f4c-add-support').count(), 1);
+
+// The sheet is taller than the phone, so the way out and the thing it asks you
+// to agree to have to stay on screen rather than sit past the fold.
+await page.locator('.f4c-add-support').click();
+await page.waitForSelector('.sup-picker', { timeout: 10000 });
+await page.waitForTimeout(400);
+const sheetReach = async () => page.evaluate(() => {
+  const card = document.querySelector('.modal-card');
+  const btns = [...card.querySelectorAll('.modal-actions .btn')].map(b => ({
+    t: (b.textContent || '').trim(),
+    inView: b.getBoundingClientRect().bottom <= card.getBoundingClientRect().bottom + 1,
+  }));
+  return { scrolls: card.scrollHeight > card.clientHeight + 2, btns };
+});
+let reach = await sheetReach();
+check('the picker is longer than the sheet, so this matters', reach.scrolls);
+check('its way out is on screen without scrolling to the end',
+  reach.btns.length > 0 && reach.btns.every(b => b.inView),
+  JSON.stringify(reach.btns));
+
+await page.locator('.sup-option').first().click();
+await page.waitForTimeout(600);
+reach = await sheetReach();
+check('and so is the button that commits to it',
+  reach.btns.length === 2 && reach.btns.every(b => b.inView),
+  JSON.stringify(reach.btns));
+
+// Backing out leaves nothing behind.
+const sheetBefore = await snapshot();
+await page.locator('.modal-card .btn-ghost').click();
+await page.waitForTimeout(400);
+await page.locator('.modal-card .btn-ghost', { hasText: 'Cancel' }).click();
+await page.waitForTimeout(400);
+eq('dismissing the picker changes nothing', await snapshot(), sheetBefore);
+eq('and returns to the Challenges home', await page.locator('.f4c-home').count(), 1);
 
 await seed({ primary: true, era: 1 });
 eq('an era-1 primary is not', await page.locator('.f4c-add-support').count(), 0);

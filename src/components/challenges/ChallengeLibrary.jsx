@@ -18,10 +18,15 @@ const DIFFICULTY_COLOR = {
  * was reachable and nothing was browsable: comparing two challenges meant
  * expanding one, scrolling it, collapsing it and finding the other.
  *
- * Now it is a grid of tiles that answer the three questions a person actually
+ * Now it is a list of rows that answer the three questions a person actually
  * asks while browsing — what is it, how hard is it, how long is it — and
  * tapping one opens a real page. Every figure still comes from the registry;
  * nothing here is written by hand.
+ *
+ * The rows were two columns of tiles first. That read well until it was
+ * measured: a 175px tile holds about 22 characters a line, so the description
+ * of nine of the ten challenges was cut mid-sentence. Full-width rows give
+ * that line the ~290px it needs, at almost no cost in scroll.
  */
 export default function ChallengeLibrary({ onOpen, activeTemplateId = null, supportTemplateId = null }) {
   const { activeProfile } = useApp();
@@ -29,7 +34,12 @@ export default function ChallengeLibrary({ onOpen, activeTemplateId = null, supp
 
   const templates = useMemo(() => visibleChallenges(activeProfile), [activeProfile]);
   const filters = useMemo(() => availableFilters(templates), [templates]);
-  const shown = useMemo(() => templates.filter(t => matchesFocus(t, filter)), [templates, filter]);
+  // Startable challenges lead. A Coming Soon one is still worth reading, but it
+  // is not a thing you can do today, so it does not sit between two that are.
+  const shown = useMemo(() => {
+    const matched = templates.filter(t => matchesFocus(t, filter));
+    return [...matched.filter(t => t.startable), ...matched.filter(t => !t.startable)];
+  }, [templates, filter]);
 
   return (
     <div className="f4c-library">
@@ -83,36 +93,40 @@ function ChallengeTile({ template, state, onOpen }) {
   return (
     // `challenge-card` is the same thing it always was — one challenge in the
     // library — so it keeps the name the suite knows it by. The header class
-    // sits on a span inside the button, where a click still reaches the tile.
+    // sits on a span inside the button, where a click still reaches the row.
     <button type="button" className={`f4c-tile challenge-card${soon ? ' soon' : ''}`} onClick={onOpen}>
-      <span className="f4c-tile-top challenge-card-header">
-        <span className="f4c-tile-emoji" aria-hidden="true">{template.emoji}</span>
-        {state && (
-          <span className={`f4c-tile-state ${state}`}>
-            {state === 'primary' ? 'Primary' : 'Support'}
+      <span className="f4c-tile-emoji" aria-hidden="true">{template.emoji}</span>
+
+      <span className="f4c-tile-body challenge-card-header">
+        <span className="f4c-tile-name challenge-card-name">{template.challenge_name}</span>
+        <span className="f4c-tile-desc">{template.tagline || template.purpose}</span>
+
+        {/* Status, difficulty, length and focus share one wrapping line. They
+            each had to be truncated or stacked to fit a 175px tile; at full
+            width they simply fit, which is the point of the wider row. */}
+        <span className="f4c-tile-foot challenge-card-meta">
+          {state && (
+            <span className={`f4c-tile-state ${state}`}>
+              {state === 'primary' ? 'Primary' : 'Support'}
+            </span>
+          )}
+          {soon && <span className="f4c-tile-state soon">Coming Soon</span>}
+          {/* Difficulty and length travel together, so the dot between them is
+              never left hanging at the end of a wrapped line. */}
+          <span className="f4c-tile-pair">
+            <span
+              className="f4c-tile-diff"
+              style={{ color: DIFFICULTY_COLOR[TIER_LABELS[range.tier]] || 'var(--text2)' }}
+            >
+              {range.label}
+            </span>
+            <span className="f4c-tile-dur">{durationRangeText(template)}</span>
           </span>
-        )}
-        {soon && <span className="f4c-tile-state soon">Coming Soon</span>}
-      </span>
-
-      <span className="f4c-tile-name challenge-card-name">{template.challenge_name}</span>
-      <span className="f4c-tile-desc">{template.tagline || template.purpose}</span>
-
-      <span className="f4c-tile-foot challenge-card-meta">
-        <span
-          className="f4c-tile-diff"
-          style={{ color: DIFFICULTY_COLOR[TIER_LABELS[range.tier]] || 'var(--text2)' }}
-        >
-          {range.label}
-        </span>
-        <span className="f4c-tile-dur">{durationRangeText(template)}</span>
-      </span>
-
-      {tags.length > 0 && (
-        <span className="f4c-tile-tags">
           {tags.map(tag => <span key={tag} className="f4c-tag">{focusLabel(tag)}</span>)}
         </span>
-      )}
+      </span>
+
+      <span className="f4c-tile-chev" aria-hidden="true">›</span>
     </button>
   );
 }

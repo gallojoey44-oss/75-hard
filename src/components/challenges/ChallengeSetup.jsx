@@ -6,6 +6,7 @@ import {
   MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_TASK,
 } from '../../data/challengeTemplates';
 import { CONFIGURED_SETUPS } from '../../data/configuredSetups';
+import { modeComparison, modeChoiceLine } from '../../data/challengeModes';
 import * as FLH from '../../data/fatLossHardConfig';
 import { HARD_CONFIRM } from '../../data/challengeContent';
 import { FutureSelfLetterForm } from '../FutureSelfLetter';
@@ -15,10 +16,63 @@ import { dateOffsetFromToday } from '../../utils/challengeSchedule';
 import { displayXP } from '../../utils/xpDisplay';
 
 const MODES = [
-  { key: 'beginner', label: 'Beginner', blurb: 'A lighter way in. Same habits, gentler targets.' },
-  { key: 'standard', label: 'Standard', blurb: 'The balanced version, and the one most people want.' },
-  { key: 'hard', label: 'Hard', blurb: 'Maximum commitment. Confirmed before it begins.' },
+  { key: 'beginner', label: 'Beginner' },
+  { key: 'standard', label: 'Standard' },
+  { key: 'hard', label: 'Hard' },
 ];
+
+/**
+ * What a mode actually asks for, from its own configuration.
+ *
+ * Counts first — true of every challenge — then the requirements that really
+ * differ, in this mode's own words. Nothing generic: if two modes ask for the
+ * same things at a different pace, it says that instead of inventing a
+ * distinction.
+ */
+function ModeDetail({ comparison, selected, xp }) {
+  const m = comparison.find(c => c.key === selected);
+  if (!m) return null;
+  const shown = m.changes.slice(0, 4);
+  const more = m.changes.length - shown.length;
+  return (
+    <div className="f4c-peek">
+      <div className="f4c-peek-h">
+        {m.habits} daily {m.habits === 1 ? 'habit' : 'habits'}
+        {m.weeklyPerWeek > 0 ? ` · ${m.weeklyPerWeek} sessions a week` : ''}
+        {' · '}{xp(m.dailyXP)} XP a day
+      </div>
+      {m.sameAsOthers ? (
+        <p className="f4c-note">
+          The requirements are the same as the other modes — what changes is what a day
+          is worth, and what missing one costs.
+        </p>
+      ) : (
+        <>
+          <div className="f4c-peek-sub">At this level you commit to</div>
+          <ul className="f4c-peek-list">
+            {shown.map((c, i) => (
+              <li key={i}>
+                {c.label}
+                {c.onlyHere && <span className="f4c-peek-only"> — this mode only</span>}
+              </li>
+            ))}
+            {more > 0 && <li className="f4c-dim">+{more} more that differ by mode</li>}
+          </ul>
+          {m.fewerHabits > 0 && (
+            <p className="f4c-note">
+              {m.fewerHabits} requirement{m.fewerHabits === 1 ? '' : 's'} that a harder mode
+              adds {m.fewerHabits === 1 ? 'is' : 'are'} not part of this one.
+            </p>
+          )}
+        </>
+      )}
+      <div className="f4c-peek-foot">
+        Each missed day costs {xp(m.missPenalty)} XP
+        {m.completionBonus > 0 ? ` · finishing pays ${xp(m.completionBonus)} XP` : ''}
+      </div>
+    </div>
+  );
+}
 
 function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
@@ -61,6 +115,12 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
   const [stepIndex, setStepIndex] = useState(0);
 
   const modes = isVariant ? MODES.filter(m => template.variants?.[m.key]) : [];
+  // Every mode previewed at the chosen length, so the chooser describes the
+  // commitment this attempt would really make.
+  const comparison = useMemo(
+    () => (isVariant ? modeComparison(template, duration) : []),
+    [template, duration, isVariant],
+  );
 
   // The steps this particular challenge actually needs. A configured challenge
   // has no mode or duration chips of its own — its setup screen owns both — so
@@ -190,13 +250,15 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
                 onClick={() => setMode(m.key)}
               >
                 <span className="f4c-mode-l">{m.label}</span>
+                {/* The difference leads, so the three can be compared without
+                    selecting each one; the full list is below. */}
                 <span className="f4c-mode-s">
-                  {template.variants?.[m.key]?.progression || m.blurb}
+                  {modeChoiceLine(comparison.find(x => x.key === m.key), xp)}
                 </span>
               </button>
             ))}
           </div>
-          <RequirementPeek preview={preview} xp={xp} />
+          <ModeDetail comparison={comparison} selected={mode} xp={xp} />
         </section>
       )}
 
@@ -412,24 +474,6 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-/** A glance at what the current choices mean, without leaving the step. */
-function RequirementPeek({ preview, xp }) {
-  if (!preview?.tasks?.length) return null;
-  return (
-    <div className="f4c-peek">
-      <div className="f4c-peek-h">
-        {preview.tasks.length} daily habits · {xp(preview.dailyTaskXP)} XP a day
-      </div>
-      <ul className="f4c-peek-list">
-        {preview.tasks.slice(0, 4).map(t => (
-          <li key={t.id}>{t.icon || '•'} {t.name}</li>
-        ))}
-        {preview.tasks.length > 4 && <li className="f4c-dim">+{preview.tasks.length - 4} more</li>}
-      </ul>
     </div>
   );
 }

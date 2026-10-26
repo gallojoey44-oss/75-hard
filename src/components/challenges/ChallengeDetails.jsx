@@ -6,6 +6,7 @@ import {
   getProgramForDuration, getDurationLabel, isRecommendedDuration, METRIC_LABELS,
 } from '../../data/challengeTemplates';
 import { focusTagsOf, focusLabel } from '../../data/challengeFocus';
+import { modeComparison, modeChoiceLine } from '../../data/challengeModes';
 import { TIER_LABELS } from '../../data/xpEconomy';
 import { guideForTask } from '../../data/habitGuides';
 import HabitGuide from '../HabitGuide';
@@ -85,6 +86,10 @@ export default function ChallengeDetails({
   const xp = (v) => displayXP(v || 0, scale).toLocaleString();
   const program = getProgramForDuration(template, duration);
   const variantDef = isVariant ? template.variants?.[mode] : null;
+  const comparison = useMemo(
+    () => (isVariant ? modeComparison(template, duration) : []),
+    [template, duration, isVariant],
+  );
   // Named lengths get the roomier row; a bare list of numbers stays compact.
   const labelled = !!template.duration_labels
     || template.duration_options_days?.some(d => isRecommendedDuration(template, d));
@@ -156,23 +161,50 @@ export default function ChallengeDetails({
       {modes.length > 1 && (
         <section className="f4c-card">
           <h3 className="f4c-card-h">Difficulty</h3>
-          <div className="f4c-modes" role="radiogroup" aria-label="Difficulty mode">
-            {modes.map(m => (
-              <button
-                key={m.key}
-                type="button"
-                role="radio"
-                aria-checked={mode === m.key}
-                className={`f4c-mode tpl-variant-tab${mode === m.key ? ' on active' : ''}`}
-                onClick={() => setMode(m.key)}
-              >
-                <span className="f4c-mode-l">{m.label}</span>
-                {template.variants?.[m.key]?.progression && (
-                  <span className="f4c-mode-s">{template.variants[m.key].progression}</span>
-                )}
-              </button>
-            ))}
+          {/* Stacked, not side by side: the line under each name now carries
+              the requirement that tells the modes apart, and three of those
+              across one phone row would be four words a line. */}
+          <div className="f4c-modes col" role="radiogroup" aria-label="Difficulty mode">
+            {modes.map(m => {
+              const c = comparison.find(x => x.key === m.key);
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === m.key}
+                  className={`f4c-mode tpl-variant-tab${mode === m.key ? ' on active' : ''}`}
+                  onClick={() => setMode(m.key)}
+                >
+                  <span className="f4c-mode-l">{m.label}</span>
+                  {c && <span className="f4c-mode-s">{modeChoiceLine(c, xp)}</span>}
+                </button>
+              );
+            })}
           </div>
+          {/* What the selected mode really asks for, read from its own
+              configuration rather than described in the abstract. */}
+          {(() => {
+            const c = comparison.find(x => x.key === mode);
+            if (!c || c.sameAsOthers) return null;
+            const shown = c.changes.slice(0, 4);
+            return (
+              <div className="f4c-peek">
+                <div className="f4c-peek-sub">At this level you commit to</div>
+                <ul className="f4c-peek-list">
+                  {shown.map((ch, i) => (
+                    <li key={i}>
+                      {ch.label}
+                      {ch.onlyHere && <span className="f4c-peek-only"> — this mode only</span>}
+                    </li>
+                  ))}
+                  {c.changes.length > shown.length && (
+                    <li className="f4c-dim">+{c.changes.length - shown.length} more that differ by mode</li>
+                  )}
+                </ul>
+              </div>
+            );
+          })()}
           <p className="f4c-note">
             The requirements and XP below update as you change this — every figure is read from
             the attempt this choice would create.

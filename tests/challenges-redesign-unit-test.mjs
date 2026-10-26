@@ -15,6 +15,10 @@
  *   ONE CONSTRUCTION    What a details page advertises and what starting it
  *                       installs both come from `buildAttemptPayload`. The two
  *                       must agree task-for-task and figure-for-figure.
+ *   REAL DIFFICULTIES   The chooser describes Beginner, Standard and Hard from
+ *                       each template's own configuration. If the modes ever
+ *                       read alike, or the figures drift from the preview the
+ *                       attempt is built from, the chooser is lying.
  */
 import {
   challengeFocusCoverage, focusTagsOf, matchesFocus, availableFilters, FOCUS, FOCUS_FILTERS,
@@ -28,6 +32,7 @@ import { previewAttempt, buildAttemptPayload } from '../src/data/challengeAttemp
 import { stampAttempt } from '../src/utils/xpAttempt.js';
 import { CURRENT_ECONOMY_VERSION, dayRules } from '../src/data/xpEconomy.js';
 import { isStartableTemplate } from '../src/data/configuredChallenges.js';
+import { modeComparison, modeChoiceLine } from '../src/data/challengeModes.js';
 import { CONFIGURED_SETUPS } from '../src/data/configuredSetups.jsx';
 
 const results = [];
@@ -181,7 +186,71 @@ check('every configured challenge has a setup screen registered',
 check('and its builders, so the support lane can construct it too',
   configured.every(t => CONFIGURED_SETUPS[t.id]?.buildTasks && CONFIGURED_SETUPS[t.id]?.buildMeta));
 
-// ── 6. An unstartable challenge cannot be started ──────────────────────────
+// ── 6. The difficulty chooser explains a real difference ───────────────────
+//
+// The modes used to be described as "Build / Strengthen / Optimize the habit",
+// which is three ways of saying "harder". What is shown now is read from the
+// templates, so these checks guard the reading rather than any wording: that a
+// mode's figures come from its own preview, that the promoted line genuinely
+// tells the modes apart, and that nothing generic creeps back in.
+
+const variantTemplates = CHALLENGE_TEMPLATES.filter(t => t.start_flow === 'variant' && t.variants);
+check('there are difficulty-mode challenges to describe', variantTemplates.length > 0);
+
+for (const t of variantTemplates) {
+  const cmp = modeComparison(t);
+  const name = t.challenge_name;
+  check(`${name}: every mode is compared`, cmp.length === Object.keys(t.variants).length,
+    `${cmp.length} of ${Object.keys(t.variants).length}`);
+
+  // Each mode's figures are its own preview's, not another mode's.
+  for (const m of cmp) {
+    const p = previewAttempt({ template: t, variant: m.key, durationDays: getDefaultDuration(t) });
+    check(`${name}/${m.key}: the habit count is this mode's own`, m.habits === p.tasks.length,
+      `${m.habits} vs ${p.tasks.length}`);
+    check(`${name}/${m.key}: the day's worth is this mode's own`, m.dailyXP === p.dailyBudget,
+      `${m.dailyXP} vs ${p.dailyBudget}`);
+    check(`${name}/${m.key}: the miss cost is this mode's own`,
+      m.missPenalty === p.missedDayPenalty);
+  }
+
+  // A harder mode is never cheaper than an easier one.
+  const order = ['beginner', 'standard', 'hard'].filter(k => cmp.some(m => m.key === k));
+  const xps = order.map(k => cmp.find(m => m.key === k).dailyXP);
+  check(`${name}: a day is worth more at each step up`,
+    xps.every((v, i) => i === 0 || v >= xps[i - 1]), xps.join(' → '));
+
+  // The promoted line is the point of the whole refinement: it has to differ.
+  const heads = cmp.map(m => m.headline);
+  check(`${name}: a differing requirement is promoted`, heads.every(h => !!h), heads.join(' | '));
+  check(`${name}: and it reads differently in every mode`,
+    new Set(heads).size === heads.length, heads.join(' | '));
+
+  const lines = cmp.map(m => modeChoiceLine(m, v => v));
+  check(`${name}: no two modes read the same in the chooser`,
+    new Set(lines).size === lines.length, lines.join(' | '));
+  check(`${name}: and none of them is a generic phrase`,
+    lines.every(l => !/build the habit|strengthen the habit|optimi[sz]e the habit/i.test(l)),
+    lines.join(' | '));
+  // Short enough that three of them can be compared on a phone.
+  check(`${name}: each chooser line stays on a line or two`,
+    lines.every(l => l.length <= 60), lines.map(l => `${l.length}`).join(','));
+
+  // The scale is the caller's: the data layer never converts XP itself.
+  const m0 = cmp[0];
+  check(`${name}: the chooser line takes its XP through the caller's scale`,
+    modeChoiceLine(m0, v => v * 10).includes((m0.dailyXP * 10).toLocaleString())
+    || modeChoiceLine(m0, v => v * 10).includes(String(m0.dailyXP * 10)),
+    modeChoiceLine(m0, v => v * 10));
+}
+
+// A challenge without modes has nothing to compare, and says so by returning
+// nothing rather than by inventing a distinction.
+for (const t of CHALLENGE_TEMPLATES.filter(t => t.start_flow !== 'variant')) {
+  eq(`${t.challenge_name}: no mode comparison is invented`, modeComparison(t).length, 0);
+}
+
+// ── 7. An unstartable challenge cannot be started ──────────────────────────
 
 const unstartable = CHALLENGE_TEMPLATES.filter(t => !t.startable);
 check('there are Coming Soon challenges to protect', unstartable.length > 0);

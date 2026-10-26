@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   visibleChallenges, getDefaultDuration, getDurationOptions, getDurationLabel,
@@ -10,6 +10,8 @@ import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/ga
 import { HABIT_LABELS } from '../data/habitKeys';
 import { dateOffsetFromToday } from '../utils/challengeSchedule';
 import { getTodayStr, formatDateLong } from '../utils/dateUtils';
+import { previewAttempt } from '../data/challengeAttempt';
+import { displayXP } from '../utils/xpDisplay';
 
 /**
  * "Add a Support Challenge" — pick a second challenge to run alongside the
@@ -19,6 +21,38 @@ import { getTodayStr, formatDateLong } from '../utils/dateUtils';
  * (src/data/challengeCompatibility.js). This component never decides whether a
  * pairing is a good idea; it only renders what the data says.
  */
+/**
+ * One candidate in the list.
+ *
+ * The compatibility table's reasons are a paragraph each, and five of them
+ * stacked turned the picker into a wall of text you had to read before you
+ * could find the challenge you wanted. The verdict is what you compare on, so
+ * that leads; the reasoning is one tap away for the one you are weighing.
+ */
+function SupportOption({ item, dot, rating, expanded, onToggleWhy, onChoose }) {
+  return (
+    <div className={`sup-option-wrap ${rating.toLowerCase()}`}>
+      <button type="button" className={`sup-option ${rating.toLowerCase()}`} onClick={onChoose}>
+        <span className="sup-option-head">
+          <span className="sup-option-emoji">{item.template.emoji}</span>
+          <span className="sup-option-name">{item.template.challenge_name}</span>
+          <span className="sup-option-dot">{dot}</span>
+        </span>
+        <span className="sup-option-sub">{item.template.tagline || item.template.purpose}</span>
+      </button>
+      <button
+        type="button"
+        className="sup-why-toggle"
+        aria-expanded={expanded}
+        onClick={onToggleWhy}
+      >
+        {expanded ? 'Hide why' : 'Why this rating?'}
+      </button>
+      {expanded && <p className="sup-option-why">{item.compatibility.reason}</p>}
+    </div>
+  );
+}
+
 export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
   const {
     activeProfile, profile, getChallengeMeta, addSupportChallenge, previewSupportChallenge,
@@ -30,6 +64,15 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
   const [startDate, setStartDate] = useState(getTodayStr());
   const [step, setStep] = useState('list'); // list → warn (conditional) → confirm
   const [error, setError] = useState('');
+  // Which option is showing its full compatibility reasoning. One at a time:
+  // the list is for comparing challenges, not for reading all of them at once.
+  const [expandedWhy, setExpandedWhy] = useState(null);
+
+  // The sheet is one scroller across its steps, so without this you choose a
+  // challenge from halfway down the list and land halfway down its confirm
+  // screen — past its own title and the date you are about to agree to.
+  const sheet = useRef(null);
+  useEffect(() => { sheet.current?.scrollTo?.(0, 0); }, [step]);
 
   const primaryMeta = getChallengeMeta();
   const primaryId = primaryMeta?.templateId;
@@ -64,6 +107,38 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
   }
 
   const preview = step === 'confirm' && pick ? previewSupportChallenge(tasksFor()) : null;
+
+  /**
+   * What this addition really costs and pays.
+   *
+   * The merge preview says how many rows the day grows by; this says what
+   * those rows ARE, roughly how much more there is to do, and how much more XP
+   * a day is worth. Every figure comes from the attempt that would be created
+   * — `previewAttempt` through the same path `addSupportChallenge` uses — so
+   * nothing here is an estimate of the app's own behaviour.
+   *
+   * Shared habits are excluded from the added XP on purpose: they are already
+   * on the list and are paid once, which is the whole point of merging them.
+   */
+  const addition = (() => {
+    if (step !== 'confirm' || !pick || !preview) return null;
+    const attempt = previewAttempt({
+      template: pick.template,
+      variant,
+      durationDays: duration,
+      configuredSetup: configured ? { durationDays: duration } : null,
+    });
+    if (!attempt) return null;
+    const sharedIds = new Set(preview.merges.map(m => m.habitKey));
+    const newTasks = attempt.tasks.filter(t => !sharedIds.has(t.habitKey || t.id));
+    return {
+      scale: attempt.displayScale,
+      tasks: newTasks,
+      addedXP: newTasks.reduce((sum, t) => sum + (Number(t.xp) || 0), 0),
+      weeklyPerWeek: attempt.weekly.reduce((sum, w) => sum + (Number(w.perWeek) || 0), 0),
+      completionBonus: attempt.completionBonus,
+    };
+  })();
 
   function confirm() {
     const tpl = pick.template;
@@ -105,12 +180,11 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
   if (step === 'list') {
     return (
       <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-card sup-picker" onClick={e => e.stopPropagation()}>
+        <div ref={sheet} className="modal-card sup-picker" onClick={e => e.stopPropagation()}>
           <h3>Add a Support Challenge</h3>
           <p className="sup-lead">
-            A support challenge runs alongside <strong>{primaryMeta?.name}</strong> without
-            taking it over. Shared habits are merged into one task — you never log the
-            same behaviour twice.
+            Runs alongside <strong>{primaryMeta?.name}</strong>. Shared habits merge into one
+            task, so you never log the same thing twice.
           </p>
           {groups.map(g => (
             <div key={g.rating} className="sup-group">
@@ -119,18 +193,16 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
               </div>
               <div className="sup-group-blurb">{g.meta.blurb}</div>
               {g.items.map(item => (
-                <button
+                <SupportOption
                   key={item.template.id}
-                  className={`sup-option ${g.rating.toLowerCase()}`}
-                  onClick={() => choose(item)}
-                >
-                  <span className="sup-option-head">
-                    <span className="sup-option-emoji">{item.template.emoji}</span>
-                    <span className="sup-option-name">{item.template.challenge_name}</span>
-                    <span className="sup-option-dot">{g.meta.dot}</span>
-                  </span>
-                  <span className="sup-option-why">{item.compatibility.reason}</span>
-                </button>
+                  item={item}
+                  dot={g.meta.dot}
+                  rating={g.rating}
+                  expanded={expandedWhy === item.template.id}
+                  onToggleWhy={() => setExpandedWhy(
+                    expandedWhy === item.template.id ? null : item.template.id)}
+                  onChoose={() => choose(item)}
+                />
               ))}
             </div>
           ))}
@@ -147,7 +219,7 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
   if (step === 'conflict') {
     return (
       <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-card sup-conflict" onClick={e => e.stopPropagation()}>
+        <div ref={sheet} className="modal-card sup-conflict" onClick={e => e.stopPropagation()}>
           <h3>🔴 These challenges conflict</h3>
           <p className="sup-conflict-pair">
             {primaryMeta?.emoji} {primaryMeta?.name} <span className="sup-vs">vs</span> {pick.template.emoji} {pick.template.challenge_name}
@@ -178,7 +250,7 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
   if (step === 'warn') {
     return (
       <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-card sup-warn" onClick={e => e.stopPropagation()}>
+        <div ref={sheet} className="modal-card sup-warn" onClick={e => e.stopPropagation()}>
           <h3>🟡 Worth knowing first</h3>
           <p className="sup-conflict-pair">
             {primaryMeta?.emoji} {primaryMeta?.name} <span className="sup-vs">+</span> {pick.template.emoji} {pick.template.challenge_name}
@@ -204,7 +276,7 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
   const durations = configured ? [] : getDurationOptions(pick.template);
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card sup-confirm" onClick={e => e.stopPropagation()}>
+      <div ref={sheet} className="modal-card sup-confirm" onClick={e => e.stopPropagation()}>
         <h3>{pick.template.emoji} {pick.template.challenge_name}</h3>
         <div className="sup-role-note">
           Adding as your <strong>Support Challenge</strong>. {primaryMeta?.name} stays primary.
@@ -293,6 +365,52 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
             ) : (
               <div className="sup-merge-line">No overlapping habits — every task is distinct.</div>
             )}
+          </div>
+        )}
+
+        {addition && (
+          <div className="sup-add">
+            <div className="sup-merge-title">What this adds</div>
+            <div className="sup-add-figures">
+              <span>
+                <strong>+{addition.tasks.length}</strong>
+                <span className="sup-add-label">
+                  daily {addition.tasks.length === 1 ? 'habit' : 'habits'}
+                </span>
+              </span>
+              {addition.weeklyPerWeek > 0 && (
+                <span>
+                  <strong>+{addition.weeklyPerWeek}</strong>
+                  <span className="sup-add-label">sessions a week</span>
+                </span>
+              )}
+              <span>
+                <strong>+{displayXP(addition.addedXP, addition.scale).toLocaleString()}</strong>
+                <span className="sup-add-label">XP a day</span>
+              </span>
+            </div>
+            {addition.tasks.length > 0 && (
+              <ul className="sup-add-list">
+                {addition.tasks.map(t => (
+                  <li key={t.id}>
+                    <span className="sup-add-icon" aria-hidden="true">{t.icon || '•'}</span>
+                    <span className="sup-add-name">{t.name}</span>
+                    <span className="sup-add-xp">
+                      {displayXP(t.xp, addition.scale).toLocaleString()} XP
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {addition.completionBonus > 0 && (
+              <div className="sup-merge-line">
+                Finishing it pays a further{' '}
+                {displayXP(addition.completionBonus, addition.scale).toLocaleString()} XP.
+              </div>
+            )}
+            <div className="sup-merge-line">
+              Shared habits are not counted twice — they stay one task, paid once.
+            </div>
           </div>
         )}
 

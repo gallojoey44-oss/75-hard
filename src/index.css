@@ -7545,23 +7545,49 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 }
 .f4c-chip-n { font-size: var(--f4-fs-xs); opacity: 0.8; }
 
-/* ── Library grid ───────────────────────────────────────────────────────── */
+/* ── Library list ───────────────────────────────────────────────────────── */
 
-.f4c-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--f4-gap); grid-auto-rows: 1fr; }
-/* Below ~360px two columns stop being readable — one wide tile beats two
-   cramped ones, so the grid collapses rather than shrinking the text. */
-@media (max-width: 359px) { .f4c-grid { grid-template-columns: 1fr; } }
+/* One column, measured rather than assumed.
+ *
+ * This was two columns of 175px tiles at 390px. Names were fixed by letting
+ * them wrap, but the line that says what a challenge is FOR could not be: a
+ * 175px column holds ~22 characters a line, so two lines is ~44 characters
+ * against descriptions of 46–135, and nine of ten challenges were cut
+ * mid-sentence ("Physical discipline sharpens mental contro…").
+ *
+ * Shrinking the type would have fit more and read worse, so the grid became a
+ * list. A full-width row gives the text ~290px — enough for the whole
+ * description — and costs almost nothing in scroll, because the two-column
+ * tiles were 178px tall to begin with: five rows of tiles and ten list rows
+ * come out within a screen of each other.
+ */
+.f4c-grid { display: flex; flex-direction: column; gap: 10px; }
 
 .f4c-tile {
-  display: flex; flex-direction: column; gap: 6px; text-align: left; cursor: pointer;
+  display: flex; align-items: flex-start; gap: 12px; text-align: left; cursor: pointer;
   background: var(--f4-surface); border: 1px solid var(--f4-hairline);
-  border-radius: var(--f4-r); padding: 14px; min-height: 150px;
+  border-radius: var(--f4-r); padding: 13px 14px; width: 100%;
   transition: transform var(--f4-fast) var(--f4-ease), border-color var(--f4-fast) var(--f4-ease);
 }
-.f4c-tile:active { transform: scale(0.98); border-color: var(--f4-accent-line); }
-.f4c-tile.soon { opacity: 0.72; }
-.f4c-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.f4c-tile-emoji { font-size: 26px; line-height: 1; }
+.f4c-tile:active { transform: scale(0.99); border-color: var(--f4-accent-line); }
+.f4c-tile.soon { opacity: 0.82; }
+.f4c-tile.soon .f4c-tile-desc { color: var(--text3); }
+
+/* The emoji gets a plate of its own so a row scans down its left edge. */
+.f4c-tile-emoji {
+  flex: 0 0 auto; width: 38px; height: 38px; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center; font-size: 21px; line-height: 1;
+  background: var(--f4-surface-3); border: 1px solid var(--f4-hairline);
+}
+/* `padding` and `align-items` are reset, not merely omitted: this span also
+   carries the legacy `.challenge-card-header` the suite knows it by, and that
+   class brings 14px/16px of padding and centres its children. */
+.f4c-tile-body {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;
+  padding: 0; align-items: stretch;
+}
+.f4c-tile-chev { flex: 0 0 auto; color: var(--text3); font-size: 17px; line-height: 38px; }
+
 .f4c-tile-state {
   font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   padding: 3px 7px; border-radius: 999px; white-space: nowrap;
@@ -7569,21 +7595,40 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 }
 .f4c-tile-state.support { color: var(--text2); background: var(--f4-surface-3); border-color: var(--f4-hairline-2); }
 .f4c-tile-state.soon { color: var(--text3); background: var(--f4-surface-3); border-color: var(--f4-hairline); }
-.f4c-tile-name { font-size: var(--f4-fs-body); font-weight: 750; color: var(--text); line-height: 1.25; }
+.f4c-tile-name {
+  font-size: var(--f4-fs-body); font-weight: 750; color: var(--text); line-height: 1.3;
+  /* Wraps. A name is the one thing on the row that must never be guessed at
+     from half of itself, and at full width none of them needs a third line. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: break-word;
+}
 .f4c-tile-desc {
-  font-size: var(--f4-fs-xs); color: var(--text3); line-height: 1.45; flex: 1;
+  /* --text2 rather than --text3: this is the line that says what a challenge is
+     FOR, and at 11.5px the dimmer tone was the hardest text on the page to read. */
+  font-size: var(--f4-fs-sm); color: var(--text2); line-height: 1.45;
+  /* Three lines, not two. The descriptions in the registry run 46–135
+     characters and a full-width row holds ~45 a line, so two lines cut four of
+     them mid-sentence while three let every one but LOCK IN's finish. The
+     clamp only caps: a short tagline still takes the one line it needs. */
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: break-word;
 }
+
+/* Status, difficulty, length and focus on one wrapping line: nothing here is
+   long enough to need truncating once the row is full width. */
 .f4c-tile-foot {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
-  font-size: var(--f4-fs-xs); font-weight: 650; flex-wrap: nowrap; margin-top: auto;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px;
+  font-size: var(--f4-fs-sm); font-weight: 650; margin-top: 2px;
 }
-.f4c-tile-diff { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.f4c-tile-dur { color: var(--text3); white-space: nowrap; flex: 0 0 auto; }
-.f4c-tile-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+/* Difficulty and length are one unit, so the row wraps around the pair rather
+   than between them — otherwise a line ends on a lone separator. */
+.f4c-tile-pair { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.f4c-tile-diff { white-space: nowrap; }
+.f4c-tile-dur { color: var(--text2); white-space: nowrap; font-weight: 600; }
+.f4c-tile-dur::before { content: '· '; color: var(--text3); font-weight: 400; }
 .f4c-tag {
-  font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px;
-  color: var(--text3); background: var(--f4-surface-3); border: 1px solid var(--f4-hairline);
+  font-size: 10.5px; font-weight: 650; padding: 2px 7px; border-radius: 999px;
+  color: var(--text2); background: var(--f4-surface-3); border: 1px solid var(--f4-hairline);
 }
 
 /* ── Details hero ───────────────────────────────────────────────────────── */
@@ -7663,7 +7708,9 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 }
 .f4c-mode.on { border-color: var(--accent); background: var(--f4-accent-soft); }
 .f4c-mode-l { font-size: var(--f4-fs-sm); font-weight: 700; color: var(--text); }
-.f4c-mode-s { font-size: var(--f4-fs-xs); color: var(--text3); line-height: 1.4; }
+/* --text2, not --text3: this line is no longer a footnote of counts, it is the
+   requirement that tells one difficulty from another. */
+.f4c-mode-s { font-size: var(--f4-fs-xs); color: var(--text2); line-height: 1.4; }
 
 .f4c-durations { display: flex; gap: var(--f4-gap-sm); flex-wrap: wrap; }
 .f4c-durations.col { flex-direction: column; flex-wrap: nowrap; }
@@ -7734,7 +7781,22 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 }
 .f4c-peek-h { font-size: var(--f4-fs-sm); font-weight: 700; color: var(--accent2); }
 .f4c-peek-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.f4c-peek-list li { font-size: var(--f4-fs-xs); color: var(--text2); line-height: 1.45; }
+.f4c-peek-list li {
+  font-size: var(--f4-fs-sm); color: var(--text2); line-height: 1.5;
+  padding-left: 14px; position: relative;
+}
+.f4c-peek-list li::before {
+  content: '·'; position: absolute; left: 3px; color: var(--accent2); font-weight: 800;
+}
+.f4c-peek-sub {
+  font-size: var(--f4-fs-xs); font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text3); margin-top: 2px;
+}
+.f4c-peek-only { color: var(--accent2); font-weight: 650; }
+.f4c-peek-foot {
+  font-size: var(--f4-fs-xs); color: var(--text3); border-top: 1px solid var(--f4-hairline);
+  padding-top: 7px; margin-top: 2px;
+}
 
 .f4c-review-id { display: flex; align-items: center; gap: var(--f4-gap); }
 .f4c-review-sec {
@@ -7795,3 +7857,111 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 .f4c .tpl-task-list,
 .f4c .tpl-duration-card,
 .f4c .tpl-variant-tab { margin: 0; }
+
+/* Same hazard for type: the legacy `.challenge-card-name` forces one line with
+   an ellipsis, which is why library names were ending mid-word. The alias is
+   there to label the element for the suite, not to lay it out. */
+.f4c .challenge-card-name {
+  white-space: normal;
+  font-size: var(--f4-fs-body);
+  font-weight: 750;
+}
+.f4c .challenge-card-meta { font-size: var(--f4-fs-sm); }
+
+/* ─── Add Support Challenge: shorter by default, detail on request ───────── */
+
+.sup-option-wrap {
+  display: flex; flex-direction: column; gap: 2px;
+  border-radius: var(--f4-r-sm); margin-bottom: 8px;
+  background: var(--f4-surface-2); border: 1px solid var(--f4-hairline);
+  padding: 4px 4px 6px;
+}
+.sup-option-wrap.highly_compatible { border-color: rgba(16,185,129,0.28); }
+.sup-option-wrap.conditional { border-color: rgba(245,178,58,0.28); }
+.sup-option-wrap.conflicting { border-color: rgba(255,122,122,0.26); }
+
+/* The option keeps its own class so the suite still finds and taps it; inside
+   the wrapper it is a plain row rather than a card of its own. */
+.sup-option-wrap .sup-option {
+  background: transparent; border: none; margin: 0; width: 100%;
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  padding: 8px 10px; min-height: 44px; cursor: pointer; border-radius: var(--f4-r-xs);
+}
+.sup-option-wrap .sup-option:active { background: var(--f4-surface-3); }
+.sup-option-sub {
+  font-size: var(--f4-fs-xs); color: var(--text2); line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sup-why-toggle {
+  align-self: flex-start; background: none; border: none; cursor: pointer;
+  font-size: var(--f4-fs-xs); font-weight: 650; color: var(--accent2);
+  padding: 0 10px; min-height: 36px; display: inline-flex; align-items: center;
+}
+.sup-option-wrap .sup-option-why {
+  font-size: var(--f4-fs-xs); color: var(--text2); line-height: 1.5;
+  margin: 0 10px 4px; padding-top: 2px;
+  border-top: 1px solid var(--f4-hairline);
+}
+
+/* What adding it costs and pays, before the confirm button. */
+.sup-add {
+  background: var(--f4-surface-2); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-sm); padding: 12px; margin-top: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sup-add-figures { display: flex; gap: 8px; }
+.sup-add-figures > span {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; align-items: center;
+  background: var(--f4-surface-3); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-xs); padding: 9px 5px; text-align: center;
+}
+.sup-add-figures strong { font-size: var(--f4-fs-head); font-weight: 750; color: var(--accent2); }
+.sup-add-label { font-size: 10px; color: var(--text3); font-weight: 600; line-height: 1.3; }
+.sup-add-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.sup-add-list li { display: flex; align-items: baseline; gap: 7px; font-size: var(--f4-fs-sm); }
+.sup-add-icon { flex: 0 0 auto; }
+.sup-add-name { flex: 1; min-width: 0; color: var(--text2); line-height: 1.4; }
+.sup-add-xp {
+  flex: 0 0 auto; font-size: var(--f4-fs-xs); font-weight: 700; color: var(--accent2);
+  white-space: nowrap;
+}
+
+/* The sheet scrolls under the thumb and clears the home indicator; the page
+   behind it keeps its own scroll position because it is never unmounted. */
+.sup-picker, .sup-confirm, .sup-warn, .sup-conflict {
+  max-height: min(86vh, 860px);
+  /* The height cap needs a scroller with it, or everything past it — including
+     the confirm button — is simply unreachable. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+/* On the two long sheets the sticky title and action bar own the top and
+   bottom padding — see below for why they cannot simply be pulled over it. */
+.sup-picker, .sup-confirm { padding-top: 0; padding-bottom: 0; }
+/* The short ones keep theirs; they have nothing stuck to an edge. */
+.sup-warn, .sup-conflict { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+
+/* Title and actions stay put while the middle scrolls.
+ *
+ * Measured on an iPhone 14: the list step is 1,040px of content in a 724px
+ * sheet, which left Cancel 260px below the fold, and the confirm step left
+ * "Add Support Challenge" 40px past the bottom edge. The way out of a sheet,
+ * and the thing it is asking you to agree to, should never need hunting for.
+ *
+ * The side margins undo `.modal-card`'s 24px padding so the stuck bars span
+ * the full width and nothing scrolls visibly past their edges. The VERTICAL
+ * padding is handed to the bars instead of being cancelled with a negative
+ * margin: a negative margin on a sticky element shifts its constraint box but
+ * not its siblings, which leaves the element pinned 24px lower than the gap it
+ * made and the next paragraph tucked underneath it. */
+.sup-picker > h3, .sup-confirm > h3 {
+  position: sticky; top: 0; z-index: 2;
+  margin: 0 -24px 8px; padding: 24px 24px 10px;
+  background: var(--card);
+}
+.sup-picker > .modal-actions, .sup-confirm > .modal-actions {
+  position: sticky; bottom: 0; z-index: 2;
+  margin: 14px -24px 0; padding: 12px 24px calc(12px + env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--f4-hairline);
+}
