@@ -198,7 +198,10 @@ function dayXPFor(entry, { penaltiesOn = true } = {}) {
  * than one that leaves it out. Comebacks are absent for the same reason —
  * `comebackHistory` records the day it started, not the day it finished.
  */
-export function recentWins({ segments, rankHistory = [], todayStr = getTodayStr(), limit = 5, penaltiesOn = true }) {
+export function recentWins({
+  segments, rankHistory = [], todayStr = getTodayStr(),
+  limit = 5, penaltiesOn = true, maxPerfect = 3,
+}) {
   const wins = [];
 
   // A rank is permanent and dated at the moment it was unlocked. A backfilled
@@ -265,7 +268,34 @@ export function recentWins({ segments, rankHistory = [], todayStr = getTodayStr(
   }
 
   wins.sort((a, b) => (a.date === b.date ? rankOfKind(b) - rankOfKind(a) : (a.date < b.date ? 1 : -1)));
-  return wins.slice(0, limit).map(w => ({ ...w, when: whenLabel(w.date, todayStr) }));
+
+  // Perfect days are the common case — someone doing well has one most days —
+  // and left alone they fill the list and push out the rank unlock and the
+  // finished challenge, which are the things actually worth remembering. A
+  // handful of the most recent is enough to show the habit is holding; the
+  // rest of the room goes to the rarer events.
+  const capped = [];
+  let perfectShown = 0;
+  for (const w of wins) {
+    if (w.kind === 'perfect') {
+      if (perfectShown >= maxPerfect) continue;
+      perfectShown += 1;
+    }
+    capped.push(w);
+    if (capped.length >= limit) break;
+  }
+  // If the rarer events alone do not fill the list, the remaining perfect days
+  // are welcome back rather than leaving the card half empty.
+  if (capped.length < limit) {
+    for (const w of wins) {
+      if (capped.includes(w)) continue;
+      capped.push(w);
+      if (capped.length >= limit) break;
+    }
+    capped.sort((a, b) => (a.date === b.date ? rankOfKind(b) - rankOfKind(a) : (a.date < b.date ? 1 : -1)));
+  }
+
+  return capped.map(w => ({ ...w, when: whenLabel(w.date, todayStr) }));
 }
 
 /** On a shared date, the rarer thing leads. */

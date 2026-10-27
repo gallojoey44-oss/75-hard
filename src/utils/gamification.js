@@ -206,7 +206,11 @@ export const BADGE_DEFS = [
   { id: 'sleep_rebuilt',          emoji: '😴', label: 'Sleep Rebuilt',       desc: 'Sleep quality improved from low to 7+.' },
   { id: 'stress_defeated',        emoji: '🧘', label: 'Stress Defeated',     desc: 'Reduced stress from 7+ down to 5 or below.' },
   { id: 'recovery_master',        emoji: '🔋', label: 'Recovery Master',     desc: 'Recovery stayed at 7+ for 7 consecutive days.' },
-  { id: 'true_warrior_rank',      emoji: '🏅', label: 'True Warrior',        desc: 'Reached the True Warrior rank (7,500 XP).' },
+  // The threshold is read from the ladder rather than written here: this
+  // description said 7,500 long after the economy rescaled True Warrior to
+  // 75,000, and Home now shows these descriptions to people.
+  { id: 'true_warrior_rank',      emoji: '🏅', label: 'True Warrior',
+    desc: `Reached the True Warrior rank (${(RANKS.find(r => r.name === 'True Warrior')?.minXP ?? 0).toLocaleString()} XP).` },
   { id: 'body_fat_slayer',        emoji: '🗡️', label: 'Body Fat Slayer',     desc: 'Completed the 30-day Fat Loss Challenge.' },
 ];
 

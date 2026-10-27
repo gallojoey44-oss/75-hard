@@ -1099,6 +1099,42 @@ export default function Dashboard({ setView }) {
           </button>
         </div>
 
+        {/* Rank, achievements and past wins are LIFETIME things. They do not
+            belong to the challenge that just ended, and blanking them between
+            attempts told a True Warrior with 75,000 XP and a shelf of badges
+            that they had nothing — at exactly the moment they are deciding
+            whether to start again. What is genuinely absent is the challenge,
+            so that is the only card replaced. */}
+        <div style={{ position: 'relative' }}>
+          <RankCard
+            rankInfo={rankInfo}
+            challengeXP={challengeXP}
+            todayXP={todayXP}
+            onToggleDetails={() => setShowRankDetails(v => !v)}
+            showDetails={showRankDetails}
+            onToggleLadder={() => setShowRankLadder(v => !v)}
+            showLadder={showRankLadder}
+          />
+        </div>
+        {showRankLadder && (
+          <RankLadderCard
+            rankInfo={rankInfo}
+            rankHistory={profile?.rankHistory || []}
+            highestRank={rankInfo.highestRank}
+          />
+        )}
+        {showRankDetails && (
+          <RankDetailsCard
+            rankInfo={rankInfo}
+            missed={getCurrentMissedDays()}
+            challengeXP={challengeXP}
+            archivedChallenges={profileArchives.length}
+            longest={longest}
+            totalDone={totalDone}
+            comebackCompletions={comebackCompletions}
+          />
+        )}
+
         <div className="start-challenge">
           <div className="start-challenge-emoji">🔥</div>
           <h2>No Active Challenge</h2>
@@ -1110,6 +1146,15 @@ export default function Dashboard({ setView }) {
             🔥 Start Forge Daily
           </button>
         </div>
+
+        <ConsistencyCard
+          consistency={consistency}
+          streak={streak}
+          longest={longest}
+          onOpenCalendar={() => setView('insights')}
+        />
+        <AchievementsCard badges={badges} milestones={milestones} />
+        <RecentWins wins={wins} />
       </div>
     );
   }

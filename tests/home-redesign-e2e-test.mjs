@@ -399,6 +399,45 @@ eq('an unscored baseline shows no performance card', base.perf, 0);
 check('but it still reports which day it is', /^\d+$/.test(base.day || ''), base.day);
 
 // ════════════════════════════════════════════════════════════════════════════
+// 10b. With no challenge running, what is permanent stays on screen
+// ════════════════════════════════════════════════════════════════════════════
+
+await seed();
+await page.evaluate(() => {
+  const p = JSON.parse(localStorage.getItem('profiles'));
+  p.me.challengeStart = null;
+  p.me.activeChallenge = null;
+  p.me.tasks = [];
+  localStorage.setItem('profiles', JSON.stringify(p));
+});
+await page.reload();
+await page.waitForSelector('.dashboard', { timeout: 20000 });
+await page.waitForTimeout(700);
+
+const idle = await page.evaluate(() => ({
+  text: document.querySelector('.dashboard')?.textContent || '',
+  rank: document.querySelectorAll('.f41-rank').length,
+  badge: document.querySelector('.xp-rank-badge')?.textContent?.trim() || null,
+  consistency: document.querySelectorAll('.f41-consistency').length,
+  ach: document.querySelectorAll('.f41-ach').length,
+  wins: document.querySelectorAll('.f41-wins').length,
+  start: document.querySelectorAll('.start-challenge').length,
+  chal: document.querySelectorAll('.f41-chal').length,
+  day: document.querySelectorAll('.hero-day-num').length,
+}));
+check('it still says there is no active challenge', /No Active Challenge/i.test(idle.text));
+eq('and offers a way to start one', idle.start, 1);
+eq('the challenge card is gone, because there is no challenge', idle.chal, 0);
+eq('and no day number is claimed', idle.day, 0);
+// Rank, achievements and past wins are lifetime things. Blanking them between
+// attempts tells someone with 75,000 XP that they have nothing.
+eq('but the rank is still shown', idle.rank, 1);
+eq('and still named', idle.badge, 'True Warrior');
+eq('consistency survives the gap', idle.consistency, 1);
+eq('achievements survive it', idle.ach, 1);
+eq('and so do past wins', idle.wins, 1);
+
+// ════════════════════════════════════════════════════════════════════════════
 // 11. The other four tabs are untouched
 // ════════════════════════════════════════════════════════════════════════════
 

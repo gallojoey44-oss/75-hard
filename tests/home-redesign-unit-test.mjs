@@ -178,6 +178,36 @@ check('no badge is dated, because Forge never stored when one was earned',
 
 eq('the limit is honoured',
   recentWins({ segments, rankHistory: profile.rankHistory, todayStr: TODAY, limit: 3 }).length, 3);
+
+// Perfect days are the common case. Left alone they fill the card and push out
+// the rank unlock and the finished challenge — the things actually worth
+// remembering — so they are capped while rarer events are waiting.
+const manyPerfect = {};
+for (let i = 1; i <= 7; i++) manyPerfect[i] = { date: day(-(7 - i)), tasks: { ...ALL } };
+const busy = buildSegments(
+  { ...profile, challengeStart: day(-6) }, manyPerfect, archives);
+const busyWins = recentWins({ segments: busy, rankHistory: profile.rankHistory, todayStr: TODAY, limit: 5 });
+eq('the card is filled', busyWins.length, 5);
+check('perfect days do not crowd out the rarer milestones',
+  busyWins.filter(w => w.kind === 'perfect').length <= 3,
+  busyWins.map(w => w.kind).join(','));
+check('so the rank unlock still gets in',
+  busyWins.some(w => w.kind === 'rank'), busyWins.map(w => w.kind).join(','));
+check('and so does a finished challenge',
+  busyWins.some(w => w.kind === 'challenge'), busyWins.map(w => w.kind).join(','));
+check('the list is still newest first',
+  busyWins.every((w, i) => i === 0 || w.date <= busyWins[i - 1].date),
+  busyWins.map(w => w.date).join(' '));
+
+// With nothing rarer to make room for, the cap does not leave the card half
+// empty — the remaining perfect days come back.
+const onlyPerfect = recentWins({
+  segments: buildSegments({ ...profile, rankHistory: [], challengeStart: day(-6) }, manyPerfect, []),
+  rankHistory: [], todayStr: TODAY, limit: 5,
+});
+eq('a profile with only perfect days still fills the card', onlyPerfect.length, 5);
+check('and every one of them is a perfect day',
+  onlyPerfect.every(w => w.kind === 'perfect'), onlyPerfect.map(w => w.kind).join(','));
 eq('a profile with no history has no wins',
   recentWins({ segments: [], rankHistory: [], todayStr: TODAY }).length, 0);
 
