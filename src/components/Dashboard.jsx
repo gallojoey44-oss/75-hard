@@ -12,6 +12,12 @@ import FatLossHardPanel from './FatLossHardPanel';
 import TransformationPhotos from './TransformationPhotos';
 import XPHistory from './XPHistory';
 import WelcomeBack from './WelcomeBack';
+import RankCard from './home/RankCard';
+import ConsistencyCard from './home/ConsistencyCard';
+import AchievementsCard from './home/AchievementsCard';
+import HomeChallengeCard from './home/HomeChallengeCard';
+import RecentWins from './home/RecentWins';
+import { buildSegments, recentConsistency, recentWins, nextMilestones } from '../utils/homeSummary';
 import * as FLH from '../data/fatLossHardConfig';
 import { completionMessage as energyCompletionMessage } from '../data/energyResetConfig';
 import {
@@ -385,80 +391,6 @@ function ChallengeComplete({ summary, onStartNew, onViewArchive, onContinue, onR
   );
 }
 
-function CircleRing({ value, max, size = 120 }) {
-  const r = (size - 16) / 2;
-  const circ = 2 * Math.PI * r;
-  const pct = max > 0 ? value / max : 0;
-  const offset = circ * (1 - pct);
-  return (
-    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={size/2} cy={size/2} r={r} stroke="rgba(255,255,255,0.07)" strokeWidth="10" fill="none" />
-      <circle
-        cx={size/2} cy={size/2} r={r}
-        stroke="var(--accent)" strokeWidth="10" fill="none"
-        strokeLinecap="round"
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-      />
-    </svg>
-  );
-}
-
-function XPWidget({ rankInfo, challengeXP, todayXP, onToggleDetails, showDetails, onToggleLadder, showLadder }) {
-  return (
-    <div className="xp-widget">
-      <div className="xp-widget-top">
-        <div className="xp-rank-badge">{rankInfo.current.name}</div>
-        <span style={{ flex: 1 }} />
-        <span className="xp-value">{rankInfo.xp.toLocaleString()} XP</span>
-        <button className="xp-details-btn" onClick={onToggleLadder}>
-          {showLadder ? '▲ Ladder' : '🪜 Ladder'}
-        </button>
-        <button className="xp-details-btn" onClick={onToggleDetails}>
-          {showDetails ? '▲' : '▼ Details'}
-        </button>
-      </div>
-      <div className="xp-split-row">
-        <span className="xp-split-item">🔥 Challenge: <strong>{challengeXP.toLocaleString()}</strong></span>
-        <span className="xp-split-item">🏛 Lifetime: <strong>{rankInfo.xp.toLocaleString()}</strong></span>
-      </div>
-      {/* Progress runs from the CURRENT tier's floor to the NEXT tier's
-          threshold: 0% sitting on the floor, 100% on reaching the next tier.
-          `xpToNext` always uses the real next-tier threshold. */}
-      <div className="xp-bar-wrap">
-        <div className="xp-bar-track">
-          <div className="xp-bar-fill" style={{ width: `${rankInfo.progress}%` }} />
-        </div>
-        {rankInfo.next ? (
-          <span className="xp-next-label">
-            {rankInfo.xpToNext.toLocaleString()} XP to {rankInfo.next.name}
-            {/* At the floor the user is at the START of a rank they already
-                hold — never about to earn it again. */}
-            {rankInfo.atFloor && (
-              <span className="xp-floor-note"> · start of {rankInfo.current.name}</span>
-            )}
-          </span>
-        ) : (
-          <span className="xp-next-label">Max rank — {rankInfo.current.name}</span>
-        )}
-      </div>
-      {rankInfo.floored && (
-        <div className="xp-floor-row">
-          🔒 {rankInfo.current.name} is permanently unlocked — your XP cannot fall below {rankInfo.floorXP.toLocaleString()}.
-        </div>
-      )}
-      {(todayXP.gained > 0 || todayXP.lost > 0) && (
-        <div className="xp-today-row">
-          {todayXP.gained > 0 && <span className="xp-today-gain">+{todayXP.gained}</span>}
-          {todayXP.lost > 0 && <span className="xp-today-loss">-{todayXP.lost}</span>}
-          <span className="xp-today-label">today</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function RankLadderCard({ rankInfo, rankHistory = [], highestRank = 0 }) {
   const legends = [...rankHistory].sort((a, b) => a.rank - b.rank);
   const rewards = getUnlockedRewards(highestRank);
@@ -657,20 +589,6 @@ function CurrentMissedDays({ missed }) {
           </p>
         </div>
       )}
-    </div>
-  );
-}
-
-function BadgeRow({ badges }) {
-  if (!badges.length) return null;
-  return (
-    <div className="badge-row">
-      {badges.map(b => (
-        <div key={b.id} className="badge-chip" title={b.desc}>
-          <span className="badge-chip-emoji">{b.emoji}</span>
-          <span className="badge-chip-label">{b.label}</span>
-        </div>
-      ))}
     </div>
   );
 }
@@ -880,7 +798,7 @@ function ComebackCard({ dayNum, comebackMode, setback, onStart, onDismiss, onCom
 
 export default function Dashboard({ setView }) {
   const {
-    activeProfile, profile, profiles, days, allDays, archives,
+    activeProfile, profile, profiles, days, allDays, archives, todayStr,
     getChallengeMeta, getDayNumber, getDayCompletion, getStreak, getLongestStreak, getWeeklyRequirements,
     startChallenge, isForgeDaily, completeChallenge, dismissCompletion, startForgeDaily,
     isChallengeScheduled,
@@ -1006,6 +924,31 @@ export default function Dashboard({ setView }) {
   const timeline = buildTimeline(profile, days, profileArchives);
   const avg7Home = computeAveragesFromEntries(entriesInLastNDays(timeline, 7));
   const topInsight = getPriorityBottleneck(avg7Home, profile?.sleepTarget ?? 8);
+
+  // Home's own derivations: consistency, dated wins and the milestones that are
+  // closest. All of it reads stored records — see utils/homeSummary.js, which
+  // leaves out anything Forge cannot actually measure rather than estimating it.
+  const segments    = buildSegments(profile, days, profileArchives);
+  const consistency = recentConsistency(segments, todayStr);
+  const wins        = recentWins({
+    segments,
+    rankHistory: profile?.rankHistory || [],
+    todayStr,
+    limit: 5,
+    penaltiesOn: profile?.xpPenalties !== false,
+  });
+  const milestones  = nextMilestones({ rankState: rankInfo, earnedBadgeIds: badgeIds, streak });
+
+  // Today's habit count for the active lane, read from the same task list and
+  // day record Today reads — one tap on a shared habit counts for both lanes.
+  const habitCount = (() => {
+    if (!dayNum) return null;
+    const list = (profile?.tasks || []).filter(
+      t => !Array.isArray(t.challenges) || t.challenges.includes('primary'));
+    if (!list.length) return null;
+    const rec = (allDays[activeProfile] || {})[dayNum] || null;
+    return { total: list.length, done: list.filter(t => rec?.tasks?.[t.id]).length };
+  })();
 
   const weeklyNow   = getWeeklyRequirements();
   const setback     = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
@@ -1220,9 +1163,9 @@ export default function Dashboard({ setView }) {
       {/* Returning after a gap — temporary, once per gap. */}
       <WelcomeBack />
 
-      {/* XP / Rank widget with animation */}
+      {/* 1. Where you stand */}
       <div style={{ position: 'relative' }}>
-        <XPWidget
+        <RankCard
           rankInfo={rankInfo}
           challengeXP={challengeXP}
           todayXP={todayXP}
@@ -1258,13 +1201,41 @@ export default function Dashboard({ setView }) {
         />
       )}
 
-      {/* Challenge Performance — percentage score, passing line, status */}
+      {/* 2. Showing up, over the last seven days */}
+      <ConsistencyCard
+        consistency={consistency}
+        streak={streak}
+        longest={longest}
+        onOpenCalendar={() => setView('insights')}
+      />
+
+      {/* 3. What is running, and the way into it */}
+      <HomeChallengeCard
+        meta={meta}
+        dayNum={dayNum}
+        duration={duration}
+        baseline={isBaseline}
+        habitsDone={habitCount?.done ?? null}
+        habitsTotal={habitCount?.total ?? null}
+        todayPct={todayPct}
+        supportInfo={supportInfo}
+        onOpenChallenge={() => setView('challenges')}
+        onGoToday={() => setView('today')}
+      />
+
+      {/* 4. Score, grading and projection — present in full, folded small */}
       <MuscleBuildingPanel />
       <HormoneHealthPanel />
       <EnergyResetPanel />
       <FatLossHardPanel />
-      <ChallengePerformance setView={setView} />
+      <ChallengePerformance setView={setView} compact />
       <SupportProgress />
+
+      {/* 5. What you have earned, and what is close */}
+      <AchievementsCard badges={badges} milestones={milestones} />
+
+      {/* 6. What you have actually done lately */}
+      <RecentWins wins={wins} />
 
       {/* Quote of the Day — identity and motivation live on Home */}
       <QuoteOfTheDay />
@@ -1316,121 +1287,18 @@ export default function Dashboard({ setView }) {
         </button>
       )}
 
-      {/* Challenge stack — PRIMARY stays visually dominant; SUPPORT is a
-          compact secondary row beneath it. Each keeps its own day count,
-          duration and progress. */}
-      {supportInfo && (
-        <div className="stack-card">
-          <div className="stack-lane primary">
-            <div className="stack-role">PRIMARY</div>
-            <div className="stack-name">{meta.emoji} {meta.name}</div>
-            <div className="stack-progress">
-              {isBaseline
-                ? 'No active primary challenge'
-                : `Day ${dayNum || '—'} / ${duration}`}
-            </div>
-            <div className="stack-bar"><div className="stack-bar-fill" style={{ width: `${Math.min(100, ((dayNum || 0) / duration) * 100)}%` }} /></div>
-          </div>
-          <div className="stack-lane support">
-            <div className="stack-role">SUPPORT</div>
-            <div className="stack-name">{supportInfo.emoji} {supportInfo.name}</div>
-            <div className="stack-progress">
-              {supportInfo.dayNumber
-                ? `Day ${supportInfo.dayNumber} / ${supportInfo.duration}`
-                : `Starts ${formatDateShort(supportInfo.start)}`}
-            </div>
-            <div className="stack-bar"><div className="stack-bar-fill" style={{ width: `${Math.min(100, ((supportInfo.dayNumber || 0) / (supportInfo.duration || 1)) * 100)}%` }} /></div>
+      {/* The weekly-requirement line (Fat Loss only) stays on Home: it is the
+          one challenge figure that is neither a score nor a day count. */}
+      {!isBaseline && weeklyNow?.supported && weeklyNow.current && (
+        <div className="section-card wr-home-wrap">
+          <div className="wr-home">
+            <span>This Week</span>
+            {weeklyNow.current.requirements.map(r => (
+              <span key={r.id}>{r.icon} <strong>{r.done} / {r.target}</strong> {r.id === 'lifting' ? 'lifts' : 'Zone 2'}</span>
+            ))}
           </div>
         </div>
       )}
-
-      {/* Hero Ring — challenge day count (baseline shows a simpler tile) */}
-      {isBaseline ? (
-        <div className="hero-card">
-          <div className="forge-daily-day">
-            <span className="hero-day-num">Day {dayNum || 1}</span>
-            <span className="hero-of-75">Forge Daily</span>
-          </div>
-          <div className="hero-stats">
-            <div className="hero-stat-row">
-              <span className="hero-stat-label">🔥 Streak</span>
-              <span className={`hero-stat-value${streak > 0 ? ' streak' : ''}`}>{streak}d</span>
-            </div>
-            <div className="hero-stat-row">
-              <span className="hero-stat-label">Today</span>
-              <span className="hero-stat-value">{todayPct}%</span>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="hero-card">
-          <div className="hero-ring-wrap">
-            <CircleRing value={dayNum || 0} max={duration} size={120} />
-            <div className="hero-ring-text">
-              <span className="hero-day-num">{isDone ? duration : (dayNum || '—')}</span>
-              <span className="hero-of-75">of {duration}</span>
-            </div>
-          </div>
-          <div className="hero-stats">
-            <div className="hero-stat-row">
-              <span className="hero-stat-label">🔥 Streak</span>
-              <span className={`hero-stat-value${streak > 0 ? ' streak' : ''}`}>{streak}d</span>
-            </div>
-            <div className="hero-stat-row">
-              <span className="hero-stat-label">Today</span>
-              <span className="hero-stat-value">{todayPct}%</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Challenge progress bar — only for fixed-duration challenges */}
-      {!isBaseline && (
-        <div className="section-card" style={{ marginBottom: 14 }}>
-          <div className="prog-bar-wrap">
-            <div className="prog-bar-label">
-              <span>Challenge progress</span>
-              <span>{totalDone}/{Math.min(dayNum || 0, duration)} perfect days</span>
-            </div>
-            <div className="prog-bar-track">
-              <div className="prog-bar-fill" style={{ width: `${((dayNum || 0) / duration) * 100}%` }} />
-            </div>
-          </div>
-          <div className="prog-bar-wrap">
-            <div className="prog-bar-label">
-              <span>Today</span>
-              <span>{todayPct}%</span>
-            </div>
-            <div className="prog-bar-track">
-              <div
-                className={`prog-bar-fill${todayPct === 100 ? ' success' : ''}`}
-                style={{ width: `${todayPct}%` }}
-              />
-            </div>
-          </div>
-          {/* Compact weekly-requirement line (Fat Loss only) */}
-          {weeklyNow?.supported && weeklyNow.current && (
-            <div className="wr-home">
-              <span>This Week</span>
-              {weeklyNow.current.requirements.map(r => (
-                <span key={r.id}>{r.icon} <strong>{r.done} / {r.target}</strong> {r.id === 'lifting' ? 'lifts' : 'Zone 2'}</span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Stats */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-card-label">🏆 Best Streak</div>
-          <div className="stat-card-value">{longest}d</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-label">✅ Perfect Days</div>
-          <div className="stat-card-value">{totalDone}</div>
-        </div>
-      </div>
 
       {/* Top insight preview */}
       {topInsight?.bottleneck && (
@@ -1444,13 +1312,6 @@ export default function Dashboard({ setView }) {
         </button>
       )}
 
-      {/* Recent badges */}
-      <BadgeRow badges={badges} />
-
-      {/* Log Today */}
-      <button className="btn btn-primary btn-full" onClick={() => setView('today')}>
-        ✅ Log Today →
-      </button>
     </div>
   );
 }

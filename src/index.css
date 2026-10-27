@@ -7965,3 +7965,299 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
   margin: 14px -24px 0; padding: 12px 24px calc(12px + env(safe-area-inset-bottom));
   background: var(--card); border-top: 1px solid var(--f4-hairline);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORGE 4.1 — HOME
+   ---------------------------------------------------------------------------
+   Built from the same `--f4-*` vocabulary as Today and Challenges, so Home
+   joins the app rather than becoming a third design. Nothing here is scoped to
+   a page wrapper on purpose: these class names exist only on Home.
+
+   Several legacy names ride along on these elements — `xp-widget`,
+   `xp-rank-badge`, `hero-card`, `hero-day-num`, `stack-card`, `badge-row` —
+   because they are how the suite reads the rank, the day count and the lanes.
+   Their old layout rules are neutralised at the end of this block; the alias is
+   there to label the element, not to lay it out.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Shared card shell ──────────────────────────────────────────────────── */
+
+.f41-card {
+  background: var(--f4-surface); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r); padding: 14px; margin-bottom: var(--f4-gap);
+  display: flex; flex-direction: column; gap: var(--f4-gap-sm);
+}
+.f41-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.f41-card-title {
+  font-size: var(--f4-fs-head); font-weight: 750; color: var(--text); margin: 0;
+  letter-spacing: -0.01em;
+}
+.f41-card-meta { font-size: var(--f4-fs-xs); color: var(--text3); font-weight: 600; }
+.f41-sub {
+  font-size: var(--f4-fs-xs); font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text3); margin-top: 2px;
+}
+.f41-empty { font-size: var(--f4-fs-sm); color: var(--text3); line-height: 1.5; margin: 0; }
+.f41-link {
+  background: none; border: none; cursor: pointer;
+  font-size: var(--f4-fs-sm); font-weight: 650; color: var(--accent2);
+  /* A 24px link is not a tap target. The padding is horizontal-negative so the
+     control grows into the card's own padding instead of pushing the heading
+     off its baseline. */
+  min-height: 44px; padding: 0 2px; margin: -10px -2px;
+  display: inline-flex; align-items: center;
+}
+.f41-status {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+  color: var(--accent2); background: var(--f4-accent-soft); border: 1px solid var(--f4-accent-line);
+}
+.f41-expand {
+  background: none; border: none; cursor: pointer; align-self: flex-start;
+  font-size: var(--f4-fs-sm); font-weight: 650; color: var(--accent2);
+  min-height: 44px; display: inline-flex; align-items: center;
+}
+.f41-chevron { flex: 0 0 auto; color: var(--text3); font-size: 17px; }
+
+/* ── 1. Rank ────────────────────────────────────────────────────────────── */
+
+/* The one card on Home that is allowed to look like an occasion. The wash is
+   the profile accent, so it follows the theme instead of hard-coding purple. */
+.f41-rank {
+  position: relative; overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 100% 0%, var(--f4-accent-soft) 0%, transparent 60%),
+    var(--f4-surface);
+  border: 1px solid var(--f4-accent-line); border-radius: var(--f4-r-lg);
+  padding: 16px; margin-bottom: var(--f4-gap);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.f41-rank-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.f41-rank-badge {
+  font-size: var(--f4-fs-body); font-weight: 800; letter-spacing: -0.01em;
+  padding: 6px 12px; border-radius: 999px; color: #fff;
+  background: var(--f4-accent-grad); box-shadow: var(--f4-shadow-sm);
+}
+.f41-rank-tools { display: flex; gap: 6px; }
+.f41-rank-tool {
+  background: var(--f4-surface-3); border: 1px solid var(--f4-hairline);
+  color: var(--text2); border-radius: 999px; cursor: pointer;
+  font-size: var(--f4-fs-xs); font-weight: 650; padding: 7px 10px; min-height: 36px;
+}
+.f41-rank-phil { margin: 0; font-size: var(--f4-fs-sm); color: var(--text2); line-height: 1.45; }
+
+.f41-rank-xp { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.f41-rank-xp-num {
+  font-size: 34px; font-weight: 800; letter-spacing: -0.02em; color: var(--text);
+  line-height: 1.05;
+}
+.f41-rank-xp-unit { font-size: var(--f4-fs-sm); font-weight: 700; color: var(--text3); }
+.f41-rank-today { display: inline-flex; align-items: baseline; gap: 5px; margin-left: auto; }
+.f41-rank-today-label { font-size: var(--f4-fs-xs); color: var(--text3); }
+.f41-up { font-size: var(--f4-fs-sm); font-weight: 750; color: #6fcf97; }
+.f41-down { font-size: var(--f4-fs-sm); font-weight: 750; color: #ff7a7a; }
+
+.f41-rank-bar {
+  height: 10px; border-radius: 999px; overflow: hidden;
+  background: rgba(255,255,255,0.08); border: 1px solid var(--f4-hairline);
+}
+.f41-rank-bar-fill {
+  height: 100%; border-radius: 999px; background: var(--f4-accent-grad);
+  transition: width 600ms var(--f4-ease);
+}
+.f41-rank-next { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.f41-rank-next-label { font-size: var(--f4-fs-sm); color: var(--text2); font-weight: 600; }
+.f41-rank-next-pct { font-size: var(--f4-fs-sm); font-weight: 750; color: var(--accent2); }
+
+/* Eight dots, one per rank: the only place Home says how far along the whole
+   ladder you are rather than how far through the current tier. */
+.f41-rank-dots { display: flex; gap: 5px; align-items: center; }
+.f41-rank-dot {
+  flex: 1; height: 4px; border-radius: 999px; background: rgba(255,255,255,0.10);
+}
+.f41-rank-dot.done { background: var(--f4-accent-line); }
+.f41-rank-dot.here { background: var(--accent); box-shadow: 0 0 0 2px var(--f4-accent-soft); }
+
+.f41-rank-split { display: flex; gap: var(--f4-gap-sm); }
+.f41-rank-stat {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+  background: var(--f4-surface-2); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-sm); padding: 9px 11px;
+}
+.f41-rank-stat-label { font-size: var(--f4-fs-xs); color: var(--text3); font-weight: 600; }
+.f41-rank-stat-value { font-size: var(--f4-fs-head); font-weight: 750; color: var(--text); }
+.f41-rank-floor, .f41-rank-atfloor {
+  margin: 0; font-size: var(--f4-fs-xs); color: var(--text3); line-height: 1.5;
+}
+/* The split carries `xp-split-row`, whose old rule is a flex row of inline
+   items; inside the rank card it is two tiles. */
+.f41-rank-split.xp-split-row { display: flex; gap: var(--f4-gap-sm); margin: 0; padding: 0; border: none; }
+
+/* ── 2. Consistency ─────────────────────────────────────────────────────── */
+
+.f41-con-figures { display: flex; gap: var(--f4-gap-sm); }
+.f41-con-fig {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: var(--f4-surface-2); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r-sm); padding: 10px 6px; text-align: center;
+}
+.f41-con-num { font-size: 22px; font-weight: 800; color: var(--text); line-height: 1.1; }
+.f41-con-of { font-size: var(--f4-fs-sm); font-weight: 700; color: var(--text3); }
+.f41-con-label { font-size: 10.5px; color: var(--text3); font-weight: 600; line-height: 1.3; }
+
+.f41-week { display: flex; gap: 4px; list-style: none; margin: 4px 0 0; padding: 0; }
+.f41-week-day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.f41-week-label { font-size: 10.5px; color: var(--text3); font-weight: 650; }
+.f41-dot {
+  width: 100%; max-width: 34px; aspect-ratio: 1; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--f4-hairline-2); background: var(--f4-surface-2);
+}
+.f41-dot.done { background: var(--f4-accent-grad); border-color: transparent; }
+.f41-dot.partial {
+  background: linear-gradient(to top, var(--f4-accent-line) 50%, var(--f4-surface-2) 50%);
+  border-color: var(--f4-accent-line);
+}
+.f41-dot.missed { background: var(--f4-surface-2); border-color: rgba(255,122,122,0.35); }
+/* Untracked: nothing was running, so nothing is claimed either way. */
+.f41-dot.none { background: transparent; border-style: dashed; border-color: var(--f4-hairline); }
+.f41-dot.today, .f41-dot.now { box-shadow: 0 0 0 2px var(--f4-accent-soft); }
+.f41-dot-tick { font-size: 13px; color: #fff; font-weight: 800; line-height: 1; }
+
+/* ── 3. Active challenge ────────────────────────────────────────────────── */
+
+.f41-lane { display: flex; flex-direction: column; gap: var(--f4-gap-sm); }
+.f41-lane.support {
+  border-top: 1px solid var(--f4-hairline); padding-top: var(--f4-gap-sm); opacity: 0.92;
+}
+.f41-lane-role {
+  font-size: 10px; font-weight: 750; letter-spacing: 0.08em; color: var(--text3);
+}
+.f41-chal-head {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: none; padding: 0; text-align: left; cursor: pointer;
+  color: inherit; font-family: inherit;
+}
+.f41-chal-head.static { cursor: default; }
+.f41-chal-emoji {
+  flex: 0 0 auto; width: 38px; height: 38px; border-radius: 11px; font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--f4-surface-3); border: 1px solid var(--f4-hairline);
+}
+.f41-chal-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.f41-chal-name {
+  font-size: var(--f4-fs-body); font-weight: 750; color: var(--text); line-height: 1.25;
+  overflow-wrap: break-word;
+}
+.f41-chal-meta { font-size: var(--f4-fs-sm); color: var(--text2); font-weight: 600; }
+/* The primary lane reads as the dominant one — the support lane carries the
+   same information one step down the type scale. */
+.f41-lane.support .f41-chal-name { font-size: var(--f4-fs-sm); font-weight: 700; }
+.f41-lane.support .f41-chal-meta { font-size: var(--f4-fs-xs); }
+.f41-lane.support .f41-chal-emoji { width: 30px; height: 30px; font-size: 16px; border-radius: 9px; }
+
+.f41-chal-bar {
+  height: 6px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.08);
+}
+.f41-chal-bar-fill {
+  height: 100%; border-radius: 999px; background: var(--f4-accent-grad);
+  transition: width 500ms var(--f4-ease);
+}
+.f41-chal-foot {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  font-size: var(--f4-fs-sm); color: var(--text2); font-weight: 600;
+}
+.f41-chal-left { color: var(--text3); white-space: nowrap; }
+
+.f41-cta {
+  margin-top: 2px; width: 100%; min-height: 48px; border: none; cursor: pointer;
+  border-radius: var(--f4-r-sm); background: var(--f4-accent-grad); color: #fff;
+  font-size: var(--f4-fs-body); font-weight: 750; font-family: inherit;
+  transition: transform var(--f4-fast) var(--f4-ease);
+}
+.f41-cta:active { transform: scale(0.99); }
+
+/* ── 5. Achievements ────────────────────────────────────────────────────── */
+
+.f41-badges { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.f41-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--f4-surface-2); border: 1px solid var(--f4-hairline);
+  border-radius: 999px; padding: 5px 10px;
+}
+.f41-badge-emoji { font-size: 14px; line-height: 1; }
+.f41-badge-label { font-size: var(--f4-fs-xs); font-weight: 650; color: var(--text2); }
+
+.f41-miles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.f41-mile { display: flex; align-items: flex-start; gap: 9px; }
+.f41-mile-icon { flex: 0 0 auto; font-size: 16px; line-height: 1.4; }
+.f41-mile-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.f41-mile-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.f41-mile-label { font-size: var(--f4-fs-sm); font-weight: 700; color: var(--text); }
+.f41-mile-detail { font-size: var(--f4-fs-xs); color: var(--text3); white-space: nowrap; font-weight: 600; }
+.f41-mile-bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.f41-mile-bar-fill { display: block; height: 100%; border-radius: 999px; background: var(--f4-accent-grad); }
+
+.f41-collection { display: flex; flex-direction: column; gap: 8px; }
+.f41-col-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.f41-col-row { display: flex; align-items: flex-start; gap: 9px; }
+.f41-col-row.locked { opacity: 0.6; }
+.f41-col-emoji { flex: 0 0 auto; font-size: 16px; line-height: 1.4; }
+.f41-col-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.f41-col-label { font-size: var(--f4-fs-sm); font-weight: 700; color: var(--text); }
+.f41-col-desc { font-size: var(--f4-fs-xs); color: var(--text3); line-height: 1.45; }
+
+/* ── 6. Recent wins ─────────────────────────────────────────────────────── */
+
+.f41-win-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.f41-win { display: flex; align-items: flex-start; gap: 9px; }
+.f41-win-icon { flex: 0 0 auto; font-size: 16px; line-height: 1.4; }
+.f41-win-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.f41-win-title { font-size: var(--f4-fs-sm); font-weight: 700; color: var(--text); line-height: 1.35; }
+.f41-win-detail { font-size: var(--f4-fs-xs); color: var(--text3); line-height: 1.45; }
+.f41-win-right {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+}
+.f41-win-xp { font-size: var(--f4-fs-sm); font-weight: 750; color: var(--accent2); white-space: nowrap; }
+.f41-win-xp.soft { color: var(--text2); font-weight: 650; }
+.f41-win-when { font-size: 10.5px; color: var(--text3); white-space: nowrap; }
+
+/* ── 4. Challenge Performance, folded small ─────────────────────────────── */
+
+.perf-compact { padding: 14px; }
+.perf-compact .perf-ring { width: 96px; height: 96px; }
+.perf-compact .perf-main { gap: var(--f4-gap); align-items: center; }
+.perf-compact .perf-statusmsg { font-size: var(--f4-fs-xs); line-height: 1.45; }
+
+/* ── Legacy aliases: labels, not layout ─────────────────────────────────── */
+
+/* These elements carry old class names so the suite can still find them. The
+   old rules positioned a different design, so inside Home they are reset and
+   the `f41-` rules above are what actually lay the card out. */
+.f41-rank.xp-widget { display: flex; }
+.f41-rank .xp-rank-badge { margin: 0; }
+.f41-chal.hero-card,
+.f41-chal.stack-card {
+  display: flex; flex-direction: column; align-items: stretch;
+  padding: 14px; margin-bottom: var(--f4-gap); gap: var(--f4-gap-sm);
+  background: var(--f4-surface); border: 1px solid var(--f4-hairline);
+  border-radius: var(--f4-r); text-align: left;
+}
+.f41-chal .stack-lane { background: none; border: none; padding: 0; margin: 0; }
+.f41-chal .stack-name, .f41-chal .stack-progress, .f41-chal .stack-role { margin: 0; }
+.f41-chal .hero-day-num,
+.f41-chal .hero-of-75 {
+  font-size: inherit; font-weight: inherit; color: inherit; display: inline;
+  letter-spacing: normal; line-height: inherit;
+}
+.f41-chal .hero-stat-value { font-size: inherit; font-weight: inherit; color: inherit; }
+.f41-ach .badge-row { margin: 0; }
+.f41-ach .badge-chip { margin: 0; }
+
+/* The weekly-requirement strip keeps its own card, without the old margins. */
+.wr-home-wrap { margin-bottom: var(--f4-gap); }
+
+@media (prefers-reduced-motion: reduce) {
+  .f41-rank-bar-fill, .f41-chal-bar-fill { transition: none; }
+  .f41-cta:active { transform: none; }
+}

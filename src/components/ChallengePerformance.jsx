@@ -42,7 +42,14 @@ function ScoreRing({ score, passing, color }) {
   );
 }
 
-export default function ChallengePerformance({ setView }) {
+/**
+ * `compact` is Home's mode. The card keeps everything it has always had — the
+ * score, the passing line, the status, the projection, the full breakdown —
+ * but folds the three explanatory blocks behind the same disclosure the
+ * breakdown already uses, so Home gets a card instead of a screen. Today
+ * renders it unchanged, which is why this is opt-in rather than a rewrite.
+ */
+export default function ChallengePerformance({ setView, compact = false }) {
   const { activeProfile, profile, profiles, allDays, getChallengeMeta, getDayNumber, getRawDayNumber, isForgeDaily } = useApp();
   const [expanded, setExpanded] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -112,8 +119,12 @@ export default function ChallengePerformance({ setView }) {
       ? 'Passing score reached, but Keystone requirement not met.'
       : status.message;
 
+  // On Home the explanatory blocks travel with the breakdown rather than
+  // sitting open; the score, the passing line and the status always show.
+  const showDetail = !compact || expanded;
+
   return (
-    <div className="perf-card">
+    <div className={`perf-card${compact ? ' perf-compact' : ''}`}>
       <div className="perf-head">
         <span className="perf-title">⚔️ Challenge Performance</span>
         <span className="perf-status-badge" style={{ color, borderColor: color }}>
@@ -136,7 +147,7 @@ export default function ChallengePerformance({ setView }) {
         </div>
       </div>
 
-      {todayInProgress && !building && (
+      {todayInProgress && !building && showDetail && (
         <div className="perf-inprogress">
           Today is still in progress. This is your confirmed score so far — complete
           high-value tasks to strengthen it. Unchecked tasks today are not counted against you yet.
@@ -145,7 +156,7 @@ export default function ChallengePerformance({ setView }) {
 
       {feedback && <div key={feedback.key} className="perf-feedback">{feedback.text}</div>}
 
-      {projection && projection.insufficient && (
+      {showDetail && projection && projection.insufficient && (
         <div className="perf-projection">
           <div className="perf-proj-row">
             <span>📊 Projected Final Score <em>(estimate)</em></span>
@@ -154,7 +165,7 @@ export default function ChallengePerformance({ setView }) {
         </div>
       )}
 
-      {projection && !projection.insufficient && (
+      {showDetail && projection && !projection.insufficient && (
         <div className="perf-projection">
           <div className="perf-proj-row">
             <span>📊 Projected Final Score <em>(estimate)</em></span>
@@ -175,7 +186,9 @@ export default function ChallengePerformance({ setView }) {
       )}
 
       <button className="perf-expand-btn" onClick={() => setExpanded(v => !v)}>
-        {expanded ? '▲ Hide breakdown' : '▼ Performance breakdown'}
+        {expanded
+          ? '▲ Hide breakdown'
+          : compact ? '▼ Projection & breakdown' : '▼ Performance breakdown'}
       </button>
 
       {expanded && (
