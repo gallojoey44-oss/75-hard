@@ -160,7 +160,12 @@ const rank = await page.evaluate(() => {
 });
 eq('the rank is named', rank.badge, 'True Warrior');
 check('the next rank and the distance to it are stated',
-  /^[\d,]+ XP to Unbreakable$/.test(rank.next), rank.next);
+  /^[\d,]+ XP to Unbreakable/.test(rank.next), rank.next);
+// Standing exactly on a tier's floor is the start of a rank already held, not
+// the brink of earning it again — and that copy lives in this same label.
+check('sitting on the floor reads as the start of the tier, not a re-unlock',
+  /start of True Warrior/.test(rank.next) && !/XP to True Warrior/.test(rank.next),
+  rank.next);
 check('the split still reads Challenge and Lifetime',
   /Challenge:\s*[\d,]+/.test(rank.split) && /Lifetime:\s*[\d,]+/.test(rank.split),
   rank.split.replace(/\s+/g, ' '));

@@ -64,8 +64,18 @@ export default function RankCard({
       <div className="f41-rank-next">
         {next ? (
           <>
+            {/* Sitting exactly on the floor is the START of a rank already
+                held, not the brink of earning it again — and it belongs in
+                this label, where the suite reads the next-rank copy, rather
+                than in a paragraph of its own. It is a block so it drops to
+                its own line instead of being crushed against the percentage. */}
             <span className="f41-rank-next-label xp-next-label">
               {xpToNext.toLocaleString()} XP to {next.name}
+              {atFloor && (
+                <span className="f41-rank-atfloor xp-floor-note">
+                  You are at the start of {current.name}.
+                </span>
+              )}
             </span>
             <span className="f41-rank-next-pct">{progress}%</span>
           </>
@@ -77,15 +87,6 @@ export default function RankCard({
       {/* Sitting exactly on the floor is the START of a rank already held, not
           the brink of earning it again. It gets its own line rather than being
           crushed against the percentage. */}
-      {/* Deliberately NOT `xp-floor-row`: that name means "the floor is holding
-          your XP up", which is a different state from standing at the start of
-          a tier, and the suite counts the two separately. */}
-      {atFloor && (
-        <p className="f41-rank-atfloor xp-floor-note">
-          You are at the start of {current.name}.
-        </p>
-      )}
-
       {/* The ladder, as eight dots. Small, but it is the only place Home says
           how far along the whole thing you are rather than the current tier. */}
       <div className="f41-rank-dots" aria-hidden="true">

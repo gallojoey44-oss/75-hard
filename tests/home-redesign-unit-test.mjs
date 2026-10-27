@@ -150,6 +150,25 @@ eq('an era-1 challenge quotes its XP on the lifetime ladder', e1Win.xp, 4200);
 const e2Win = archWins.find(w => /Fat Loss/.test(w.title));
 eq('an era-2 challenge is quoted unchanged', e2Win.xp, 6420);
 
+// A run the user stopped is not an accomplishment, and Home does not present
+// it as one. It stays safe in the archive and in XP History; it simply is not
+// a win. This is also what keeps an ended Support Challenge from reappearing
+// on Home seconds after it was ended.
+const withEarlyEnd = buildSegments(profile, activeDays, [
+  ...archives,
+  { id: 'arch_quit', challengeStart: day(-60), endDate: day(-40), archivedAt: day(-40), endDayNum: 9,
+    challenge: { templateId: 'energy_reset_10_day', name: 'Energy Reset', emoji: '⚡', durationDays: 21, xpEconomyVersion: 2 },
+    days: {}, tasks: [], xpEarned: 980, endedEarly: true, completed: false, passed: null,
+    finalScore: 54, scoreAvailable: true },
+]);
+const earlyWins = recentWins({ segments: withEarlyEnd, rankHistory: [], todayStr: TODAY, limit: 20 });
+check('a challenge that was ended early is not listed as a win',
+  !earlyWins.some(w => /Energy Reset/.test(w.title)),
+  earlyWins.map(w => w.title).join(' | '));
+check('while the challenges that were finished still are',
+  earlyWins.filter(w => w.kind === 'challenge').length === 2,
+  earlyWins.filter(w => w.kind === 'challenge').map(w => w.title).join(' | '));
+
 const perfect = wins.filter(w => w.kind === 'perfect');
 eq('every perfect day is a win', perfect.length, 2);
 check('and each is worth real XP', perfect.every(w => w.xp > 0), perfect.map(w => w.xp).join(','));

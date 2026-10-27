@@ -225,15 +225,18 @@ export function recentWins({ segments, rankHistory = [], todayStr = getTodayStr(
     const a = seg.archive;
     const date = a.endDate || a.archivedAt;
     if (!date) continue;
+    // A run the user stopped is not a win, and this card does not pretend
+    // otherwise. The attempt and its XP are safe in the archive and in XP
+    // History either way; what it is not is an accomplishment to celebrate
+    // back at them. The same rule keeps an ended Support Challenge from
+    // reappearing on Home moments after it was ended.
+    if (a.endedEarly === true) continue;
     const passed = a.passed === true;
-    const ended = a.endedEarly === true;
     wins.push({
       kind: 'challenge',
       date: String(date).slice(0, 10),
-      icon: ended ? '🎗️' : passed ? '🏆' : '🏁',
-      title: ended
-        ? `Ended ${a.challenge?.name || 'a challenge'} early`
-        : `${passed ? 'Passed' : 'Completed'} ${a.challenge?.name || 'a challenge'}`,
+      icon: passed ? '🏆' : '🏁',
+      title: `${passed ? 'Passed' : 'Completed'} ${a.challenge?.name || 'a challenge'}`,
       detail: a.scoreAvailable && a.finalScore != null
         ? `${a.finalScore}% final score${a.endDayNum ? ` · ${a.endDayNum} days` : ''}`
         : (a.endDayNum ? `${a.endDayNum} days` : ''),
