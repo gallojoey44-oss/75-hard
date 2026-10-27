@@ -28,13 +28,29 @@ export default function AchievementsCard({ badges, milestones }) {
       </div>
 
       {earned.length > 0 ? (
+        // Emblems rather than chips: five to a row, each one the achievement's
+        // own emoji on a crest in the profile's accent. Nothing here is
+        // decorative data — the crest marks that it is HELD, the label is the
+        // badge's real name, and the count beside the heading is the real
+        // tally. When more are held than fit, the last slot says how many
+        // rather than silently dropping them.
         <ul className="f41-badges badge-row">
-          {earned.slice(0, 6).map(b => (
-            <li key={b.id} className="f41-badge badge-chip" title={b.desc}>
-              <span className="f41-badge-emoji badge-chip-emoji" aria-hidden="true">{b.emoji}</span>
+          {earned.slice(0, earned.length > 5 ? 4 : 5).map(b => (
+            <li key={b.id} className="f41-badge badge-chip" title={`${b.label} — ${b.desc}`}>
+              <span className="f41-crest" aria-hidden="true">
+                <span className="f41-crest-emoji badge-chip-emoji">{b.emoji}</span>
+              </span>
               <span className="f41-badge-label badge-chip-label">{b.label}</span>
             </li>
           ))}
+          {earned.length > 5 && (
+            <li className="f41-badge more" title={`${earned.length - 4} more earned`}>
+              <span className="f41-crest more" aria-hidden="true">
+                <span className="f41-crest-more">+{earned.length - 4}</span>
+              </span>
+              <span className="f41-badge-label">more</span>
+            </li>
+          )}
         </ul>
       ) : (
         <p className="f41-empty">

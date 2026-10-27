@@ -18,7 +18,7 @@ import {
   buildSegments, recentConsistency, recentWins, nextMilestones, badgeCollection,
 } from '../src/utils/homeSummary.js';
 import { resolveRankState } from '../src/utils/rank.js';
-import { BADGE_DEFS, RANKS } from '../src/utils/gamification.js';
+import { BADGE_DEFS, RANKS, detectSetback } from '../src/utils/gamification.js';
 
 const results = [];
 function check(name, cond, extra = '') {
@@ -240,6 +240,49 @@ const everyMile = nextMilestones({ rankState, earnedBadgeIds: new Set(), streak:
 check('only badges with a countable criterion are given a bar',
   everyMile.every(m => m.kind === 'rank' || measurable.has(m.id)),
   everyMile.map(m => m.id).join(','));
+
+// ── 4b. The comeback offer does not contradict the screen it sits on ────────
+//
+// `detectSetback` decides whether Home offers a comeback plan. It feeds no
+// penalty and no XP — it is a visibility rule — and these checks pin the two
+// ways it was contradicting the evidence beside it.
+
+const SB_TASKS = [{ id: 'x', xp: 50, keystone: 2, source: 'template', order: 0 }];
+/** `pattern` is oldest-first: true is a completed day. */
+function setbackFor(pattern, { rawDay = null } = {}) {
+  const daysObj = {};
+  pattern.forEach((done, i) => { daysObj[i + 1] = { date: day(-(pattern.length - 1 - i)), tasks: { x: !!done } }; });
+  const completion = (n) => (daysObj[n]?.tasks?.x ? 100 : 0);
+  return detectSetback({ p: daysObj }, 'p', completion, pattern.length, rawDay ?? pattern.length + 1);
+}
+
+// Two genuinely missed days out of the last finalised seven.
+eq('two missed finalised days are a setback',
+  setbackFor([true, false, true, false, true]).hasSetback, true);
+eq('one missed day is not', setbackFor([true, true, true, false, true]).hasSetback, false);
+
+// The day in progress is not evidence. Reading Home at breakfast with nothing
+// ticked yet must not be counted as an incomplete day.
+const breakfast = setbackFor([true, true, true, false, false], { rawDay: 5 });
+eq('the day in progress is excluded from the window', breakfast.incompleteDays, 1);
+eq('so a single real miss plus an unstarted today is not a setback',
+  breakfast.hasSetback, false);
+// Without that boundary the same history would read as two incomplete days.
+eq('counting today would have said otherwise',
+  setbackFor([true, true, true, false, false], { rawDay: 6 }).incompleteDays, 2);
+
+// Having already strung three days together IS the comeback.
+const recovered = setbackFor([false, false, true, true, true]);
+eq('three complete days in a row are recognised', recovered.recoveredDays, 3);
+eq('and the offer is withdrawn once they are', recovered.hasSetback, false);
+eq('two days back is not yet a recovery',
+  setbackFor([false, false, false, true, true]).hasSetback, true);
+
+// A real slump still offers the plan.
+const slump = setbackFor([true, true, false, false, false]);
+eq('a run of missed days is still a setback', slump.hasSetback, true);
+eq('and reports how many were consecutive', slump.consecutiveMissed, 3);
+eq('with nothing recovered yet', slump.recoveredDays, 0);
 
 // ── 5. The collection accounts for every badge ──────────────────────────────
 

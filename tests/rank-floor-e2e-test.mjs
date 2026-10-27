@@ -55,6 +55,27 @@ const barPct = () => page.evaluate(() => {
 });
 
 /**
+ * The floor notice, read where Forge 4.1 shows it.
+ *
+ * The paragraph explaining the floor moved behind Details — it is a rule that
+ * matters on the day it bites, not every day — so this opens Details, reads
+ * it, and closes Details again. The behaviour under test is unchanged: the
+ * floor is still explained, and it still names the value it holds at.
+ */
+async function floorNotice() {
+  const btn = page.locator('.xp-details-btn', { hasText: 'Details' }).first();
+  await btn.click();
+  await page.waitForTimeout(300);
+  const out = await page.evaluate(() => {
+    const el = document.querySelector('.xp-floor-row');
+    return { count: document.querySelectorAll('.xp-floor-row').length, text: el?.textContent || '' };
+  });
+  await btn.click();
+  await page.waitForTimeout(250);
+  return out;
+}
+
+/**
  * Seed a profile whose ARCHIVED XP totals `archivedXP`, optionally with a
  * persisted highestRank. Archived XP is the cleanest lever: it is real Lifetime
  * XP, and adjusting it is exactly what a challenge recalculation or a historical
@@ -124,7 +145,7 @@ const LOWER = inTier(WARRIOR, ELITE, 0.2);
 await setArchivedXP(LOWER);
 check('1: losing XP below the next tier is reflected in full', (await lifetimeXP()) === LOWER);
 check('1: no floor notice is shown while above the floor',
-  (await page.locator('.xp-floor-row').count()) === 0);
+  (await floorNotice()).count === 0);
 
 // ══ 2: reaching a tier permanently unlocks and persists it ══════════════════
 await setArchivedXP(ELITE);
@@ -152,10 +173,14 @@ check('5: the rank is not demoted', (await rankName()) === 'Elite Warrior');
 await setArchivedXP(0);
 check('5: even zero calculated XP holds at the floor', (await lifetimeXP()) === ELITE);
 check('5: still Elite Warrior at zero raw XP', (await rankName()) === 'Elite Warrior');
-check('5: the floor is explained to the user', (await page.locator('.xp-floor-row').count()) === 1);
+const notice = await floorNotice();
+check('5: the floor is explained to the user', notice.count === 1);
 check('5: the notice names the floor value',
-  new RegExp(`cannot fall below ${ELITE.toLocaleString()}`).test(await page.textContent('.xp-floor-row')),
-  await page.textContent('.xp-floor-row'));
+  new RegExp(`cannot fall below ${ELITE.toLocaleString()}`).test(notice.text), notice.text);
+// And the card itself still says, in one line, that the rank is locked in.
+check('5: the card states the rank is locked in without the paragraph',
+  /is locked in/.test(await page.textContent('.f41-rank')),
+  (await page.textContent('.f41-rank')).replace(/\s+/g, ' ').slice(0, 160));
 
 // ══ 19: no screen can show a rank beside XP below its threshold ═════════════
 check('19: Home shows Elite Warrior with XP at or above its threshold',

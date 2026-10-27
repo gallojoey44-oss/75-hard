@@ -1193,13 +1193,26 @@ export function getWarriorMessage({ isMWD = false, isComeback = false, stressHig
 
 // ─── Setback detection ───────────────────────────────────────────────────────
 
-export function detectSetback(allDays, profId, getDayCompletion, dayNum) {
+export function detectSetback(allDays, profId, getDayCompletion, dayNum, currentRawDay = null) {
   if (!dayNum || dayNum < 2) {
-    return { hasSetback: false, incompleteDays: 0, consecutiveMissed: 0, avgCompletion: 0 };
+    return { hasSetback: false, incompleteDays: 0, consecutiveMissed: 0, avgCompletion: 0, recoveredDays: 0 };
   }
   const profDays = allDays[profId] || {};
-  const last7    = Array.from({ length: Math.min(7, dayNum) }, (_, i) => dayNum - i).filter(n => n >= 1);
 
+  // The day in progress is NOT evidence of a setback. Everywhere else in Forge
+  // today is neutral until it ends — no miss penalty, excluded from the
+  // Challenge Score, never a missed circle on Home — and counting it here is
+  // what let the comeback offer appear at breakfast, telling someone on a
+  // streak that two of their last seven days were incomplete when one of the
+  // two was the morning they were reading it. Only finalised days are judged.
+  const lastFinal = currentRawDay ? Math.min(dayNum, currentRawDay - 1) : dayNum;
+  if (lastFinal < 2) {
+    return { hasSetback: false, incompleteDays: 0, consecutiveMissed: 0, avgCompletion: 0, recoveredDays: 0 };
+  }
+
+  const last7 = Array.from({ length: Math.min(7, lastFinal) }, (_, i) => lastFinal - i).filter(n => n >= 1);
+
+  const complete = (n) => getMWDComplete(profDays[n]) || getDayCompletion(n, profId) >= 60;
   const completions = last7.map(n => {
     const mwdOk = getMWDComplete(profDays[n]);
     return mwdOk ? 60 : getDayCompletion(n, profId);
@@ -1208,9 +1221,18 @@ export function detectSetback(allDays, profId, getDayCompletion, dayNum) {
   const incompleteDays = completions.filter(p => p < 60).length;
 
   let consecutiveMissed = 0;
-  for (let i = dayNum; i >= Math.max(1, dayNum - 6); i--) {
-    const mwdOk = getMWDComplete(profDays[i]);
-    if (!mwdOk && getDayCompletion(i, profId) < 60) consecutiveMissed++;
+  for (let i = lastFinal; i >= Math.max(1, lastFinal - 6); i--) {
+    if (!complete(i)) consecutiveMissed++;
+    else break;
+  }
+
+  // How many finalised days they have already strung together. A comeback plan
+  // is three days long, so someone who has just done three in a row has
+  // already done one — offering it then contradicts the evidence on the same
+  // screen, where the streak and the week's circles are both saying otherwise.
+  let recoveredDays = 0;
+  for (let i = lastFinal; i >= 1; i--) {
+    if (complete(i)) recoveredDays++;
     else break;
   }
 
@@ -1218,5 +1240,8 @@ export function detectSetback(allDays, profId, getDayCompletion, dayNum) {
     ? Math.round(completions.reduce((s, v) => s + v, 0) / completions.length)
     : 0;
 
-  return { hasSetback: incompleteDays >= 2, incompleteDays, consecutiveMissed, avgCompletion };
+  return {
+    hasSetback: incompleteDays >= 2 && recoveredDays < 3,
+    incompleteDays, consecutiveMissed, avgCompletion, recoveredDays,
+  };
 }

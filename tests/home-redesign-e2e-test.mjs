@@ -170,6 +170,30 @@ check('the split still reads Challenge and Lifetime',
   /Challenge:\s*[\d,]+/.test(rank.split) && /Lifetime:\s*[\d,]+/.test(rank.split),
   rank.split.replace(/\s+/g, ' '));
 eq('there is one dot per rank', rank.dots, 8);
+
+// The floor PARAGRAPH is behind Details; the card keeps the one-line fact.
+const floorOnCard = await page.evaluate(() => ({
+  paragraph: document.querySelectorAll('.f41-rank .xp-floor-row').length,
+  oneLiner: document.querySelectorAll('.f41-rank-locked').length,
+  text: document.querySelector('.f41-rank-locked')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+}));
+eq('the card does not carry the floor paragraph', floorOnCard.paragraph, 0);
+eq('it states in one line that the rank is locked in', floorOnCard.oneLiner, 1);
+check('and offers the explanation rather than printing it',
+  /locked in/.test(floorOnCard.text) && /What that means/.test(floorOnCard.text),
+  floorOnCard.text);
+
+await page.locator('.f41-rank-why').click();
+await page.waitForTimeout(500);
+const floorInDetails = await page.evaluate(() => ({
+  shown: document.querySelectorAll('.xp-floor-row').length,
+  text: document.querySelector('.xp-floor-row')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+}));
+eq('the explanation opens in Details', floorInDetails.shown, 1);
+check('and still names the floor it holds at',
+  /cannot fall below [\d,]+/.test(floorInDetails.text), floorInDetails.text);
+await page.locator('.xp-details-btn', { hasText: 'Details' }).first().click();
+await page.waitForTimeout(350);
 eq('exactly one of them is the rank you hold', rank.here, 1);
 check('the bar width matches the stated percentage',
   rank.barW === rank.pct, `${rank.barW} vs ${rank.pct}`);
@@ -271,6 +295,30 @@ await page.waitForTimeout(300);
 // ════════════════════════════════════════════════════════════════════════════
 // 6. Achievements: what is held, what is close, and all of it
 // ════════════════════════════════════════════════════════════════════════════
+
+// Earned achievements are crests, five to a row, and the preview keeps one
+// predictable height however many are held.
+const crests = await page.evaluate(() => {
+  const cells = [...document.querySelectorAll('.f41-badge')];
+  const card = document.querySelector('.f41-ach');
+  const grid = document.querySelector('.f41-badges');
+  const clipped = (el) => !!el && el.scrollHeight > el.clientHeight + 1;
+  return {
+    cells: cells.length,
+    perRow: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+    withCrest: cells.filter(c => c.querySelector('.f41-crest')).length,
+    labelsClipped: cells.filter(c => clipped(c.querySelector('.f41-badge-label'))).length,
+    hexed: cells.filter(c => /polygon/.test(getComputedStyle(c.querySelector('.f41-crest') || c).clipPath || '')).length,
+    gridHeight: Math.round(grid.getBoundingClientRect().height),
+    cardHeight: Math.round(card.getBoundingClientRect().height),
+  };
+});
+eq('the preview lays achievements out five to a row', crests.perRow, 5);
+check('no more than one row is shown', crests.cells <= 5, `${crests.cells}`);
+eq('every one of them is a crest', crests.withCrest, crests.cells);
+eq('and the crests are hexagons, not chips', crests.hexed, crests.cells);
+eq('no achievement name is clipped', crests.labelsClipped, 0);
+check('the preview stays one row tall', crests.gridHeight <= 90, `${crests.gridHeight}px`);
 
 const ach = await page.evaluate(() => ({
   earned: document.querySelectorAll('.f41-badge').length,
@@ -397,6 +445,58 @@ eq('it has no fixed length, so no progress bar', base.bar, 0);
 eq('and nothing counting down', base.left, false);
 eq('an unscored baseline shows no performance card', base.perf, 0);
 check('but it still reports which day it is', /^\d+$/.test(base.day || ''), base.day);
+
+// ════════════════════════════════════════════════════════════════════════════
+// 9b. The comeback offer agrees with the rest of the screen
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Rewrite the day records to a pattern, oldest first; true is a full day. */
+async function withDays(pattern) {
+  await seed();
+  await page.evaluate((c) => {
+    const p = JSON.parse(localStorage.getItem('profiles'));
+    const ids = p.me.tasks.map(t => t.id);
+    const all = Object.fromEntries(ids.map(id => [id, true]));
+    const days = {};
+    c.pattern.forEach((done, i) => {
+      days[i + 1] = { date: c.dates[i], tasks: done ? { ...all } : {} };
+    });
+    p.me.challengeStart = c.dates[0];
+    localStorage.setItem('profiles', JSON.stringify(p));
+    localStorage.setItem('allDays', JSON.stringify({ me: days, girlfriend: {} }));
+  }, {
+    pattern,
+    dates: pattern.map((_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - (pattern.length - 1 - i));
+      return d.toISOString().slice(0, 10);
+    }),
+  });
+  await page.reload();
+  await page.waitForSelector('.dashboard', { timeout: 20000 });
+  await page.waitForTimeout(700);
+  return page.evaluate(() => ({
+    offered: document.querySelectorAll('.comeback-card').length,
+    streak: document.querySelector('.f41-con-num')?.textContent?.trim(),
+    body: document.querySelector('.comeback-body')?.textContent?.replace(/\s+/g, ' ').trim() || null,
+  }));
+}
+
+// A real slump: three finalised days missed, nothing recovered.
+const slump = await withDays([true, true, false, false, false, false]);
+eq('a genuine slump is offered a comeback', slump.offered, 1);
+check('and it says how many days it is reacting to',
+  /\d of your last 7 days were incomplete/.test(slump.body || ''), slump.body);
+
+// The same history, read at breakfast: today is untouched because the day has
+// not happened yet, and that must not be counted as a missed day.
+const morning = await withDays([true, true, true, true, false, false]);
+eq('one real miss plus an unstarted today is not a setback', morning.offered, 0);
+
+// Already recovered: three complete days in a row IS the comeback plan.
+const recovered = await withDays([false, false, true, true, true, true]);
+eq('a profile that has already recovered is not offered one', recovered.offered, 0);
+check('and the streak on the same screen agrees', Number(recovered.streak) >= 3,
+  `streak ${recovered.streak}`);
 
 // ════════════════════════════════════════════════════════════════════════════
 // 10b. With no challenge running, what is permanent stays on screen

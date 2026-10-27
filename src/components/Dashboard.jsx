@@ -547,6 +547,16 @@ function RankDetailsCard({ rankInfo, challengeXP, archivedChallenges, longest, t
         )}
       </div>
 
+      {/* The rank floor, explained in full. It sits here rather than on the
+          card because it is a paragraph about a rule that matters on the day
+          it bites, and the card is read every day. */}
+      {rankInfo.floored && (
+        <p className="rank-details-floor xp-floor-row">
+          🔒 {rankInfo.current.name} is permanently unlocked — your XP cannot fall below{' '}
+          {rankInfo.floorXP.toLocaleString()}.
+        </p>
+      )}
+
       {/* The CURRENT challenge's missed days, on request. Tied to the live
           challenge, so it disappears when that challenge is archived — the
           permanent record then lives in XP History below. */}
@@ -799,7 +809,7 @@ function ComebackCard({ dayNum, comebackMode, setback, onStart, onDismiss, onCom
 export default function Dashboard({ setView }) {
   const {
     activeProfile, profile, profiles, days, allDays, archives, todayStr,
-    getChallengeMeta, getDayNumber, getDayCompletion, getStreak, getLongestStreak, getWeeklyRequirements,
+    getChallengeMeta, getDayNumber, getRawDayNumber, getDayCompletion, getStreak, getLongestStreak, getWeeklyRequirements,
     startChallenge, isForgeDaily, completeChallenge, dismissCompletion, startForgeDaily,
     isChallengeScheduled,
     setActiveProfile,
@@ -951,7 +961,11 @@ export default function Dashboard({ setView }) {
   })();
 
   const weeklyNow   = getWeeklyRequirements();
-  const setback     = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
+  // The raw day marks the boundary between finalised days and the one in
+  // progress, exactly as the Challenge Score uses it.
+  const setback     = dayNum
+    ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum, getRawDayNumber())
+    : { hasSetback: false };
   const comebackMode = profile?.comebackMode || { active: false, dayStart: null, dismissedAt: null };
   const comebackCompletions = (profile?.comebackHistory || []).filter(cb => cb.completed).length;
 

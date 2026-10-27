@@ -453,7 +453,7 @@ const RANGE_FILTERS = [
 export default function InsightsView() {
   const {
     activeProfile, profile, profiles, allDays, archives,
-    getDayNumber, addTask, getDayCompletion,
+    getDayNumber, getRawDayNumber, addTask, getDayCompletion,
     experiments, updateExperiment, startExperiment,
     dismissHint, dismissedHints,
     startComeback,
@@ -507,7 +507,9 @@ export default function InsightsView() {
   const suggestions  = generateSuggestions(avg7, activeHabits, dismissedIds, sleepTarget);
   const coachMsg     = getCoachMessage(avg7, sleepTarget);
   const bottleneck   = getPriorityBottleneck(avg7, sleepTarget);
-  const setback      = dayNum ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum) : { hasSetback: false };
+  const setback      = dayNum
+    ? detectSetback(allDays, activeProfile, getDayCompletion, dayNum, getRawDayNumber())
+    : { hasSetback: false };
   const comebackMode = profile?.comebackMode || {};
 
   // XP trend for last 5 days (most recent first). Only the SIGN of each day is

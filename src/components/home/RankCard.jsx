@@ -114,10 +114,17 @@ export default function RankCard({
         </div>
       </div>
 
+      {/* The full floor explanation lives behind Details. It is a paragraph
+          about a rule, and a rule only matters on the day it bites — whereas
+          the card is read every day. What stays here is the one-word fact that
+          the rank is locked in; `.xp-floor-row` and its wording move with the
+          explanation, so the suite still reads them where they are shown. */}
       {floored && (
-        <p className="f41-rank-floor xp-floor-row">
-          🔒 {current.name} is permanently unlocked — your XP cannot fall below{' '}
-          {floorXP.toLocaleString()}.
+        <p className="f41-rank-locked">
+          🔒 {current.name} is locked in.
+          <button type="button" className="f41-rank-why" onClick={onToggleDetails}>
+            What that means
+          </button>
         </p>
       )}
     </section>
