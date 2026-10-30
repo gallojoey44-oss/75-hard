@@ -136,6 +136,7 @@ export function buildStartTasks(setup = defaultSetup()) {
   return [
     {
       id: 'fl_protein', name: proteinLabel(s), icon: '🥩', color: '#FF6B6B',
+      guideId: 'fatloss:protein',
       xp: XP.protein, keystone: 3, keystoneHabit: true,
       habitKey: HABIT_KEYS.PROTEIN_TARGET,
       target: { value: proteinGrams(s), unit: 'g', direction: 'atLeast' },
@@ -149,6 +150,7 @@ export function buildStartTasks(setup = defaultSetup()) {
     },
     {
       id: 'fl_steps', name: `Walk ${STEP_TARGET.toLocaleString()}+ steps`, icon: '🚶', color: '#FFB347',
+      guideId: 'fatloss:steps',
       xp: XP.steps, keystone: 2,
       habitKey: HABIT_KEYS.DAILY_STEPS,
       target: { value: STEP_TARGET, unit: 'steps', direction: 'atLeast' },
@@ -156,6 +158,7 @@ export function buildStartTasks(setup = defaultSetup()) {
     },
     {
       id: 'fl_fullness', name: FULLNESS.short, icon: '🍽️', color: '#F97316',
+      guideId: 'fatloss:fullness',
       xp: XP.fullness, keystone: 2,
       habitKey: HABIT_KEYS.FULLNESS_CONTROL,
       desc: FULLNESS.plain,
@@ -175,6 +178,7 @@ export function buildStartTasks(setup = defaultSetup()) {
     },
     {
       id: 'fl_photo', name: 'Daily progress photo', icon: '📸', color: '#74B9FF',
+      guideId: 'fatloss:photo',
       xp: XP.photo, keystone: 1,
       habitKey: HABIT_KEYS.PROGRESS_PHOTO,
       photoCapture: true,      // the daily panel renders a real camera/upload control
@@ -182,6 +186,7 @@ export function buildStartTasks(setup = defaultSetup()) {
     },
     {
       id: 'daily_log', name: 'Complete Daily Log', icon: '📊', color: '#8B9DC3',
+      guideId: 'forge:dailyLog',
       xp: XP.dailyLog, keystone: 1,
       habitKey: HABIT_KEYS.DAILY_LOG,
       desc: 'Ratings and any measurements you took today.',

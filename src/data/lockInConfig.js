@@ -1,4 +1,6 @@
 import { HABIT_KEYS } from './habitKeys';
+import { EVIDENCE } from './evidence';
+import { guideRef as coreGuide } from './coreGuides';
 
 /**
  * 🎯 LOCK IN — the complete challenge definition.
@@ -386,30 +388,12 @@ export function progressionOf(meta) {
  * something well established or something one small study hinted at. Nothing in
  * the guides invents a statistic, and nothing experimental is presented as
  * settled.
+ *
+ * The definitions moved to data/evidence.js when challenges other than LOCK IN
+ * gained guides, so one 🟢 means one thing app-wide. Re-exported here under
+ * their original names.
  */
-export const EVIDENCE = {
-  ESTABLISHED: 'established',
-  PROMISING: 'promising',
-  EXPERIMENTAL: 'experimental',
-};
-
-export const EVIDENCE_META = {
-  [EVIDENCE.ESTABLISHED]: {
-    key: EVIDENCE.ESTABLISHED, label: 'Well supported', dot: '🟢', color: '#10B981',
-    blurb: 'Consistent evidence, or a direct consequence of something well established.',
-  },
-  [EVIDENCE.PROMISING]: {
-    key: EVIDENCE.PROMISING, label: 'Some support', dot: '🟡', color: '#F59E0B',
-    blurb: 'Real evidence, but limited, mixed, or mostly from small studies. Worth trying; do not treat as settled.',
-  },
-  [EVIDENCE.EXPERIMENTAL]: {
-    key: EVIDENCE.EXPERIMENTAL, label: 'Experimental', dot: '🔵', color: '#60A5FA',
-    blurb: 'Mostly practice and plausible reasoning rather than good evidence. Harmless to try, but no promises.',
-  },
-};
-
-export const EVIDENCE_LEGEND =
-  'Optimization and advanced strategies are labelled by how good the evidence is. Everything required by the challenge is in “How to complete it” — the labelled strategies are all optional.';
+export { EVIDENCE, EVIDENCE_META, EVIDENCE_LEGEND } from './evidence';
 
 // ── The eight strategy guides ───────────────────────────────────────────────
 /**
@@ -1459,7 +1443,7 @@ export const DAILY_HABITS = [
     }),
   },
   {
-    id: 'daily_log', habitKey: HABIT_KEYS.DAILY_LOG, guideId: null,
+    id: 'daily_log', habitKey: HABIT_KEYS.DAILY_LOG, guideId: coreGuide('dailyLog'),
     icon: '📊', color: '#8B9DC3', xp: XP.dailyLog, keystone: 0,
     build: () => ({
       name: 'Complete Daily Log',

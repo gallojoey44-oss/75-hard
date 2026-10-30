@@ -1,4 +1,8 @@
 import * as LI from './lockInConfig';
+import * as FLG from './fatLossGuides';
+import * as MTG from './mentalTrainingGuides';
+import * as CORE from './coreGuides';
+import { EVIDENCE, EVIDENCE_META, EVIDENCE_LEGEND } from './evidence';
 
 /**
  * Habit strategy guides — the shared registry.
@@ -25,7 +29,10 @@ function namespaced(source, guides) {
 }
 
 export const HABIT_GUIDES = {
-  ...namespaced('lockin', LI.GUIDES),
+  ...namespaced(LI.GUIDE_SOURCE, LI.GUIDES),
+  ...namespaced(FLG.GUIDE_SOURCE, FLG.GUIDES),
+  ...namespaced(MTG.GUIDE_SOURCE, MTG.GUIDES),
+  ...namespaced(CORE.GUIDE_SOURCE, CORE.GUIDES),
 };
 
 /** Full guide id for a source module's local guide id. */
@@ -50,8 +57,7 @@ export function hasGuide(task) {
 
 /**
  * Evidence labelling, shared by every guide so the legend means the same thing
- * everywhere. Sourced from LOCK IN, which introduced it.
+ * everywhere. Introduced by LOCK IN; it moved to its own module once other
+ * challenges had guides of their own.
  */
-export const EVIDENCE = LI.EVIDENCE;
-export const EVIDENCE_META = LI.EVIDENCE_META;
-export const EVIDENCE_LEGEND = LI.EVIDENCE_LEGEND;
+export { EVIDENCE, EVIDENCE_META, EVIDENCE_LEGEND };
