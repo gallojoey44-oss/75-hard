@@ -909,6 +909,69 @@ check('16.5: every line of secondary copy clears WCAG AA',
   contrast2.length > 0 && contrast2.every(c => c.r >= 4.5),
   contrast2.map(c => `${c.sel} ${c.r}`).join(' · '));
 
+// ── 16.6 — the centre of a row always ticks the habit ──────────────────────
+//
+// A habit row's one job is to be tickable, and the middle of it is where a
+// thumb lands. Every control inside the row stops propagation, so any control
+// that can reach the centre silently steals the row's primary action — which
+// is precisely what happened once a description ran to three lines and pushed
+// "Show full requirement" and its 44px touch area into the middle of the row:
+// tapping the centre of "Walk 8,000+ steps" expanded the text and awarded
+// nothing. Whether the text wraps depends on the device's width, so this is
+// asserted geometrically rather than trusted to hold.
+await page.setViewportSize({ width: 390, height: 844 });
+await seed({
+  tasks: [
+    // Long enough to clamp at 390px, and no guide — so the row carries the
+    // disclosure, which is the control that used to collide with the centre.
+    { id: 'long_one', name: 'Walk 8,000+ steps', icon: '🚶', xp: 40, keystone: 1,
+      target: { value: 8000, unit: 'steps', direction: 'atLeast' },
+      desc: 'Steps across the whole day, not one walk. Ten minutes of walking is roughly a thousand of them.' },
+    { id: 'short_one', name: 'Hit water goal', icon: '💧', xp: 20, keystone: 0 },
+    { id: 'daily_log', name: 'Complete Daily Log', icon: '📊', xp: 20, keystone: 0 },
+  ],
+});
+const longest = page.locator('.check-item', { hasText: '8,000+ steps' }).first();
+check('16.6: the long row does clamp, so the disclosure is really there',
+  (await longest.locator('.check-desc-more').count()) === 1 &&
+  await longest.locator('.check-desc').evaluate(el => el.scrollHeight > el.clientHeight + 1));
+// The disclosure keeps its 44px target in its new column.
+const moreHit = await longest.locator('.check-desc-more').evaluate((el) => {
+  const r = el.getBoundingClientRect();
+  const cs = getComputedStyle(el, '::after');
+  const grow = (v) => Math.abs(parseFloat(v) || 0);
+  return { w: r.width + grow(cs.left) + grow(cs.right), h: r.height + grow(cs.top) + grow(cs.bottom) };
+});
+check('16.6: and it is still a 44px touch target',
+  moreHit.h >= 44 && moreHit.w >= 24, `${Math.round(moreHit.w)}x${Math.round(moreHit.h)}`);
+// Nothing that swallows a tap may sit at any row's centre.
+const centres = await page.evaluate(() => [...document.querySelectorAll('.check-item')].map((row) => {
+  row.scrollIntoView({ block: 'center' });
+  const b = row.getBoundingClientRect();
+  const hit = document.elementFromPoint(Math.round(b.left + b.width / 2), Math.round(b.top + b.height / 2));
+  return {
+    name: row.querySelector('.f4-task-title')?.textContent?.trim() || '?',
+    inRow: !!(hit && row.contains(hit)),
+    onControl: !!(hit && hit.closest('button, a, input, [role="button"]')),
+  };
+}));
+const stolen = centres.filter(c => !c.inRow || c.onControl);
+check('16.6: no control sits at the centre of any habit row',
+  centres.length === 3 && stolen.length === 0,
+  stolen.map(c => c.name).join(' · ') || centres.map(c => c.name).join(' · '));
+// And the behaviour the geometry is protecting: a centre tap completes it.
+await longest.click();
+await page.waitForTimeout(350);
+check('16.6: tapping the centre of a clamped row completes the habit',
+  (await days())[3]?.tasks?.long_one === true);
+check('16.6: and it did not expand the description instead',
+  (await longest.locator('.check-desc.expanded').count()) === 0);
+await longest.locator('.check-desc-more').click();
+await page.waitForTimeout(300);
+check('16.6: the disclosure still reads the full requirement, and only that',
+  (await longest.locator('.check-desc.expanded').count()) === 1 &&
+  (await days())[3]?.tasks?.long_one === true);
+
 // ══ 13: no page errors ════════════════════════════════════════════════════
 const real = errors.filter(e => !/favicon|manifest|ServiceWorker|sw\.js/i.test(e));
 check('13: no page errors across every state', real.length === 0, real.slice(0, 2).join(' | '));

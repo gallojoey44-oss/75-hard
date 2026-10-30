@@ -7305,15 +7305,20 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 /* ─── Forge 4.0: reading a clamped requirement, without leaving Today ───── */
 
 .f4-task .check-desc.expanded { -webkit-line-clamp: unset; display: block; }
+/* Lives in the row's right-hand column beside the XP, never under the text —
+   see the note in CheckItem. Short label because the column is narrow, and
+   narrow is the point: it keeps every tap-swallowing control off the centre. */
 .check-desc-more {
-  display: inline-block; margin-top: 3px; padding: 2px 0;
+  display: inline-block; padding: 2px 3px;
   background: transparent; border: none;
-  color: var(--accent2); font-size: 10.5px; font-weight: 700;
-  text-align: left; cursor: pointer; position: relative;
+  color: var(--accent2); font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  text-align: right; cursor: pointer; position: relative;
 }
 /* The visible control stays small; the touch area does not. */
-.check-desc-more::after { content: ''; position: absolute; inset: -11px -8px; }
+.check-desc-more::after { content: ''; position: absolute; inset: -15px -11px; }
 .check-desc-more:active { opacity: 0.7; }
+.check-desc-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 
 /* Same treatment for the guide chip: 22px of ink, 44px of target. */
 .f4-task .check-guide { position: relative; }
