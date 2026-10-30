@@ -416,8 +416,7 @@ export default function ChallengeDetails({
       )}
 
       {/* ── What the programme expects, under a disclosure ──────────── */}
-      {(program?.expected_results?.length > 0 || program?.timeline || program?.why_it_works
-        || template.inspiration_sources?.length > 0) && (
+      {(program?.expected_results?.length > 0 || program?.timeline || program?.why_it_works) && (
         <section className="f4c-card">
           <button
             type="button"
@@ -488,10 +487,6 @@ export default function ChallengeDetails({
                   above are typical, not promised. */}
               {program?.results_disclaimer && (
                 <p className="f4c-note">{program.results_disclaimer}</p>
-              )}
-              {template.inspiration_sources?.length > 0
-                && template.inspiration_sources[0] !== 'User-defined' && (
-                <p className="f4c-note">Informed by: {template.inspiration_sources.join(', ')}</p>
               )}
             </div>
           )}

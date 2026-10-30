@@ -331,7 +331,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'strong',
     risk_level: 'low',
-    inspiration_sources: ['Andrew Huberman', 'Matthew Walker', 'Peter Attia'],
     variants: {
       beginner: {
         required_daily_tasks: [
@@ -421,7 +420,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'strong',
     risk_level: 'medium',
-    inspiration_sources: ['Layne Norton', 'Peter Attia', 'Andrew Huberman'],
     // Full transformation-program content, rendered as sections on the card
     program: {
       goal: 'Lose body fat while preserving muscle, improving energy, increasing confidence, and building sustainable habits.',
@@ -640,7 +638,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'strong',
     risk_level: 'medium',
-    inspiration_sources: ['Peter Attia', 'Layne Norton', 'Andrew Huberman'],
     variants: {
       beginner: {
         required_daily_tasks: [
@@ -719,7 +716,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'strong',
     risk_level: 'medium',
-    inspiration_sources: ['Brad Schoenfeld', 'Eric Helms', 'Mike Israetel', 'Layne Norton'],
     // Educational, never scored.
     training_quality: MB.RIR_GUIDANCE,
     why: MB.WHY,
@@ -778,7 +774,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'moderate',
     risk_level: 'low',
-    inspiration_sources: ['Andrew Huberman', 'Matthew Walker', 'James Clear'],
     variants: {
       beginner: {
         progression: 'Build the habit.',
@@ -860,7 +855,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'moderate',
     risk_level: 'low',
-    inspiration_sources: ['Stacy Sims', 'Lauren Colenso-Semple', 'Kelly Casperson'],
     exercise_guidance: HH.EXERCISE_GUIDANCE,
     why: HH.WHY,
   },
@@ -901,7 +895,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'moderate',
     risk_level: 'low',
-    inspiration_sources: ['Andrew Huberman', 'Matthew Walker', 'Peter Attia', 'Layne Norton'],
     exercise_guidance: ER.EXERCISE_GUIDE,
     why: ER.WHY,
   },
@@ -945,7 +938,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'moderate',
     risk_level: 'low',
-    inspiration_sources: ['Cal Newport', 'Mihaly Csikszentmihalyi', 'Anders Ericsson', 'Matthew Walker'],
     why: Object.fromEntries(LI.DAILY_HABITS.map(h => [h.habitKey, LI.guide(
       (h.guideId || '').split(':')[1],
     )?.why?.blurb]).filter(([, v]) => !!v)),
@@ -972,7 +964,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'strong',
     risk_level: 'low',
-    inspiration_sources: ['Andrew Huberman', 'Peter Attia', 'Matthew Walker'],
     variants: {
       beginner: {
         required_daily_tasks: [
@@ -1039,7 +1030,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'moderate',
     risk_level: 'medium',
-    inspiration_sources: ['Layne Norton', 'James Clear', 'Peter Attia', 'Andrew Huberman'],
     variants: {
       beginner: {
         required_daily_tasks: [
@@ -1114,7 +1104,6 @@ export const CHALLENGE_TEMPLATES = [
     },
     evidence_level: 'user_defined',
     risk_level: 'user_defined',
-    inspiration_sources: ['User-defined'],
     variants: {
       beginner: {
         required_daily_tasks: [

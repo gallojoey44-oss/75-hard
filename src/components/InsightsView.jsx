@@ -164,7 +164,6 @@ function SuggestionCard({ suggestion, onStart, onAddTask, onDismiss }) {
           <span className="ins-suggest-habit-emoji">{habit.emoji}</span>
           <div>
             <div className="ins-suggest-habit-name">Try: {habit.name}</div>
-            <div className="ins-suggest-source">Source: {habit.source}</div>
           </div>
         </div>
 
@@ -717,7 +716,7 @@ export default function InsightsView() {
                 <div className="ins-library-info">
                   <div className="ins-library-name">{h.name}</div>
                   <div className="ins-library-meta">
-                    {h.source} · {h.evidenceLevel} evidence · {h.riskLevel} risk
+                    {h.evidenceLevel} evidence · {h.riskLevel} risk
                   </div>
                 </div>
                 <button
