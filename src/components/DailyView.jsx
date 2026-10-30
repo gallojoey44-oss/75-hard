@@ -35,6 +35,7 @@ import * as FLH from '../data/fatLossHardConfig';
 import HabitGuide from './HabitGuide';
 import LockInPanel from './LockInPanel';
 import { guideForTask } from '../data/habitGuides';
+import { presentTasks } from '../data/habitPresentation';
 import TodayHeader from './today/TodayHeader';
 import QuickLog from './today/QuickLog';
 import Collapsible from './today/Collapsible';
@@ -522,7 +523,17 @@ export default function DailyView({ editDayNum, setView }) {
   const isEditingOtherDay = currentDayNum && selectedDayNum !== currentDayNum;
   const pct     = calcPct(dayData);
   const mwdPct  = calcMWDPct(dayData);
-  const tasks   = [...requiredTasksForDay(profile.tasks || [], profile.activeChallenge, profile.challengeStart, selectedDayNum)].sort((a, b) => a.order - b.order);
+  // What a row SAYS is resolved here, against the live challenge definition;
+  // what it REQUIRES stays exactly as the attempt stored it. presentTasks
+  // replaces `desc` and `guideId` and nothing else, which is why a better
+  // explanation reaches a challenge already underway without anyone being
+  // asked to update their requirements to get it. calcPct above deliberately
+  // does NOT go through this — scoring reads the stored list.
+  const tasks   = presentTasks(
+    [...requiredTasksForDay(profile.tasks || [], profile.activeChallenge, profile.challengeStart, selectedDayNum)].sort((a, b) => a.order - b.order),
+    profile.activeChallenge,
+    profile.supportChallenge || null,
+  );
   const dateStr = dayData?.date || getDateForDayNumber(profile?.challengeStart, selectedDayNum);
   const isMe    = activeProfile === 'me';
   const isMWD   = !!dayData?.isMWD;
@@ -762,6 +773,10 @@ export default function DailyView({ editDayNum, setView }) {
         return (
           <HabitGuide
             guide={g}
+            // The habit's own line from the task row. The row clamps it to two
+            // lines and a habit with a guide shows no expand control, so this
+            // is where the whole sentence is readable.
+            rowRequirement={task.desc || null}
             xp={taskXP(task)}
             checked={!!dayData?.tasks?.[task.id]}
             onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}

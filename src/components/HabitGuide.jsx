@@ -55,7 +55,7 @@ function Strategies({ items }) {
   );
 }
 
-export default function HabitGuide({ guide, xp, checked, onToggle, onClose }) {
+export default function HabitGuide({ guide, xp, checked, onToggle, onClose, rowRequirement = null }) {
   // Quick Start and the completion rules are what a user needs mid-challenge;
   // the long-form sections stay shut until opened.
   const [open, setOpen] = useState({ how: true });
@@ -104,6 +104,14 @@ export default function HabitGuide({ guide, xp, checked, onToggle, onClose }) {
           id="how" title="How to complete it" meta={typeof xp === 'number' ? `${xp.toLocaleString()} XP` : null}
           open={!!open.how} onToggle={toggle}
         >
+          {/* The sentence from the habit's own row, in full. The row clamps it
+              to two lines and offers no expand control when a guide exists,
+              because two 44px controls do not fit in the row's right-hand
+              column — so this is where the rest of it lives. Skipped when the
+              guide's own requirement already says the same thing. */}
+          {rowRequirement && rowRequirement.trim() !== guide.how.requirement.trim() && (
+            <p className="hg-row-req">{rowRequirement}</p>
+          )}
           <p className="hg-req">{guide.how.requirement}</p>
           <ul className="hg-list">
             {guide.how.earns.map((e, i) => <li key={i}>{e}</li>)}

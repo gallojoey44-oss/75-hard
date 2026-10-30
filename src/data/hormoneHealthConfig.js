@@ -1,4 +1,5 @@
 import { HABIT_KEYS } from './habitKeys';
+import { guideRef as hhGuide } from './hormoneHealthGuides';
 
 /**
  * Women's Hormone Health — 8 or 12 weeks.
@@ -376,7 +377,7 @@ export function buildStartTasks(setup = defaultSetup()) {
   const s = { ...defaultSetup(), ...setup };
   const tasks = [
     {
-      id: 'hh_sleep',
+      id: 'hh_sleep', guideId: hhGuide('sleep'),
       name: `Sleep ${s.sleepHours}–${SLEEP_TARGET.max} hours`,
       icon: '😴', color: '#A78BFA',
       xp: XP.sleep, keystone: 3,
@@ -386,7 +387,7 @@ export function buildStartTasks(setup = defaultSetup()) {
       desc: 'Keep a reasonably consistent sleep and wake time. On rough days, give yourself extra sleep opportunity.',
     },
     {
-      id: 'hh_whole_food',
+      id: 'hh_whole_food', guideId: hhGuide('wholeFood'),
       name: 'Eat mostly whole foods',
       icon: '🥗', color: '#6BCB77',
       xp: XP.wholeFood, keystone: 2,
@@ -403,7 +404,7 @@ export function buildStartTasks(setup = defaultSetup()) {
       desc: 'Movement you can keep up even on days when hard exercise is not realistic.',
     },
     {
-      id: 'hh_stress',
+      id: 'hh_stress', guideId: hhGuide('stress'),
       name: `${s.stressMinutes}+ minutes of down-regulation`,
       icon: '🌿', color: '#34D399',
       xp: XP.stress, keystone: 1,
@@ -423,7 +424,7 @@ export function buildStartTasks(setup = defaultSetup()) {
       id: 'daily_log',
      
       name: 'Complete Daily Log',
-      desc: 'Rate the day here. Your score and Insights come from these ratings.',
+      desc: 'Save at least one metric — it completes itself and awards XP once.',
       icon: '📊', color: '#8B9DC3',
       xp: XP.symptomCheckIn, keystone: 1,
       habitKey: HABIT_KEYS.DAILY_LOG,

@@ -1,5 +1,6 @@
 import { HABIT_KEYS } from './habitKeys';
 import { ENERGY_FIELDS, ENERGY_SCALE } from '../utils/energyTracking';
+import { guideRef as erGuide } from './energyResetGuides';
 
 /**
  * ⚡ Energy Reset — the complete challenge definition.
@@ -354,7 +355,7 @@ export const LAGGED_HABIT_KEYS = [HABIT_KEYS.SLEEP_TARGET, HABIT_KEYS.EVENING_WI
  */
 export const DAILY_HABITS = [
   {
-    id: 'er_sleep', habitKey: HABIT_KEYS.SLEEP_TARGET,
+    id: 'er_sleep', guideId: erGuide('sleep'), habitKey: HABIT_KEYS.SLEEP_TARGET,
     icon: '😴', color: '#A78BFA', xp: XP.sleep, keystone: 3, keystoneHabit: true,
     build: (s) => ({
       name: `Sleep opportunity: ${s.sleepHours}+ hours`,
@@ -363,7 +364,7 @@ export const DAILY_HABITS = [
     }),
   },
   {
-    id: 'er_light', habitKey: HABIT_KEYS.MORNING_LIGHT,
+    id: 'er_light', guideId: erGuide('light'), habitKey: HABIT_KEYS.MORNING_LIGHT,
     icon: '🌅', color: '#FBBF24', xp: XP.morningLight, keystone: 3,
     build: (s) => ({
       name: `Morning light: ${s.lightMinutes}+ minutes outdoors`,
@@ -372,7 +373,7 @@ export const DAILY_HABITS = [
     }),
   },
   {
-    id: 'er_nutrition', habitKey: HABIT_KEYS.WHOLE_FOODS,
+    id: 'er_nutrition', guideId: erGuide('nutrition'), habitKey: HABIT_KEYS.WHOLE_FOODS,
     icon: '🥗', color: '#6BCB77', xp: XP.nutrientDense, keystone: 2,
     build: () => ({
       name: 'Eat nutrient-dense whole foods',
@@ -397,7 +398,7 @@ export const DAILY_HABITS = [
     }),
   },
   {
-    id: 'er_caffeine', habitKey: HABIT_KEYS.CAFFEINE_DISCIPLINE,
+    id: 'er_caffeine', guideId: erGuide('caffeine'), habitKey: HABIT_KEYS.CAFFEINE_DISCIPLINE,
     icon: '☕', color: '#B45309', xp: XP.caffeine, keystone: 2,
     build: (s) => ({
       name: 'Caffeine used deliberately',
@@ -406,7 +407,7 @@ export const DAILY_HABITS = [
     }),
   },
   {
-    id: 'er_stress', habitKey: HABIT_KEYS.STRESS_RECOVERY,
+    id: 'er_stress', guideId: erGuide('stress'), habitKey: HABIT_KEYS.STRESS_RECOVERY,
     icon: '🌿', color: '#34D399', xp: XP.stress, keystone: 1,
     build: (s) => ({
       name: `${s.stressMinutes}+ minutes of downshifting`,
@@ -418,7 +419,7 @@ export const DAILY_HABITS = [
     }),
   },
   {
-    id: 'er_winddown', habitKey: HABIT_KEYS.EVENING_WINDDOWN,
+    id: 'er_winddown', guideId: erGuide('winddown'), habitKey: HABIT_KEYS.EVENING_WINDDOWN,
     icon: '🌙', color: '#818CF8', xp: XP.windDown, keystone: 1,
     build: () => ({
       name: 'Evening wind-down',

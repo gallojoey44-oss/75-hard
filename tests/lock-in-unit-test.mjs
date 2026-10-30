@@ -382,9 +382,23 @@ check('14: the other configured challenges still build',
       const b = buildersFor(t);
       return !!b && b.buildTasks().length > 0 && !!b.buildMeta().templateId;
     }));
-check('14: no existing challenge gained a guide by accident',
+// These three had no guides when LOCK IN introduced them, and this check
+// existed so LOCK IN's could not leak sideways. They have guides of their own
+// now, so what is still worth guarding is that none of them is wired to
+// ANOTHER challenge's guide: a Muscle Building habit must not open an Energy
+// Reset article because two challenges happen to share a habit id.
+check('14: no challenge is wired to another challenge\'s guide',
+  [['muscle_building_phase', 'muscle'], ['womens_hormone_health', 'hormone'],
+   ['energy_reset_10_day', 'energy']]
+    .every(([id, source]) => buildersFor(getTemplateById(id)).buildTasks()
+      .every(t => !t.guideId || t.guideId.startsWith(`${source}:`))),
   ['muscle_building_phase', 'womens_hormone_health', 'energy_reset_10_day']
-    .every(id => buildersFor(getTemplateById(id)).buildTasks().every(t => !t.guideId)));
+    .flatMap(id => buildersFor(getTemplateById(id)).buildTasks().map(t => t.guideId).filter(Boolean))
+    .join(' '));
+check('14: and LOCK IN\'s guides did not leak into any of them',
+  ['muscle_building_phase', 'womens_hormone_health', 'energy_reset_10_day']
+    .every(id => buildersFor(getTemplateById(id)).buildTasks()
+      .every(t => !String(t.guideId || '').startsWith(`${LI.GUIDE_SOURCE}:`))));
 check('14: the 75-day challenge is still in the library',
   !!getTemplateById('75_day_discipline_challenge'));
 check('14: existing habit keys are unchanged',

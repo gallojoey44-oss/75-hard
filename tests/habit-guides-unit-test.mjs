@@ -5,6 +5,9 @@ import * as MB from '../src/data/muscleBuildingConfig.js';
 import * as HH from '../src/data/hormoneHealthConfig.js';
 import * as ER from '../src/data/energyResetConfig.js';
 import * as LI from '../src/data/lockInConfig.js';
+import { HABIT_RULES_VERSION, VERSIONED_HABITS, versionedRule, rulesVersionOf } from '../src/data/habitRules.js';
+import { presentTasks, presentationFor, guideIdMap } from '../src/data/habitPresentation.js';
+import { NEW_ATTEMPT_DEFAULTS } from '../src/data/challengeAttempt.js';
 
 /**
  * The guide registry, across every challenge that now has one.
@@ -160,6 +163,111 @@ check('7: no challenge gives the Daily Log a guide',
 check('7: and no guide in the registry is about logging',
   !Object.keys(HABIT_GUIDES).some(k => /log$/i.test(k)),
   Object.keys(HABIT_GUIDES).filter(k => /log$/i.test(k)).join(', ') || 'none');
+
+// ── 8: versioned rules, and the attempts each applies to ──────────────────
+// A rule that changed is attached to the ATTEMPT, not to the app. These checks
+// are the contract: an attempt started before a rule was settled keeps the old
+// reading for life, and nothing in this file can reach XP or completion.
+check('8: a new attempt is stamped with the current rules version',
+  NEW_ATTEMPT_DEFAULTS.habitRulesVersion === HABIT_RULES_VERSION,
+  `${NEW_ATTEMPT_DEFAULTS.habitRulesVersion}`);
+check('8: an attempt with no stamp is version 1, for life',
+  rulesVersionOf({}) === 1 && rulesVersionOf(null) === 1 &&
+  rulesVersionOf({ habitRulesVersion: 'nonsense' }) === 1);
+check('8: every versioned guide id resolves to a real guide', (() => {
+  for (const byVersion of Object.values(VERSIONED_HABITS)) {
+    for (const rule of Object.values(byVersion)) {
+      if (rule.guideId && !getGuide(rule.guideId)) return false;
+    }
+  }
+  return true;
+})(), Object.keys(VERSIONED_HABITS).join(', '));
+check('8: version 1 of every versioned habit offers no guide',
+  Object.keys(VERSIONED_HABITS).every(id => versionedRule(id, 1)?.guideId == null),
+  Object.keys(VERSIONED_HABITS).filter(id => versionedRule(id, 1)?.guideId).join(', ') || 'none');
+check('8: the whole-foods wording follows the mode, not a fixed percentage',
+  /eight meals/.test(versionedRule('fl_whole', 2, 'beginner').desc) &&
+  /nine meals/.test(versionedRule('fl_whole', 2, 'standard').desc));
+check('8: an unversioned habit has no versioned rule',
+  versionedRule('fl_protein', 2) === null && versionedRule('nope', 2) === null);
+
+// ── 9: presentation refreshes what a row SAYS and nothing else ────────────
+// This is what replaced bumping template_version to deliver a better sentence.
+// If it ever touched a field that decides completion or XP, an improved
+// explanation would silently rewrite a running attempt.
+const STORED = [
+  { id: 'fl_protein', name: 'Hit protein goal (0.8–1 g/lb goal weight)', xp: 25, keystone: 2,
+    keystoneHabit: true, order: 1, source: 'template', desc: 'stale text', guideId: null,
+    target: { value: 1, unit: 'g', direction: 'atLeast' } },
+  { id: 'fl_sleep', name: 'Sleep 7.5+ hours', xp: 25, keystone: 2, order: 2, source: 'template' },
+  { id: 'my_own_thing', name: 'Custom', xp: 10, keystone: 0, order: 3, source: 'custom' },
+];
+const META_V1 = { templateId: 'fat_loss_phase', variant: 'standard' };
+const META_V2 = { ...META_V1, habitRulesVersion: 2 };
+
+const shownV1 = presentTasks(STORED, META_V1);
+const shownV2 = presentTasks(STORED, META_V2);
+check('9: the stale description is replaced from the live definition',
+  shownV1[0].desc !== 'stale text' && /0\.8–1/.test(shownV1[0].desc), shownV1[0].desc);
+check('9: and the guide the habit now has is offered',
+  shownV1[0].guideId === 'fatloss:protein' && !!getGuide(shownV1[0].guideId));
+check('9: nothing but desc and guideId is ever touched', (() => {
+  for (const [i, before] of STORED.entries()) {
+    for (const shown of [shownV1[i], shownV2[i]]) {
+      for (const key of Object.keys({ ...before, ...shown })) {
+        if (key === 'desc' || key === 'guideId') continue;
+        if (JSON.stringify(shown[key]) !== JSON.stringify(before[key])) return false;
+      }
+    }
+  }
+  return true;
+})());
+check('9: the stored list itself is never mutated',
+  STORED[0].desc === 'stale text' && STORED[0].guideId === null && STORED[1].desc === undefined);
+check('9: a custom task is left entirely alone',
+  shownV1[2] === STORED[2] && shownV2[2] === STORED[2]);
+check('9: an attempt on version 1 is NOT given the new sleep rule',
+  (shownV1[1].desc ?? null) === null && (shownV1[1].guideId ?? null) === null);
+check('9: an attempt on version 2 is',
+  /Time in bed/.test(shownV2[1].desc) && shownV2[1].guideId === 'fatloss:sleep');
+// A version states a DIFFERENCE. Where it changes nothing for a given mode —
+// Hard Mode already says "roughly nine meals in ten" — the challenge's own
+// sentence has to survive, or settling a rule would blank a better one.
+const HARD = { templateId: 'fat_loss_phase', variant: 'hard', habitRulesVersion: 2 };
+const hardWhole = presentationFor({ id: 'fl_whole', desc: 'stored' }, HARD);
+check('9: a version with nothing to say for a mode leaves its wording alone',
+  /nine meals in ten/i.test(hardWhole.desc) && hardWhole.guideId === 'fatloss:whole', hardWhole.desc);
+check('9: an unchanged list comes back as the same array, not a copy',
+  presentTasks(shownV2, META_V2) === shownV2);
+check('9: no meta, or no tasks, changes nothing',
+  presentTasks(STORED, null) === STORED && presentTasks([], META_V2).length === 0);
+check('9: a habit from a challenge this build does not define is left alone',
+  presentationFor({ id: 'whatever' }, { templateId: 'no_such_challenge' }) === null);
+
+// A support-lane habit follows ITS OWN attempt's rules, not the primary's.
+const STACKED = [
+  { id: 'fl_sleep', name: 'Sleep 7.5+ hours', order: 1, challenges: ['primary'] },
+  { id: 'mt_mind', name: 'Mental Training — 5 minutes', order: 2, challenges: ['support'] },
+];
+const laned = presentTasks(STACKED, META_V1, { templateId: 'mental_training_phase', variant: 'standard', habitRulesVersion: 2 });
+check('9: a support habit is resolved against the support attempt',
+  /visualization/.test(laned[1].desc) && laned[1].guideId === 'mental:mind', laned[1].desc);
+check('9: while the primary lane keeps the primary attempt\'s rules',
+  (laned[0].desc ?? null) === null);
+
+// ── 10: every challenge that can be started has guidance ──────────────────
+const byChallenge = new Map();
+for (const { where, task } of tasks) {
+  const key = where.split('/')[0];
+  if (!byChallenge.has(key)) byChallenge.set(key, []);
+  byChallenge.get(key).push(task);
+}
+const bare = [...byChallenge.entries()].filter(([, list]) => !list.some(t => t.guideId));
+check('10: every startable challenge offers at least one guide',
+  bare.length === 0, bare.map(([k]) => k).join(', ') || [...byChallenge.keys()].join(', '));
+const guidedCount = guideIdMap().size;
+check('10: the guide map covers every habit that has one',
+  guidedCount >= 20, `${guidedCount} habits map to a guide`);
 
 const failed = results.filter(r => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);

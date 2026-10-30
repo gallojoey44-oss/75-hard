@@ -1,4 +1,5 @@
 import { HABIT_KEYS } from './habitKeys';
+import { guideRef as mbGuide } from './muscleBuildingGuides';
 
 /**
  * Muscle Building — SAMPLE V1 configuration.
@@ -769,7 +770,7 @@ export function buildStartTasks(setup = defaultSetup()) {
 
   const tasks = [
     {
-      id: 'mb_protein',
+      id: 'mb_protein', guideId: mbGuide('protein'),
       name: grams ? `Hit protein target (${grams} g)` : 'Hit protein target',
       icon: '🥩',
       color: '#FF6B6B',
@@ -783,7 +784,7 @@ export function buildStartTasks(setup = defaultSetup()) {
         : `Aim for ${PROTEIN_PER_LB.min}–${PROTEIN_PER_LB.max} g per lb of bodyweight. ${PROTEIN_PER_LB.note}`,
     },
     {
-      id: 'mb_nutrition',
+      id: 'mb_nutrition', guideId: mbGuide('nutrition'),
       name: s.calorieTarget ? `Hit nutrition target (${s.calorieTarget} kcal)` : 'Hit Nutrition Target',
       icon: '🍽️',
       color: '#F97316',
@@ -794,7 +795,7 @@ export function buildStartTasks(setup = defaultSetup()) {
       desc: `${mode.label} — ${mode.blurb}`,
     },
     {
-      id: 'mb_carbs',
+      id: 'mb_carbs', guideId: mbGuide('carbs'),
       name: carbGrams ? `Hit carb target (${carbGrams} g)` : 'Hit carb target',
       icon: '🍚',
       color: '#FBBF24',
@@ -817,7 +818,7 @@ export function buildStartTasks(setup = defaultSetup()) {
       target: { value: s.sleepHours, unit: 'hours', direction: 'atLeast' },
     },
     {
-      id: 'mb_recovery',
+      id: 'mb_recovery', guideId: mbGuide('recovery'),
       name: 'Daily Recovery Practice',
       icon: '🌿',
       color: '#34D399',
@@ -825,7 +826,10 @@ export function buildStartTasks(setup = defaultSetup()) {
       keystone: 1,
       habitKey: HABIT_KEYS.STRESS_RECOVERY,
       target: { value: RECOVERY_PRACTICE.minMinutes, unit: 'minutes', direction: 'atLeast' },
-      desc: `${RECOVERY_PRACTICE.minMinutes}–${RECOVERY_PRACTICE.maxMinutes} minutes: ${RECOVERY_PRACTICE.options.slice(0, 4).join(', ').toLowerCase()}, or another deliberate calming practice.`,
+      // Not lowercased: the options are written properly in RECOVERY_PRACTICE,
+      // and flattening them turned NSDR into "nsdr" on the card — the same
+      // defect Energy Reset's down-regulation habit had.
+      desc: `${RECOVERY_PRACTICE.minMinutes}–${RECOVERY_PRACTICE.maxMinutes} minutes: ${RECOVERY_PRACTICE.options.slice(0, 3).join(', ')}, or anything deliberately calming.`,
     },
   ];
 
@@ -849,7 +853,7 @@ export function buildStartTasks(setup = defaultSetup()) {
     id: 'daily_log',
    
     name: 'Complete Daily Log',
-    desc: 'Rate the day here. Your score and Insights come from these ratings.',
+    desc: 'Save at least one metric — it completes itself and awards XP once.',
     icon: '📊',
     color: '#8B9DC3',
     xp: XP.dailyLog,

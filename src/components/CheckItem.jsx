@@ -79,8 +79,16 @@ export default function CheckItem({
     if (expanded) return;
     setClamped(el.scrollHeight > el.clientHeight + 1);
   }, [desc, expanded]);
-  // A habit with a guide already has its full requirement one tap away, so a
-  // second way to read the same text would just crowd the row.
+  // Only for a habit with no guide. Both controls live in the right-hand
+  // column — the one place in the row where a tap-swallowing control cannot
+  // reach the centre — and the column is too narrow to stack two 44px touch
+  // targets without them overlapping: with both present, the disclosure's
+  // touch area sat over the Guide chip and swallowed taps meant for it.
+  //
+  // So the guide carries the habit's own sentence instead. HabitGuide is
+  // handed the row's description and shows it in full at the top of "How to
+  // complete it", which means nothing is lost by hiding this control — the
+  // text is one tap away rather than in place.
   const showMore = !onOpenGuide && desc && (clamped || expanded);
 
   return (

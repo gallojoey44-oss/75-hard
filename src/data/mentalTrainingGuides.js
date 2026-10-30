@@ -26,6 +26,106 @@ export function guideRef(id) {
 }
 
 export const GUIDES = {
+  // ─────────────────────────────────────────────────── 0. Mental training
+  // Offered only to attempts on habit rules version 2 — see data/habitRules.js.
+  // Version 1 attempts were started when the only statement of this habit's
+  // scope was the challenge's rationale copy, naming breathwork, meditation or
+  // prayer; they keep that, and they are not offered this.
+  mind: {
+    id: 'mind',
+    title: 'Mental Training',
+    icon: '🧘',
+    tagline: 'A few focused minutes of deliberate mental practice. Sitting quietly counts.',
+    quickStart: [
+      'Check the length on the habit row — 2, 5 or 10 minutes, depending on your mode.',
+      'Pick one practice and keep it for the challenge. Switching methods every day is how people conclude they cannot do this.',
+      'Sit somewhere ordinary, set a timer that is not your phone, and start.',
+    ],
+    why: {
+      blurb: 'This is the challenge\'s keystone habit, and it is deliberately short. The point is not to become good at meditating — it is to spend a few minutes every day deliberately directing your attention, which is the capacity every other habit here draws on.',
+      points: [
+        'Brief, regular practice is better supported than occasional long sessions for the things people actually want from it: attention, and a less reactive baseline.',
+        'The length follows your mode, starting at two minutes for a reason. A twenty-minute first session mostly teaches you that you cannot sit for twenty minutes.',
+        'The practice does not have to go well. Noticing you have drifted and coming back IS the repetition — it is not the thing interrupting it.',
+        'Mental Training has a separate Prayer habit with its own XP. Keeping the two apart is why this habit\'s list of methods does not include prayer.',
+      ],
+    },
+    how: {
+      requirement: 'Spend the minutes on the habit row in deliberate mental practice: meditation, mindfulness, breathwork or visualization. The length is on the row and follows your chosen mode.',
+      earns: [
+        'Checking this habit earns the XP shown on its row, once per day.',
+        'Any of the four methods counts in full. There is no hierarchy between them.',
+        'A distracted session still counts. The requirement is the minutes, not the quality.',
+      ],
+      notes: 'Prayer has its own habit in this challenge and its own XP, so one session of prayer does not also satisfy this one. Attempts started before this rule was settled follow the earlier wording, which did include prayer here — those are unchanged, and this guide is not offered to them.',
+    },
+    optimize: [
+      {
+        title: 'Same time, same place, every day',
+        body: 'The decision that kills this habit is "when shall I do it". Removing that decision is worth more than any technique.',
+        evidence: EVIDENCE.ESTABLISHED,
+      },
+      {
+        title: 'Follow the breath when you have no other plan',
+        body: 'Count the exhale to four and start again. It needs no app, no instruction and no belief about what it is doing.',
+        evidence: EVIDENCE.ESTABLISHED,
+      },
+      {
+        title: 'Use a timer that is not your phone',
+        body: 'Unlocking the phone to start is what ends most short practices. A kitchen timer removes the whole problem.',
+        evidence: EVIDENCE.PROMISING,
+      },
+      {
+        title: 'Keep one method for the whole challenge',
+        body: 'Trying a different technique every few days means never getting past the awkward first week of any of them.',
+        evidence: EVIDENCE.PROMISING,
+      },
+    ],
+    advanced: [
+      {
+        title: 'Try visualization for something specific',
+        body: 'Rehearsing a concrete, upcoming thing — a conversation, a lift, a performance — has more support behind it than general visualization does. Keep it specific and keep it short.',
+        evidence: EVIDENCE.PROMISING,
+      },
+      {
+        title: 'Lengthen only after the habit is secure',
+        body: 'Two weeks of unbroken short sessions earns the right to make them longer. Lengthening first is the usual route to stopping.',
+        evidence: EVIDENCE.PROMISING,
+      },
+      {
+        title: 'Put it before the hardest part of the day',
+        body: 'The state is most useful going into something demanding rather than recovering from it.',
+        evidence: EVIDENCE.EXPERIMENTAL,
+      },
+    ],
+    mistakes: [
+      { title: 'Expecting a clear mind', body: 'A wandering mind is the normal condition and the material the practice works on. Coming back is the rep.' },
+      { title: 'Grading the session', body: 'Judging whether it went well is the most reliable way to stop doing it. The minutes are the requirement.' },
+      { title: 'Starting at ten minutes', body: 'Your mode sets the length for a reason. The ramp is the design, not a limitation.' },
+      { title: 'Waiting for a calm moment', body: 'The calm moment does not arrive. The practice is what produces it, not what requires it.' },
+    ],
+    examples: [
+      {
+        label: 'Five minutes, first thing',
+        lines: [
+          '06:50 — before the phone is unlocked, which is the only reliably quiet part of the day.',
+          'Kitchen timer for five minutes, sitting on the edge of the bed.',
+          'Your mind wanders perhaps thirty times. Each time you notice, you go back to the breath.',
+          'Timer goes. Tick the habit.',
+        ],
+      },
+      {
+        label: 'Ten minutes, using visualization',
+        lines: [
+          'There is a difficult conversation tomorrow, so today\'s session has a subject.',
+          'Five minutes following the breath to settle, then five rehearsing the conversation concretely — what you open with, what they are likely to say.',
+          'Specific rather than general, which is the version with something behind it.',
+          'Tick it.',
+        ],
+      },
+    ],
+  },
+
   // ─────────────────────────────────────────────────────────── 1. Focus block
   focus: {
     id: 'focus',
@@ -155,7 +255,7 @@ export const GUIDES = {
         'Any book counts. Fiction, non-fiction, something you reread every year — Forge has no opinion on what you read.',
         'More pages than the target is fine and earns the same. The habit is daily, not cumulative.',
       ],
-      notes: 'The rule as written says pages of a book. It does not say anything about audiobooks either way, so Forge does not either — if you want that settled, it is on the audit\'s list of open questions rather than quietly decided here.',
+      notes: 'A physical book and an ebook both count — the target is pages, and both have them. An audiobook does not satisfy a page target on its own; there is nothing wrong with listening, it simply is not what this habit measures. A listening alternative would need a rule of its own, with its own measure.',
     },
     optimize: [
       {

@@ -340,7 +340,195 @@ export const GUIDES = {
     ],
   },
 
-  // ──────────────────────────────────────────────────────────────── 4. Photo
+  // ───────────────────────────────────────────────────────────── 4. Sleep
+  // Offered only to attempts on habit rules version 2 — see data/habitRules.js.
+  // Earlier attempts were started when the habit said "Sleep 7.5+ hours" and
+  // nothing else, and they keep that.
+  sleep: {
+    id: 'sleep',
+    title: 'Sleep Opportunity',
+    icon: '😴',
+    tagline: 'Time in bed, not time asleep. The opportunity is the part you decide.',
+    quickStart: [
+      'Fix your wake time and keep it, weekends included.',
+      'Count the window on the habit row backwards from it, and set an alarm to START getting ready for bed.',
+      'Give yourself the full window even on nights you expect to sleep badly.',
+    ],
+    why: {
+      blurb: 'Short sleep makes a deficit much harder to run. It raises appetite, blunts the fullness signal the challenge asks you to read, and makes the day you were going to walk 8,000 steps in feel like one you would rather sit down for. The habit measures the opportunity because that is the part you can actually decide.',
+      points: [
+        'Short sleep is associated with higher hunger and lower fullness signalling, which is precisely the combination that makes a deficit feel like willpower.',
+        'It is also associated with a greater share of weight lost coming from lean mass rather than fat — which is the specific outcome this challenge\'s protein habit exists to prevent.',
+        'Nobody is asleep the whole time they are in bed. An eight-hour window is how most people get seven hours of sleep.',
+        'A consistent wake time stabilises the rhythm more effectively than a consistent bedtime, and it is easier to control.',
+      ],
+    },
+    how: {
+      requirement: 'Give yourself the sleep opportunity on the habit row — time in bed with the lights out, not hours of measured sleep.',
+      earns: [
+        'Checking this habit earns the XP shown on its row, once per day.',
+        'A night in bed for the window that you slept badly through still counts. The opportunity was given.',
+        'Logging hours slept in the Daily Log records the night; it never completes this habit for you.',
+      ],
+      notes: 'This reading — opportunity rather than measured sleep — applies to attempts started after the rule was settled, and brings Fat Loss into line with what LOCK IN and Energy Reset have always said. An attempt already running keeps the wording it started with.',
+    },
+    optimize: [
+      {
+        title: 'Decide the wake time, then work backwards',
+        body: 'Planning from the bedtime end means the window shrinks whenever the evening runs long. Planning from the wake time means the evening gives way instead.',
+        evidence: EVIDENCE.ESTABLISHED,
+      },
+      {
+        title: 'Set an alarm for going to bed',
+        body: 'Hardly anybody does, and it is the highest-return change available here. The decision that costs you sleep is made at 23:40.',
+        evidence: EVIDENCE.PROMISING,
+      },
+      {
+        title: 'Protect it hardest in the first fortnight',
+        body: 'That is when appetite is adjusting and when a short night does the most damage to the rest of the day\'s habits.',
+        evidence: EVIDENCE.PROMISING,
+      },
+      {
+        title: 'Keep weekends within about an hour',
+        body: 'A three-hour lie-in is a time-zone change twice a week, and Monday pays for it — usually in the protein and steps habits.',
+        evidence: EVIDENCE.ESTABLISHED,
+      },
+    ],
+    advanced: [
+      {
+        title: 'Stop auditing your own sleep quality',
+        body: 'Close self-tracking makes some people sleep worse, which has a name in the literature. The Daily Log rating is enough.',
+        evidence: EVIDENCE.EXPERIMENTAL,
+      },
+      {
+        title: 'Expect the hungry evening after a short night',
+        body: 'Knowing it is coming is most of handling it. Plan the evening meal rather than deciding it at 21:00 on four hours\' sleep.',
+        evidence: EVIDENCE.PROMISING,
+      },
+    ],
+    mistakes: [
+      { title: 'Counting hours asleep', body: 'That is the reading this habit deliberately moved away from. In bed for the window is a complete habit.' },
+      { title: 'Treating a bad night as a failed day', body: 'You cannot decide to fall asleep. You can decide to be in bed, and that is what is being asked.' },
+      { title: 'Cutting sleep to fit the training in', body: 'Trading an hour of sleep for a session is a bad trade during a deficit, and it usually costs you the following day as well.' },
+      { title: 'Letting the wake time float', body: 'It is the anchor the rest of the day hangs off. Moving it daily is why a compliant week can still feel awful.' },
+    ],
+    examples: [
+      {
+        label: 'A 7.5-hour window',
+        lines: [
+          'Wake time is 06:30 and stays 06:30, Saturday included.',
+          '7.5 hours back is 23:00, so an alarm at 22:40 starts the wind-down.',
+          'Lights out at 23:05. You are awake for twenty minutes in the middle of the night.',
+          'The window was given, so the habit is complete.',
+        ],
+      },
+      {
+        label: 'The night after a short one',
+        lines: [
+          'You slept five hours and the day has been hungry and flat — which is the expected pattern, not a character failure.',
+          'You eat the planned dinner rather than improvising at 21:00.',
+          'You are in bed at the normal time rather than trying to repay the whole debt in one night.',
+          'Tick the habit and let tomorrow be the day it resets.',
+        ],
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────── 5. Whole foods
+  // Also version 2 only. The percentage was in the habit's name and nowhere
+  // else, so "80% of what" had no answer in Beginner or Standard until the
+  // unit was settled as meals — which is what Hard Mode's card already said.
+  whole: {
+    id: 'whole',
+    title: 'Mostly Whole Foods',
+    icon: '🥗',
+    tagline: 'Counted in meals. Not a ban list.',
+    quickStart: [
+      'Count in meals: the habit row\'s percentage is roughly how many of the day\'s meals are minimally processed.',
+      'Build each one round a protein source and something that grew.',
+      'Spend the remainder deliberately rather than accidentally.',
+    ],
+    why: {
+      blurb: 'Minimally processed food is more filling per calorie, harder to overeat, and carries the protein and fibre the rest of the challenge depends on. The percentage is not a purity score — it is a working majority, with room left in it on purpose.',
+      points: [
+        'Highly processed food is easier to eat quickly and in quantity, which is the mechanism that matters most during a deficit.',
+        'Whole foods bring protein and fibre with them, so this habit quietly makes the protein target and the fullness habit easier.',
+        'The unit is meals, not calories and not plate volume. That is the reading Hard Mode has always used, and it is now the reading everywhere.',
+        'The remaining fraction is deliberate room. A rule with no room in it is one you break and then abandon.',
+      ],
+    },
+    how: {
+      requirement: 'Make roughly the habit row\'s share of the day\'s meals minimally processed. The percentage follows the mode you chose.',
+      earns: [
+        'Checking this habit earns the XP shown on its row, once per day.',
+        'Counted in meals across the day, not in calories and not per plate.',
+        'It is a judgement call, and it is meant to be. Nothing is weighed or logged.',
+      ],
+      notes: 'This is one of the two keystone habits, so it carries more weight in your score than the rest. It is also not the same as the fullness habit in Hard Mode — that one is about when you stop, this one is about what is on the plate.',
+    },
+    optimize: [
+      {
+        title: 'Spend the remainder on purpose',
+        body: 'Decide in advance which meal is the flexible one — the dinner out, the thing you actually want. An unplanned remainder is just the day going wrong twice.',
+        evidence: EVIDENCE.PROMISING,
+      },
+      {
+        title: 'Fix breakfast and lunch, flex dinner',
+        body: 'The two meals you control most are the cheapest ones to make minimally processed, and they bank most of the day\'s percentage before anything unpredictable happens.',
+        evidence: EVIDENCE.ESTABLISHED,
+      },
+      {
+        title: 'Judge by how it was made, not by how it is marketed',
+        body: 'A protein bar is processed; a potato is not. "Healthy" on the packet is a claim about positioning, not about the food.',
+        evidence: EVIDENCE.ESTABLISHED,
+      },
+      {
+        title: 'Keep the easy whole options stocked',
+        body: 'Frozen vegetables, tinned fish, eggs, rice, fruit. Most failures of this habit are a shopping problem rather than a willpower one.',
+        evidence: EVIDENCE.ESTABLISHED,
+      },
+    ],
+    advanced: [
+      {
+        title: 'Cook once, eat three times',
+        body: 'A single session producing three lunches is the most reliable way to raise the percentage without raising the effort.',
+        evidence: EVIDENCE.PROMISING,
+      },
+      {
+        title: 'Watch the drinks',
+        body: 'They do not look like meals and are easy to leave out of the count. They are also where a surprising share of a day\'s calories can sit.',
+        evidence: EVIDENCE.PROMISING,
+      },
+    ],
+    mistakes: [
+      { title: 'Reading it as a ban list', body: 'The remaining share is in the rule. Treating the habit as "nothing processed ever" is how it gets abandoned on day five.' },
+      { title: 'Counting it in calories', body: 'The unit is meals. Switching to calories makes it a tracking habit, which is exactly what this challenge avoids.' },
+      { title: 'Confusing it with the fullness habit', body: 'Hard Mode has both. This one is what you eat; that one is when you stop.' },
+      { title: 'Failing the whole day over one item', body: '"Roughly" and "mostly" are both in the rule. One biscuit is not a failed day.' },
+    ],
+    examples: [
+      {
+        label: 'Standard mode — nine meals in ten',
+        lines: [
+          'Across the day you eat five times: breakfast, lunch, a snack, dinner, something in the evening.',
+          'Four of those are built round protein and something that grew.',
+          'The evening one is ice cream, which you decided on this morning rather than at 21:30.',
+          'That is comfortably inside "roughly nine in ten" over the week. Tick it.',
+        ],
+      },
+      {
+        label: 'A day away from home',
+        lines: [
+          'Breakfast is a hotel buffet: eggs and fruit rather than pastries.',
+          'Lunch is a sandwich, because that is what there was. That is one of the day\'s flexible slots spent.',
+          'Afternoon — fruit from a shop rather than the vending machine.',
+          'Dinner out: the dish with the obvious protein and a side of vegetables. Most of the day minimally processed, which is a pass.',
+        ],
+      },
+    ],
+  },
+
+  // ──────────────────────────────────────────────────────────────── 6. Photo
   photo: {
     id: 'photo',
     title: 'Progress Photo',

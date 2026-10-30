@@ -40,7 +40,7 @@ export const DAILY_LOG_TASK = {
   // Every challenge that includes this task showed a blank line under it. What
   // the log IS — the ratings the challenge's own score and insights are read
   // from — is the one thing worth saying about it.
-  desc: 'Rate the day here. Your score and Insights come from these ratings.',
+  desc: 'Save at least one metric — it completes itself and awards XP once.',
   icon: '📊',
   color: '#8B9DC3',
   xp: 20,
@@ -394,7 +394,7 @@ export const CHALLENGE_TEMPLATES = [
     emoji: '⚡',
     startable: true,
     start_flow: 'variant',
-    template_version: 4,
+    template_version: 3,
     task_id_prefix: 'fl_',
     challenge_name: 'Fat Loss Challenge',
     category: 'Body Composition',
@@ -572,7 +572,7 @@ export const CHALLENGE_TEMPLATES = [
           { id: 'fl_protein', name: 'Hit protein goal (0.8–1 g/lb goal weight)', desc: 'Goal weight in lb × 0.8–1 = grams per day. A 170 lb goal is about 140–170 g.', icon: '🥩', color: '#FF6B6B', xp: 40, keystone: 3, keystoneHabit: true, habitKey: HABIT_KEYS.PROTEIN_TARGET, guideId: flGuide('protein') },
           { id: 'fl_steps',   name: 'Walk 6,000+ steps', desc: 'Your day’s total, not one walk. Ten minutes is about 1,000 steps.',                   icon: '🚶', color: '#FFB347', xp: 25, keystone: 2, habitKey: HABIT_KEYS.DAILY_STEPS, target: { value: 6000, unit: 'steps', direction: 'atLeast' }, guideId: flGuide('steps') },
           { id: 'fl_whole',   name: 'Eat mostly whole foods (80%+)',       icon: '🥗', color: '#6BCB77', xp: 40, keystone: 3, keystoneHabit: true, habitKey: HABIT_KEYS.WHOLE_FOODS },
-          { id: 'fl_water',   name: 'Hit water goal',                      icon: '💧', color: '#45B7D1', xp: 15, keystone: 1, habitKey: HABIT_KEYS.HYDRATION },
+          { id: 'fl_water',   name: 'Hit water goal', desc: 'Your usual daily hydration target. Not a weight-manipulation tool.', icon: '💧', color: '#45B7D1', xp: 15, keystone: 1, habitKey: HABIT_KEYS.HYDRATION },
           { id: 'fl_sleep',   name: 'Sleep 7.5+ hours',                    icon: '😴', color: '#A78BFA', xp: 25, keystone: 2, habitKey: HABIT_KEYS.SLEEP_TARGET, target: { value: 7.5, unit: 'hours', direction: 'atLeast' } },
           { ...DAILY_LOG_TASK, xp: 10, keystone: 1 },
         ],
@@ -595,7 +595,7 @@ export const CHALLENGE_TEMPLATES = [
           { id: 'fl_protein', name: 'Hit protein goal (0.8–1 g/lb goal weight)', desc: 'Goal weight in lb × 0.8–1 = grams per day. A 170 lb goal is about 140–170 g.', icon: '🥩', color: '#FF6B6B', xp: 40, keystone: 3, keystoneHabit: true, habitKey: HABIT_KEYS.PROTEIN_TARGET, guideId: flGuide('protein') },
           { id: 'fl_steps',   name: 'Walk 8,000+ steps', desc: 'Your day’s total, not one walk. Ten minutes is about 1,000 steps.',                   icon: '🚶', color: '#FFB347', xp: 25, keystone: 2, habitKey: HABIT_KEYS.DAILY_STEPS, target: { value: 8000, unit: 'steps', direction: 'atLeast' }, guideId: flGuide('steps') },
           { id: 'fl_whole',   name: 'Eat mostly whole foods (90%)',        icon: '🥗', color: '#6BCB77', xp: 40, keystone: 3, keystoneHabit: true, habitKey: HABIT_KEYS.WHOLE_FOODS },
-          { id: 'fl_water',   name: 'Hit water goal',                      icon: '💧', color: '#45B7D1', xp: 15, keystone: 1, habitKey: HABIT_KEYS.HYDRATION },
+          { id: 'fl_water',   name: 'Hit water goal', desc: 'Your usual daily hydration target. Not a weight-manipulation tool.', icon: '💧', color: '#45B7D1', xp: 15, keystone: 1, habitKey: HABIT_KEYS.HYDRATION },
           { id: 'fl_sleep',   name: 'Sleep 7.5–9 hours',                   icon: '😴', color: '#A78BFA', xp: 25, keystone: 2, habitKey: HABIT_KEYS.SLEEP_TARGET, target: { value: 7.5, unit: 'hours', direction: 'atLeast' } },
           { ...DAILY_LOG_TASK, xp: 10, keystone: 1 },
         ],
@@ -746,7 +746,7 @@ export const CHALLENGE_TEMPLATES = [
     start_flow: 'variant', // start button with variant + duration selection
     // Bump when the variant task lists change, so active challenges can offer
     // a sync to the latest version without resetting progress.
-    template_version: 7,
+    template_version: 6,
     // All template-owned task ids share this prefix — used to tell template
     // tasks apart from user-added custom tasks on lists saved before tasks
     // carried an explicit source.
@@ -792,7 +792,7 @@ export const CHALLENGE_TEMPLATES = [
         optional_tasks: [],
         start_tasks: [
           { id: 'mt_mind',      name: 'Mental Training — 2 minutes',         icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3, habitKey: HABIT_KEYS.MEDITATION },
-          { id: 'mt_reading',   name: 'Read 2 pages', desc: '2 pages of a book you are actually reading. Any book counts.',                        icon: '📚', color: '#74B9FF', xp: 40, keystone: 2, habitKey: HABIT_KEYS.READING, guideId: mtGuide('reading') },
+          { id: 'mt_reading',   name: 'Read 2 pages', desc: '2 pages of a book you are reading. Paper or ebook — any book counts.',                        icon: '📚', color: '#74B9FF', xp: 40, keystone: 2, habitKey: HABIT_KEYS.READING, guideId: mtGuide('reading') },
           { id: 'mt_prayer',    name: 'Prayer', desc: 'A few deliberate moments of prayer, in whatever form it takes for you.',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2, habitKey: HABIT_KEYS.PRAYER },
           { id: 'mt_gratitude', name: 'Write one gratitude', desc: 'Write down one thing you are grateful for. One line is enough.',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1, habitKey: HABIT_KEYS.GRATITUDE, guideId: mtGuide('gratitude') },
           { id: 'mt_focus',     name: '30-min phone-free focus block', desc: 'One unbroken block, phone in another room — not added up across the day.',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1, habitKey: HABIT_KEYS.FOCUS_BLOCK, guideId: mtGuide('focus') },
@@ -805,7 +805,7 @@ export const CHALLENGE_TEMPLATES = [
         optional_tasks: [],
         start_tasks: [
           { id: 'mt_mind',      name: 'Mental Training — 5 minutes',         icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3, habitKey: HABIT_KEYS.MEDITATION },
-          { id: 'mt_reading',   name: 'Read 5 pages', desc: '5 pages of a book you are actually reading. Any book counts.',                        icon: '📚', color: '#74B9FF', xp: 40, keystone: 2, habitKey: HABIT_KEYS.READING, guideId: mtGuide('reading') },
+          { id: 'mt_reading',   name: 'Read 5 pages', desc: '5 pages of a book you are reading. Paper or ebook — any book counts.',                        icon: '📚', color: '#74B9FF', xp: 40, keystone: 2, habitKey: HABIT_KEYS.READING, guideId: mtGuide('reading') },
           { id: 'mt_prayer',    name: 'Prayer', desc: 'A few deliberate moments of prayer, in whatever form it takes for you.',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2, habitKey: HABIT_KEYS.PRAYER },
           { id: 'mt_gratitude', name: 'Write one gratitude', desc: 'Write down one thing you are grateful for. One line is enough.',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1, habitKey: HABIT_KEYS.GRATITUDE, guideId: mtGuide('gratitude') },
           { id: 'mt_focus',     name: '60-min phone-free focus block', desc: 'One unbroken block, phone in another room — not added up across the day.',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1, habitKey: HABIT_KEYS.FOCUS_BLOCK, guideId: mtGuide('focus') },
@@ -818,7 +818,7 @@ export const CHALLENGE_TEMPLATES = [
         optional_tasks: [],
         start_tasks: [
           { id: 'mt_mind',      name: 'Mental Training — 10 minutes',        icon: '🧘', color: '#A78BFA', xp: 100, keystone: 3, habitKey: HABIT_KEYS.MEDITATION },
-          { id: 'mt_reading',   name: 'Read 10 pages', desc: '10 pages of a book you are actually reading. Any book counts.',                       icon: '📚', color: '#74B9FF', xp: 40, keystone: 2, habitKey: HABIT_KEYS.READING, guideId: mtGuide('reading') },
+          { id: 'mt_reading',   name: 'Read 10 pages', desc: '10 pages of a book you are reading. Paper or ebook — any book counts.',                       icon: '📚', color: '#74B9FF', xp: 40, keystone: 2, habitKey: HABIT_KEYS.READING, guideId: mtGuide('reading') },
           { id: 'mt_prayer',    name: 'Prayer', desc: 'A few deliberate moments of prayer, in whatever form it takes for you.',                              icon: '🙏', color: '#A8E6CF', xp: 40, keystone: 2, habitKey: HABIT_KEYS.PRAYER },
           { id: 'mt_gratitude', name: 'Write one gratitude', desc: 'Write down one thing you are grateful for. One line is enough.',                 icon: '📝', color: '#F9E04B', xp: 20, keystone: 1, habitKey: HABIT_KEYS.GRATITUDE, guideId: mtGuide('gratitude') },
           { id: 'mt_focus',     name: '90-min phone-free focus block', desc: 'One unbroken block, phone in another room — not added up across the day.',       icon: '🎯', color: '#FFB347', xp: 20, keystone: 1, habitKey: HABIT_KEYS.FOCUS_BLOCK, guideId: mtGuide('focus') },

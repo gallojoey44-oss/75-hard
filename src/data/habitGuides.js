@@ -1,6 +1,9 @@
 import * as LI from './lockInConfig';
 import * as FLG from './fatLossGuides';
 import * as MTG from './mentalTrainingGuides';
+import * as MBG from './muscleBuildingGuides';
+import * as ERG from './energyResetGuides';
+import * as HHG from './hormoneHealthGuides';
 import { EVIDENCE, EVIDENCE_META, EVIDENCE_LEGEND } from './evidence';
 
 /**
@@ -31,6 +34,9 @@ export const HABIT_GUIDES = {
   ...namespaced(LI.GUIDE_SOURCE, LI.GUIDES),
   ...namespaced(FLG.GUIDE_SOURCE, FLG.GUIDES),
   ...namespaced(MTG.GUIDE_SOURCE, MTG.GUIDES),
+  ...namespaced(MBG.GUIDE_SOURCE, MBG.GUIDES),
+  ...namespaced(ERG.GUIDE_SOURCE, ERG.GUIDES),
+  ...namespaced(HHG.GUIDE_SOURCE, HHG.GUIDES),
 };
 
 /** Full guide id for a source module's local guide id. */

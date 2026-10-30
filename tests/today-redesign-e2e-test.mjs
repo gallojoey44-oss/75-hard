@@ -199,9 +199,16 @@ if (await guideRow.locator('.check-guide').count()) {
   await page.waitForTimeout(400);
   const after = await days();
   check('3: opening a guide never completes the habit', after[3]?.tasks?.li_sleep !== true);
-  await page.keyboard.press('Escape').catch(() => {});
-  await page.locator('.modal-overlay, .hg-close, button', { hasText: /close/i }).first().click().catch(() => {});
+  // Close it by the close button. This used to be a comma-list starting with
+  // .modal-overlay, whose first match is the overlay — and clicking the
+  // overlay's centre lands on the card, which stops propagation, so the guide
+  // never actually closed. It went unnoticed while this fixture's rows had no
+  // guideId and the whole branch was skipped; now that a row resolves its
+  // guide at render time, the branch runs and an un-closed modal is the next
+  // element after the task card.
+  await page.locator('.hg-close').click();
   await page.waitForTimeout(300);
+  check('3: and the guide closes again', (await page.locator('.hg-card').count()) === 0);
 }
 
 // ══ 4: the Daily Log is directly under the habits ═════════════════════════
