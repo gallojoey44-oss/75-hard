@@ -41,7 +41,7 @@ export const GUIDES = {
       blurb: 'This habit trains the thing that makes everything else in the challenge possible: the ability to stay with one task while something easier is available. It is deliberately one block rather than a daily total, because the capacity being trained is continuity.',
       points: [
         'Switching tasks has a real cost in both time and errors. Every interruption means reloading context, and the cost is paid again on the way back.',
-        'A phone within reach measurably degrades performance on attention-demanding tasks even when it is never picked up. Distance, not discipline, is what fixes that.',
+        'There is evidence that a phone within reach degrades performance on attention-demanding tasks even when it is never picked up. How large that effect is, is argued about; that distance is cheaper than discipline is not.',
         'The block is uninterrupted on purpose. Sixty minutes assembled from six ten-minute fragments trains the opposite of what this habit is for.',
         'It gets easier quickly, and the first week is the worst of it. The discomfort in the first ten minutes is the habit working, not a sign you are bad at it.',
       ],
@@ -58,8 +58,8 @@ export const GUIDES = {
     optimize: [
       {
         title: 'Put the phone in a different room, every time',
-        body: 'Face down on the desk is still within reach, and within reach is the condition that costs you. Another room turns a reflex into a decision you would have to stand up for.',
-        evidence: EVIDENCE.ESTABLISHED,
+        body: 'Face down on the desk is still within reach, and within reach is the condition under study. Another room turns a reflex into a decision you would have to stand up for, which is worth doing whatever the size of the effect turns out to be.',
+        evidence: EVIDENCE.PROMISING,
       },
       {
         title: 'Decide the task before the block opens',
@@ -242,7 +242,7 @@ export const GUIDES = {
       'Keep it somewhere boring and permanent: the same notebook, the same note on your phone, every day.',
     ],
     why: {
-      blurb: 'Written gratitude is one of the better-supported interventions in the whole area, and the effect comes from specificity and from writing rather than from volume. One concrete line is doing the work; a list of ten abstractions is not.',
+      blurb: 'Written gratitude is one of the better-supported of the simple interventions, though the effects reported are modest rather than transformative. What evidence there is points at specificity and at the writing, not at volume: one concrete line is doing the work, and a list of ten abstractions is not.',
       points: [
         'Writing forces the thought to be finished. Noticing something in passing and writing it down are different cognitive acts, and only one of them is the habit.',
         'Specific entries work better than general ones. The mechanism appears to involve actually recalling the event, which "my family" does not require you to do.',

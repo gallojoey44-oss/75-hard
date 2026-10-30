@@ -186,7 +186,6 @@ export function buildStartTasks(setup = defaultSetup()) {
     },
     {
       id: 'daily_log', name: 'Complete Daily Log', icon: '📊', color: '#8B9DC3',
-      guideId: 'forge:dailyLog',
       xp: XP.dailyLog, keystone: 1,
       habitKey: HABIT_KEYS.DAILY_LOG,
       desc: 'Ratings and any measurements you took today.',

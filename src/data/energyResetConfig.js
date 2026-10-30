@@ -1,6 +1,5 @@
 import { HABIT_KEYS } from './habitKeys';
 import { ENERGY_FIELDS, ENERGY_SCALE } from '../utils/energyTracking';
-import { guideRef as coreGuide } from './coreGuides';
 
 /**
  * ⚡ Energy Reset — the complete challenge definition.
@@ -427,7 +426,7 @@ export const DAILY_HABITS = [
     }),
   },
   {
-    id: 'daily_log', habitKey: HABIT_KEYS.DAILY_LOG, guideId: coreGuide('dailyLog'),
+    id: 'daily_log', habitKey: HABIT_KEYS.DAILY_LOG,
     icon: '📊', color: '#8B9DC3', xp: XP.dailyLog, keystone: 1,
     build: () => ({
       name: 'Complete Daily Log',

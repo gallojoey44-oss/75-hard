@@ -1,7 +1,6 @@
 import * as LI from './lockInConfig';
 import * as FLG from './fatLossGuides';
 import * as MTG from './mentalTrainingGuides';
-import * as CORE from './coreGuides';
 import { EVIDENCE, EVIDENCE_META, EVIDENCE_LEGEND } from './evidence';
 
 /**
@@ -32,7 +31,6 @@ export const HABIT_GUIDES = {
   ...namespaced(LI.GUIDE_SOURCE, LI.GUIDES),
   ...namespaced(FLG.GUIDE_SOURCE, FLG.GUIDES),
   ...namespaced(MTG.GUIDE_SOURCE, MTG.GUIDES),
-  ...namespaced(CORE.GUIDE_SOURCE, CORE.GUIDES),
 };
 
 /** Full guide id for a source module's local guide id. */

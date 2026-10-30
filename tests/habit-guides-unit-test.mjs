@@ -64,9 +64,12 @@ const dangling = referenced.filter(id => !getGuide(id));
 check('1: every guideId on every task resolves to a real guide',
   dangling.length === 0, dangling.join(', ') || `${referenced.length} distinct ids, all resolve`);
 
-const nulls = tasks.filter(t => t.task.guideId === null);
+// An explicit `guideId: null` is how a task says "no guide on purpose", and
+// the Daily Log is the one habit that says it. Anywhere else it is a guideRef
+// that found nothing — a typo that silently removes a Guide button.
+const nulls = tasks.filter(t => t.task.guideId === null && t.task.id !== 'daily_log');
 check('1: a guideRef that returns null is a typo, not a design',
-  nulls.length === 0, nulls.map(t => `${t.where}:${t.task.id}`).join(' ') || 'none');
+  nulls.length === 0, nulls.map(t => `${t.where}:${t.task.id}`).join(' ') || 'only the Daily Log, deliberately');
 
 // ── 2: every guide is complete enough to render ────────────────────────────
 // HabitGuide dereferences all of these unconditionally. A guide missing one of
@@ -108,7 +111,7 @@ check('3: every registry key is namespaced by its source module',
   unnamespaced.length === 0, unnamespaced.join(', ') || 'all namespaced');
 const sources = new Set(Object.values(HABIT_GUIDES).map(g => g.source));
 check('3: guides come from more than one challenge now',
-  sources.size >= 4, [...sources].sort().join(', '));
+  sources.size >= 3, [...sources].sort().join(', '));
 
 // ── 4: the undefined-rule habits have NO guide ────────────────────────────
 // Each of these carries a requirement Forge has never stated anywhere: "80%+"
@@ -143,14 +146,20 @@ check('6: guideForTask and hasGuide agree with the registry', (() => {
     getGuide('nope:nothing') === null && getGuide(null) === null;
 })());
 
-// ── 7: the Daily Log guide reaches every challenge that has the habit ─────
-// It is the one habit every challenge includes, and the habit people most often
-// take for the bookkeeping it is not.
+// ── 7: the Daily Log has no guide, in any challenge ───────────────────────
+// Forge's standing decision: the Daily Log is tracking, not something to
+// teach. It is kept out of the Habit Library, its row is not tappable into a
+// guide, and the LOCK IN suites assert both. It is the one habit every
+// challenge includes, so giving it a guide would have put a Guide button on
+// every challenge at once — which is why this is asserted here too.
 const logTasks = tasks.filter(t => t.task.id === 'daily_log');
-const logWithout = logTasks.filter(t => t.task.guideId !== 'forge:dailyLog');
-check('7: every Daily Log row points at the shared Daily Log guide',
-  logTasks.length > 0 && logWithout.length === 0,
-  logWithout.map(t => `${t.where}:${t.task.guideId}`).join(' ') || `${logTasks.length} rows`);
+const logGuided = logTasks.filter(t => t.task.guideId);
+check('7: no challenge gives the Daily Log a guide',
+  logTasks.length > 0 && logGuided.length === 0,
+  logGuided.map(t => `${t.where}:${t.task.guideId}`).join(' ') || `${logTasks.length} rows, none guided`);
+check('7: and no guide in the registry is about logging',
+  !Object.keys(HABIT_GUIDES).some(k => /log$/i.test(k)),
+  Object.keys(HABIT_GUIDES).filter(k => /log$/i.test(k)).join(', ') || 'none');
 
 const failed = results.filter(r => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);

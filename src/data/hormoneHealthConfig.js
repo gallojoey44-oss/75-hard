@@ -1,5 +1,4 @@
 import { HABIT_KEYS } from './habitKeys';
-import { guideRef as coreGuide } from './coreGuides';
 
 /**
  * Women's Hormone Health — 8 or 12 weeks.
@@ -422,7 +421,7 @@ export function buildStartTasks(setup = defaultSetup()) {
     },
     {
       id: 'daily_log',
-      guideId: coreGuide('dailyLog'),
+     
       name: 'Complete Daily Log',
       desc: 'Rate the day here. Your score and Insights come from these ratings.',
       icon: '📊', color: '#8B9DC3',

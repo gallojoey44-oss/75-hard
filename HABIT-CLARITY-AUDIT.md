@@ -30,16 +30,16 @@ adding the content exposed a real bug in the row.
 
 | Challenge | Habits | Described | With a guide |
 |---|---:|---:|---:|
-| Fat Loss Challenge | 8 | 5 | 5 |
-| Fat Loss — Hard Mode | 8 | 8 | 5 |
-| Mental Training Phase | 7 | 6 | 5 |
-| Muscle Building | 6 | 5 | 1 |
-| Women's Hormone Health | 6 | 6 | 1 |
-| Energy Reset | 9 | 9 | 1 |
-| LOCK IN | 9 | 9 | 9 |
-| **Total** | **53** | **48** | **27** |
+| Fat Loss Challenge | 8 | 5 | 4 |
+| Fat Loss — Hard Mode | 8 | 8 | 4 |
+| Mental Training Phase | 7 | 6 | 4 |
+| Muscle Building | 6 | 5 | 0 |
+| Women's Hormone Health | 6 | 6 | 0 |
+| Energy Reset | 9 | 9 | 0 |
+| LOCK IN | 9 | 9 | 8 |
+| **Total** | **53** | **48** | **20** |
 
-Before this change: 37 described, 9 with a guide.
+Before this change: 37 described, 8 with a guide.
 
 Everything still blank is on the flagged list below. Those are blank on
 purpose — each one would require inventing a rule that does not exist in the
@@ -86,7 +86,7 @@ the one job it was added for.
 
 ## 2. Guides
 
-Nine new guides, in the same shape as the LOCK IN ones, which already carry
+Eight new guides, in the same shape as the LOCK IN ones, which already carry
 the five sections asked for:
 
 | Asked for | Guide field |
@@ -103,10 +103,7 @@ at ~90% Fullness, Progress Photo.
 **Mental Training** (`src/data/mentalTrainingGuides.js`) — Phone-Free Focus
 Block, Daily Reading, Daily Gratitude, Short Physical Reset.
 
-**Every challenge** (`src/data/coreGuides.js`) — Daily Log. It is the habit
-people most often skip as bookkeeping, and the one whose absence does the most
-damage: the ratings it collects are what the challenge score, Insights and
-every correlation Forge can offer are read from.
+A ninth, for the Daily Log, was written and then withdrawn — see decision 7.
 
 Two rules these guides are written under, because a guide's "How to complete
 it" **is** the challenge's contract with the person reading it:
@@ -127,8 +124,8 @@ Muscle Building guide — which is the next batch of work, not this one.
 
 ### Still to write
 
-26 habits have no guide: all of Energy Reset, all but the log of Hormone
-Health and Muscle Building, and the flagged habits. The registry is
+33 habits have no guide: all of Energy Reset, Hormone Health and Muscle
+Building, plus the flagged habits. The registry is
 challenge-agnostic — a challenge gets guides by adding its module to
 `habitGuides.js` — so this is content, not plumbing. Suggested order, vaguest
 requirement first: Energy Reset (`er_stress`, `er_caffeine`, `er_winddown`),
@@ -200,7 +197,7 @@ is lost mid-challenge.
 
 ---
 
-## 5. Flagged — six decisions that are yours, not mine
+## 5. Flagged — seven decisions that are yours, not mine
 
 Each one states the rule as it exists today, what is ambiguous about it, and a
 recommended wording. **None has been applied**, and none of these habits has
@@ -321,6 +318,28 @@ medium open. Two clean answers exist —
 
 **Decide:** (a), (b), or leave it genuinely open.
 
+### 7. Should the Daily Log have a guide at all? *(new — and I reversed myself)*
+
+**The rule today.** Forge has a standing decision that the Daily Log is
+infrastructure rather than something to teach. It is kept out of the Habit
+Library, its row is not tappable into a guide, its `guideId` is explicitly
+`null`, and three separate suites assert all of that in those words: *"the
+Daily Log has no guide — it is infrastructure, not a habit to teach"*.
+
+**What I did, and undid.** I wrote it one anyway — it is the habit people most
+often skip as bookkeeping, and the one whose absence does the most damage,
+since the ratings it collects are what the challenge score, Insights and every
+correlation Forge can offer are read from. The regression suite caught it
+immediately: adding the guide would have put a GUIDE button on the Daily Log of
+every challenge at once and listed it in the Habit Library, both of which the
+existing decision forbids. So it is reverted, and the suite now asserts the
+absence from the new side as well.
+
+**Decide:** (a) leave the standing decision alone, (b) give the Daily Log a
+guide — which means the Habit Library gains a non-habit entry and three
+assertions change on purpose, or (c) something narrower, such as explaining
+what the ratings feed in the log card itself rather than in a guide.
+
 ---
 
 ## 6. Safeguards
@@ -328,7 +347,7 @@ medium open. Two clean answers exist —
 No challenge requirement, XP figure, rank, attempt, archive, profile or
 notification is changed by any of this. Descriptions and guides are
 display-only: a description restates the rule, it never becomes the rule. The
-flagged six are left blank rather than guessed at.
+flagged habits are left blank rather than guessed at.
 
 Three regression checks hold the line:
 
@@ -336,8 +355,9 @@ Three regression checks hold the line:
   challenge resolves to a real, complete guide; every guide has every field
   `HabitGuide` renders; every strategy carries an evidence label; the
   mode-dependent guides point at the habit row rather than a hardcoded figure;
-  and **no habit on the flagged list has been given a guide**, so settling one
-  of those rules has to be a deliberate edit to that list.
+  and **no habit on the flagged list has been given a guide** — nor the Daily
+  Log — so settling one of those questions has to be a deliberate edit to that
+  list.
 - **`today-redesign-e2e-test.mjs` 16.6** — nothing that stops propagation may
   sit at the centre of any habit row, and a tap there completes the habit.
 - **`no-attribution-unit-test.mjs`** — the removal of every external-personality

@@ -1,6 +1,5 @@
 import { HABIT_KEYS } from './habitKeys';
 import { EVIDENCE } from './evidence';
-import { guideRef as coreGuide } from './coreGuides';
 
 /**
  * 🎯 LOCK IN — the complete challenge definition.
@@ -1443,7 +1442,7 @@ export const DAILY_HABITS = [
     }),
   },
   {
-    id: 'daily_log', habitKey: HABIT_KEYS.DAILY_LOG, guideId: coreGuide('dailyLog'),
+    id: 'daily_log', habitKey: HABIT_KEYS.DAILY_LOG, guideId: null,
     icon: '📊', color: '#8B9DC3', xp: XP.dailyLog, keystone: 0,
     build: () => ({
       name: 'Complete Daily Log',

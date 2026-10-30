@@ -7,7 +7,6 @@ import * as FLH from './fatLossHardConfig';
 import * as LI from './lockInConfig';
 import { guideRef as flGuide } from './fatLossGuides';
 import { guideRef as mtGuide } from './mentalTrainingGuides';
-import { guideRef as coreGuide } from './coreGuides';
 
 // Official Forge challenge template library.
 // Display metadata (emoji, startable) lives alongside the template data;
@@ -47,7 +46,12 @@ export const DAILY_LOG_TASK = {
   xp: 20,
   keystone: 0,
   habitKey: HABIT_KEYS.DAILY_LOG,
-  guideId: coreGuide('dailyLog'),
+  // Deliberately no guide. Forge's standing decision is that the Daily Log
+  // is tracking rather than something to teach: it is kept out of the Habit
+  // Library, its row is not tappable into a guide, and three suites assert
+  // all of that. Whether it should have one is a question for the user, and
+  // it is on the audit's list.
+  guideId: null,
 };
 
 // ─── Cold Exposure Upgrade (Mental Training only) ────────────────────────────

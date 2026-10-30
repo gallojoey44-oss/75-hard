@@ -198,8 +198,13 @@ check('8: guide ids are namespaced, so two challenges can both have a "sleep" gu
   habitTasks.every(t => t.guideId.startsWith(`${LI.GUIDE_SOURCE}:`)));
 check('8: every task\'s guide resolves through the shared registry',
   habitTasks.every(t => !!getGuide(t.guideId) && guideForTask(t) === getGuide(t.guideId)));
-check('8: the registry exposes exactly these eight guides',
-  Object.keys(HABIT_GUIDES).length === 8);
+// The registry is no longer LOCK IN's alone — Fat Loss and Mental Training
+// have guides of their own. What LOCK IN is responsible for is its own eight,
+// and that none of them has gone missing from the shared registry.
+const lockinKeys = Object.keys(HABIT_GUIDES).filter(k => k.startsWith(`${LI.GUIDE_SOURCE}:`));
+check('8: LOCK IN contributes exactly its eight guides to the shared registry',
+  lockinKeys.length === 8 && Object.keys(HABIT_GUIDES).length >= 8,
+  `${lockinKeys.length} of ${Object.keys(HABIT_GUIDES).length}`);
 check('8: each guide resolves to the habit it belongs to',
   guideForTask(byId.li_sleep).id === 'sleep' &&
   guideForTask(byId.li_flow).id === 'flow' &&
@@ -566,7 +571,9 @@ check('18: lighter-day lookup respects the attempt\'s own list',
 check('19: all eight guides resolve from the registry with no challenge involved',
   LI.GUIDE_ORDER.every(id => !!getGuide(`${LI.GUIDE_SOURCE}:${id}`)));
 check('19: every registry entry records its source, so the library can group them',
-  Object.values(HABIT_GUIDES).every(g => g.source === LI.GUIDE_SOURCE));
+  Object.values(HABIT_GUIDES).every(g => !!g.source) &&
+  LI.GUIDE_ORDER.every(id => getGuide(`${LI.GUIDE_SOURCE}:${id}`).source === LI.GUIDE_SOURCE),
+  [...new Set(Object.values(HABIT_GUIDES).map(g => g.source))].sort().join(', '));
 check('19: the registry carries no XP, completion or progress fields',
   Object.values(HABIT_GUIDES).every(g =>
     g.xp === undefined && g.checked === undefined && g.completed === undefined &&
@@ -576,7 +583,8 @@ check('19: a guide can be resolved from a task snapshot alone — no live attemp
 check('19: the Daily Log stays a tracking requirement, not an educational habit',
   !LI.GUIDE_ORDER.includes('dailyLog') && !LI.GUIDE_ORDER.includes('log') &&
   LI.DAILY_HABITS.find(h => h.id === 'daily_log').guideId === null &&
-  Object.keys(HABIT_GUIDES).length === 8);
+  !Object.keys(HABIT_GUIDES).some(k => /log$/i.test(k)),
+  Object.keys(HABIT_GUIDES).filter(k => /log$/i.test(k)).join(', ') || 'no logging guide anywhere');
 check('19: the eight library guides are exactly the eight specified habits',
   LI.GUIDE_ORDER.map(id => LI.GUIDES[id].title).sort().join('|') ===
   ['Attention Training', 'Daily Mission', 'Execute Your Priorities', 'Flow Training',
