@@ -411,7 +411,10 @@ export const DAILY_HABITS = [
     build: (s) => ({
       name: `${s.stressMinutes}+ minutes of downshifting`,
       target: { value: s.stressMinutes, unit: 'minutes', direction: 'atLeast' },
-      desc: `Your choice: ${STRESS_OPTIONS.join(',').toLowerCase()}, or anything else deliberately calming.`,
+      // `join(', ')`, not `join(',')`: the list was rendering as
+      // "meditation,diaphragmatic breathing,nsdr" with no spaces. NSDR is an
+      // acronym, so the list is no longer lowercased wholesale either.
+      desc: `Your choice: ${STRESS_OPTIONS.join(', ')}, or anything else deliberately calming. Five quiet minutes counts — it does not have to be formal practice.`,
     }),
   },
   {

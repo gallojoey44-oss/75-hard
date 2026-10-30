@@ -422,6 +422,7 @@ export function buildStartTasks(setup = defaultSetup()) {
     {
       id: 'daily_log',
       name: 'Complete Daily Log',
+      desc: 'Rate the day on the Today screen. These ratings are what Insights and your challenge score are read from.',
       icon: '📊', color: '#8B9DC3',
       xp: XP.symptomCheckIn, keystone: 1,
       habitKey: HABIT_KEYS.DAILY_LOG,
