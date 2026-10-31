@@ -156,7 +156,7 @@ await seed({
 const v2 = await rows();
 const v2Sleep = v2.find(r => /Sleep 7\.5/.test(r.name));
 check('3: an attempt started under the new rules IS',
-  /Time in bed/i.test(v2Sleep.desc) && v2Sleep.guide, v2Sleep.desc);
+  /set aside to sleep/i.test(v2Sleep.desc) && v2Sleep.guide, v2Sleep.desc);
 const v2Whole = v2.find(r => /whole foods/i.test(r.name));
 check('3: and the whole-foods unit is stated in meals, following the mode',
   /nine meals in ten/i.test(v2Whole.desc), v2Whole.desc);

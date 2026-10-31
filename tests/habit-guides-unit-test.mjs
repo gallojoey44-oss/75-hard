@@ -139,6 +139,21 @@ const hardcoded = MODE_DEPENDENT.filter(id => {
 check('5: mode-dependent guides point at the habit row, not a fixed number',
   hardcoded.length === 0, hardcoded.join(', ') || MODE_DEPENDENT.join(', '));
 
+// A habit whose figure comes from the SETUP FORM rather than the mode cannot
+// have its rule stated here at all — Hard Mode's protein can be a ratio of
+// your goal weight or a fixed number of grams, depending on what you chose,
+// and Muscle Building's calorie and carb figures are personal. These guides
+// have to send you to the row.
+const SETUP_DEPENDENT = [
+  'fatloss:protein', 'fatloss:whole', 'muscle:protein', 'muscle:nutrition',
+  'muscle:carbs', 'muscle:sleep', 'muscle:recovery', 'fatloss:sleep',
+  'energy:sleep', 'energy:light', 'energy:caffeine', 'energy:stress',
+  'hormone:sleep', 'hormone:stress',
+];
+const notDeferring = SETUP_DEPENDENT.filter(id => !/\brow\b/i.test(getGuide(id)?.how?.requirement || ''));
+check('5: setup-dependent guides send you to the habit row for the figure',
+  notDeferring.length === 0, notDeferring.join(', ') || `${SETUP_DEPENDENT.length} checked`);
+
 // ── 6: the helpers behave ──────────────────────────────────────────────────
 check('6: guideForTask and hasGuide agree with the registry', (() => {
   const guided = tasks.find(t => t.task.guideId)?.task;
@@ -229,7 +244,8 @@ check('9: a custom task is left entirely alone',
 check('9: an attempt on version 1 is NOT given the new sleep rule',
   (shownV1[1].desc ?? null) === null && (shownV1[1].guideId ?? null) === null);
 check('9: an attempt on version 2 is',
-  /Time in bed/.test(shownV2[1].desc) && shownV2[1].guideId === 'fatloss:sleep');
+  /set aside to sleep/.test(shownV2[1].desc) && shownV2[1].guideId === 'fatloss:sleep',
+  shownV2[1].desc);
 // A version states a DIFFERENCE. Where it changes nothing for a given mode —
 // Hard Mode already says "roughly nine meals in ten" — the challenge's own
 // sentence has to survive, or settling a rule would blank a better one.
@@ -254,6 +270,88 @@ check('9: a support habit is resolved against the support attempt',
   /visualization/.test(laned[1].desc) && laned[1].guideId === 'mental:mind', laned[1].desc);
 check('9: while the primary lane keeps the primary attempt\'s rules',
   (laned[0].desc ?? null) === null);
+
+// ── 9b: a legacy attempt is never shown a rule it was not started under ──
+// Three ways that could happen, each guarded here.
+//
+// First, a version could inject new text at version 1, which would reach every
+// attempt ever started. A version 1 entry must therefore state nothing of its
+// own: it exists only to say "this habit is versioned, and version 1 is
+// whatever the challenge already said".
+//
+// One habit is listed as an exception, with its reason, rather than the check
+// being softened: mt_mind had NO description at all, and its version 1 text
+// restates the rule exactly as the challenge's own rationale copy already
+// stated it — breathwork, meditation or prayer. That is informational, and
+// adding another name here has to be an argued decision, not an edit nobody
+// noticed.
+const V1_STATES_AN_EXISTING_RULE = ['mt_mind'];
+const v1Injected = Object.keys(VERSIONED_HABITS)
+  .filter(id => !V1_STATES_AN_EXISTING_RULE.includes(id))
+  .filter(id => versionedRule(id, 1)?.desc != null || versionedRule(id, 1)?.guideId != null);
+check('9b: version 1 of a versioned habit adds no wording of its own',
+  v1Injected.length === 0, v1Injected.join(', ') || `all but ${V1_STATES_AN_EXISTING_RULE.join(', ')}, deliberately`);
+check('9b: and the one exception offers no guide either — only the existing rule, restated',
+  V1_STATES_AN_EXISTING_RULE.every(id => versionedRule(id, 1)?.guideId == null));
+
+// Second, a version entry that changes nothing is a version that is not doing
+// its job — the new rule would be reaching version 1 attempts by some other
+// route, or not reaching anyone.
+const inert = Object.keys(VERSIONED_HABITS).filter((id) => {
+  const modes = [null, 'beginner', 'standard', 'hard'];
+  return !modes.some((m) => {
+    const a = versionedRule(id, 1, m), b = versionedRule(id, HABIT_RULES_VERSION, m);
+    return (a?.desc ?? null) !== (b?.desc ?? null) || (a?.guideId ?? null) !== (b?.guideId ?? null);
+  });
+});
+check('9b: every versioned habit actually differs between versions',
+  inert.length === 0, inert.join(', ') || 'all differ');
+
+// Third, a guide written for a new rule is readable in the Habit Library by
+// somebody whose attempt is on the old one — the library is deliberately
+// independent of enrolment. So a guide a version introduces has to say, in its
+// own completion rules, which attempts it describes.
+const unlabelled = [];
+for (const [habit, byVersion] of Object.entries(VERSIONED_HABITS)) {
+  for (const [version, rule] of Object.entries(byVersion)) {
+    if (!rule.guideId || Number(version) <= 1) continue;
+    const notes = getGuide(rule.guideId)?.how?.notes || '';
+    if (!/attempt/i.test(notes) || !/(started after|already running|earlier|before)/i.test(notes)) {
+      unlabelled.push(`${habit}→${rule.guideId}`);
+    }
+  }
+}
+check('9b: a guide a new rule introduces says which attempts it applies to',
+  unlabelled.length === 0, unlabelled.join(', ') || 'all labelled');
+
+// Fourth, a guide must not state a figure that contradicts the row it is
+// attached to. Where the habits pointing at one guide disagree about the
+// number — 2/5/10 pages, 6/8/10k steps, every per-setup target in Muscle
+// Building — the guide has to defer to the row rather than pick one.
+const byGuide = new Map();
+for (const { task } of tasks) {
+  if (!task.guideId) continue;
+  if (!byGuide.has(task.guideId)) byGuide.set(task.guideId, new Set());
+  if (task.target?.value != null) byGuide.get(task.guideId).add(String(task.target.value));
+}
+// Only the genuinely dangerous case is checked: a guide shared by rows that
+// disagree about the number. A single-target guide is left alone, because a
+// figure in its requirement is usually a different quantity entirely — the
+// protein guide's "0.8–1 g per pound" is a ratio, not the gram target beside
+// it, and the morning-light guide's "within 60 minutes of waking" is not the
+// ten minutes outdoors. A textual check cannot tell those apart, and one that
+// cried wolf would be deleted by the third person who tripped it.
+const contradicting = [];
+for (const [id, values] of byGuide) {
+  if (values.size <= 1) continue;
+  const req = getGuide(id)?.how?.requirement || '';
+  const named = (req.match(/\b\d[\d,.]*\b/g) || [])
+    .map(x => x.replace(/,/g, ''))
+    .filter(x => values.has(x) || values.has(Number(x).toLocaleString()));
+  if (named.length) contradicting.push(`${id} names ${named.join('/')} though its rows differ: ${[...values].join('/')}`);
+}
+check('9b: no guide states a figure that contradicts the habit row it is on',
+  contradicting.length === 0, contradicting.join(' · ') || `${byGuide.size} guides checked against their rows`);
 
 // ── 10: every challenge that can be started has guidance ──────────────────
 const byChallenge = new Map();

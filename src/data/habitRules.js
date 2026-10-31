@@ -69,16 +69,22 @@ export const VERSIONED_HABITS = {
   // the card. Fat Loss and Muscle Building carried a number and no sentence,
   // so the two of them were quietly measuring something the other two were
   // not. Version 2 aligns all four.
-  // Fat Loss states the rule and keeps its own reason for caring about it:
-  // Hard Mode's card already connected sleep to reading hunger, and that is
-  // worth more on the row than a second sentence about the opportunity.
+  // Sleep opportunity is time DELIBERATELY SET ASIDE for sleep, which is a
+  // narrower thing than time spent in bed. An hour in bed on your phone is
+  // not part of the window, and neither is reading or working there. What is
+  // explicitly not required is falling asleep: how much of the window you
+  // spend asleep is not something anyone can decide, and scoring it would
+  // punish a bad night on top of the bad night.
+  //
+  // The mode's figure is untouched by any of this — it stays in the habit's
+  // name and its target, exactly where it was.
   fl_sleep: {
     1: { desc: null, guideId: null },
-    2: { desc: 'Time in bed, not time asleep. Short sleep makes hunger harder to read.', guideId: 'fatloss:sleep' },
+    2: { desc: 'Hours set aside to sleep, lights out — not time in bed on your phone.', guideId: 'fatloss:sleep' },
   },
   mb_sleep: {
     1: { desc: null, guideId: null },
-    2: { desc: 'Time in bed, not time asleep. Give yourself the opportunity.', guideId: 'muscle:sleep' },
+    2: { desc: 'Hours set aside to sleep, lights out — not time in bed on your phone.', guideId: 'muscle:sleep' },
   },
 
   // ── Whole foods: the unit is meals ──────────────────────────────────────

@@ -59,10 +59,10 @@ export const GUIDES = {
       ],
     },
     how: {
-      requirement: 'Reach 0.8–1 g of protein per pound of your goal body weight, totalled across the whole day. The habit row states the rule; the arithmetic is yours to do once.',
+      requirement: 'Reach the protein target on the habit row, totalled across the whole day. In Beginner and Standard that is 0.8–1 g per pound of your goal body weight. Hard Mode prints the grams instead, worked out from the goal weight you entered — or from the fixed daily figure, if that is the mode you chose at setup.',
       earns: [
         'Checking this habit earns the XP shown on its row, once per day.',
-        'Goal weight, not current weight. If your goal is 150 lb, the target is roughly 120–150 g regardless of what you weigh today.',
+        'Goal weight, not current weight. If your goal is 150 lb, the target is roughly 120–150 g regardless of what you weigh today — and if you chose a fixed daily number at setup instead, that number is the target and this ratio does not apply to you.',
         'Anything you ate counts — it is a daily total, not a per-meal rule.',
       ],
       notes: 'This is one of the two ⭐⭐⭐ keystone habits, which means it carries more weight in your challenge score than the rest. If a day has to be partial, this is the one to protect.',
@@ -348,29 +348,30 @@ export const GUIDES = {
     id: 'sleep',
     title: 'Sleep Opportunity',
     icon: '😴',
-    tagline: 'Time in bed, not time asleep. The opportunity is the part you decide.',
+    tagline: 'The hours you set aside to sleep. Not hours asleep, and not hours in bed.',
     quickStart: [
       'Fix your wake time and keep it, weekends included.',
       'Count the window on the habit row backwards from it, and set an alarm to START getting ready for bed.',
-      'Give yourself the full window even on nights you expect to sleep badly.',
+      'Lights out at the start of it. The window is time set aside to sleep, not time spent in bed.',
     ],
     why: {
       blurb: 'Short sleep makes a deficit much harder to run. It raises appetite, blunts the fullness signal the challenge asks you to read, and makes the day you were going to walk 8,000 steps in feel like one you would rather sit down for. The habit measures the opportunity because that is the part you can actually decide.',
       points: [
         'Short sleep is associated with higher hunger and lower fullness signalling, which is precisely the combination that makes a deficit feel like willpower.',
         'It is also associated with a greater share of weight lost coming from lean mass rather than fat — which is the specific outcome this challenge\'s protein habit exists to prevent.',
-        'Nobody is asleep the whole time they are in bed. An eight-hour window is how most people get seven hours of sleep.',
+        'Nobody is asleep for the whole window they set aside. Allowing eight hours is how most people get something over seven hours of sleep.',
         'A consistent wake time stabilises the rhythm more effectively than a consistent bedtime, and it is easier to control.',
       ],
     },
     how: {
-      requirement: 'Give yourself the sleep opportunity on the habit row — time in bed with the lights out, not hours of measured sleep.',
+      requirement: 'Give yourself the sleep opportunity on the habit row: the hours you deliberately set aside to sleep, lights out and genuinely trying. Falling asleep is not required — how much of the window you sleep through is not something you can decide — but time in bed doing something else is not part of it.',
       earns: [
         'Checking this habit earns the XP shown on its row, once per day.',
-        'A night in bed for the window that you slept badly through still counts. The opportunity was given.',
-        'Logging hours slept in the Daily Log records the night; it never completes this habit for you.',
+        'A night you were in the window for and slept badly through still counts in full. The opportunity was given, and that is the whole requirement.',
+        'Time in bed on your phone, reading for an hour, or working does not count towards the window. Lights out, genuinely trying, is what the hours are measuring.',
+        'Logging hours slept in the Daily Log records the night. It never completes this habit for you, and no logged figure can — the window is something only you know you gave yourself.',
       ],
-      notes: 'This reading — opportunity rather than measured sleep — applies to attempts started after the rule was settled, and brings Fat Loss into line with what LOCK IN and Energy Reset have always said. An attempt already running keeps the wording it started with.',
+      notes: 'The figure itself follows your mode and is on the row, unchanged. This reading of it — hours set aside rather than hours asleep — applies to attempts started after the rule was settled; an attempt already running keeps the wording it was started under, and is not offered this guide.',
     },
     optimize: [
       {
@@ -407,8 +408,9 @@ export const GUIDES = {
       },
     ],
     mistakes: [
-      { title: 'Counting hours asleep', body: 'That is the reading this habit deliberately moved away from. In bed for the window is a complete habit.' },
-      { title: 'Treating a bad night as a failed day', body: 'You cannot decide to fall asleep. You can decide to be in bed, and that is what is being asked.' },
+      { title: 'Counting hours asleep', body: 'Falling asleep is not something you can decide, so it is not what is being asked. The window you set aside is the part you control, and it is the whole requirement.' },
+      { title: 'Counting the hour in bed on your phone', body: 'Scrolling in the dark is time in bed, not time set aside to sleep. It is the most common way the window gets reported as given when it was not — and it is also the thing most likely to have shortened it.' },
+      { title: 'Treating a bad night as a failed day', body: 'You cannot decide to fall asleep. You can decide to set the hours aside and put the lights out, and that is what is being asked.' },
       { title: 'Cutting sleep to fit the training in', body: 'Trading an hour of sleep for a session is a bad trade during a deficit, and it usually costs you the following day as well.' },
       { title: 'Letting the wake time float', body: 'It is the anchor the rest of the day hangs off. Moving it daily is why a compliant week can still feel awful.' },
     ],
@@ -427,8 +429,9 @@ export const GUIDES = {
         lines: [
           'You slept five hours and the day has been hungry and flat — which is the expected pattern, not a character failure.',
           'You eat the planned dinner rather than improvising at 21:00.',
-          'You are in bed at the normal time rather than trying to repay the whole debt in one night.',
-          'Tick the habit and let tomorrow be the day it resets.',
+          'Lights out at the normal time rather than trying to repay the whole debt in one night, and the phone charges in the hall.',
+          'Had you spent that hour in bed scrolling instead, the window would not have been set aside and the habit would not be done.',
+          'Tick it, and let tomorrow be the day it resets.',
         ],
       },
     ],
@@ -464,7 +467,7 @@ export const GUIDES = {
         'Counted in meals across the day, not in calories and not per plate.',
         'It is a judgement call, and it is meant to be. Nothing is weighed or logged.',
       ],
-      notes: 'This is one of the two keystone habits, so it carries more weight in your score than the rest. It is also not the same as the fullness habit in Hard Mode — that one is about when you stop, this one is about what is on the plate.',
+      notes: 'Counting in meals is the reading that applies to attempts started after the rule was settled; an attempt already running keeps the wording it was started under, and Hard Mode said this all along. It is one of the two keystone habits, so it carries more weight in your score than the rest — and it is not the fullness habit, which is about when you stop rather than what is on the plate.',
     },
     optimize: [
       {

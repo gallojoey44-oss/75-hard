@@ -306,29 +306,30 @@ export const GUIDES = {
     id: 'sleep',
     title: 'Sleep Opportunity',
     icon: '😴',
-    tagline: 'Time in bed, not time asleep. The opportunity is what you control.',
+    tagline: 'The hours you set aside to sleep. Not hours asleep, and not hours in bed.',
     quickStart: [
       'Count backwards from your wake time and set a going-to-bed alarm, not just a waking one.',
       'Keep the wake time steady, including at weekends. It anchors everything else.',
-      'Give yourself the full window on the habit row even on nights you expect to sleep badly.',
+      'Lights out at the start of it. The window is time set aside to sleep, not time spent in bed.',
     ],
     why: {
       blurb: 'Training is the stimulus and sleep is where the adaptation happens. The habit asks for time in bed rather than hours asleep because the opportunity is the part you can actually decide — how much of it you spend asleep is largely not up to you, and holding yourself to it makes bad nights worse.',
       points: [
         'Short sleep is associated with reduced training performance, worse recovery and a less favourable hormonal picture for building muscle.',
-        'Nobody is asleep for the whole time they are in bed. An eight-hour opportunity is a normal person\'s route to something over seven hours of sleep.',
+        'Nobody is asleep for the whole window they set aside. Allowing eight hours is how most people get something over seven hours of sleep.',
         'A consistent wake time does more for sleep quality than a consistent bedtime, and it is easier to control.',
         'Measuring the opportunity also removes the trap of lying awake doing arithmetic about how much sleep is left.',
       ],
     },
     how: {
-      requirement: 'Give yourself the sleep opportunity on the habit row — time in bed with the lights out, not hours of measured sleep.',
+      requirement: 'Give yourself the sleep opportunity on the habit row: the hours you deliberately set aside to sleep, lights out and genuinely trying. Falling asleep is not required — how much of the window you sleep through is not something you can decide — but time in bed doing something else is not part of it.',
       earns: [
         'Checking this habit earns the XP shown on its row, once per day.',
-        'A night where you were in bed for the window but slept poorly still counts. The opportunity was given.',
-        'Nothing ticks this for you. Logging hours slept in the Daily Log records the night; it never completes this habit.',
+        'A night you were in the window for and slept badly through still counts in full. The opportunity was given, and that is the whole requirement.',
+        'Time in bed on your phone, reading for an hour, or working does not count towards the window. Lights out, genuinely trying, is what the hours are measuring.',
+        'Logging hours slept in the Daily Log records the night. It never completes this habit for you, and no logged figure can — the window is something only you know you gave yourself.',
       ],
-      notes: 'This reading of the habit — opportunity rather than measured sleep — applies to attempts started after the rule was settled. An attempt already running keeps the wording it was started with.',
+      notes: 'The figure itself follows your setup and is on the row, unchanged. This reading of it — hours set aside rather than hours asleep — applies to attempts started after the rule was settled; an attempt already running keeps the wording it was started under, and is not offered this guide.',
     },
     optimize: [
       {
@@ -365,9 +366,10 @@ export const GUIDES = {
       },
     ],
     mistakes: [
-      { title: 'Counting hours asleep instead of time in bed', body: 'That is the reading this habit deliberately moved away from. If you were in bed for the window, the habit is done.' },
+      { title: 'Counting hours asleep', body: 'Falling asleep is not something you can decide, so it is not what is being asked. The window you set aside is the part you control, and it is the whole requirement.' },
+      { title: 'Counting the hour in bed on your phone', body: 'Scrolling in the dark is time in bed, not time set aside to sleep. It is the most common way the window gets reported as given when it was not — and it is also the thing most likely to have shortened it.' },
       { title: 'Only protecting sleep on training days', body: 'The building happens on the rest days. Those are the nights that matter most.' },
-      { title: 'Treating a bad night as a failed habit', body: 'You cannot decide to fall asleep. You can decide to be in bed, and that is what is being asked.' },
+      { title: 'Treating a bad night as a failed habit', body: 'You cannot decide to fall asleep. You can decide to set the hours aside and put the lights out, and that is what is being asked.' },
       { title: 'Borrowing from sleep to finish the day', body: 'The hour taken at 23:00 is paid back the next afternoon with interest, usually out of the session.' },
     ],
     examples: [
@@ -383,8 +385,9 @@ export const GUIDES = {
       {
         label: 'A night that went wrong',
         lines: [
-          'You were in bed at 22:30 and did not fall asleep until well after midnight.',
+          'Lights out at 22:30, and you did not fall asleep until well after midnight.',
           'You are awake at 06:30 anyway, because the wake time is the anchor.',
+          'The hours were set aside and you were genuinely trying, so the window was given — which is the whole requirement.',
           'The opportunity was there, so the habit is complete — and you log the poor night in the Daily Log, which is where it belongs.',
           'You do not nap for two hours in the afternoon, which would move tonight\'s window as well.',
         ],

@@ -147,8 +147,8 @@ the habit requires.
 |---|---|---|
 | **1. `fl_whole`** | Unchanged: the percentage in the habit name, no sentence. | "Roughly eight/nine meals in ten minimally processed. Not a ban list." The unit is **meals**, following Hard Mode's existing wording, and the percentage follows the mode. Hard Mode keeps its own sentence — a version states a difference, not a replacement. Gains the Mostly Whole Foods guide. |
 | **3. `mt_mind`** | "Breathwork, meditation or prayer. Following your breath quietly counts." — the rule exactly as the challenge's own rationale copy states it. Prayer eligibility intact. No guide. | "Meditation, mindfulness, breathwork or visualization." Prayer moves out, because Mental Training has a separate Prayer habit worth its own XP and one practice should not tick two requirements meant to be separate. Gains the Mental Training guide. |
-| **4. `fl_sleep`** | Unchanged: a number and no sentence. | "Time in bed, not time asleep. Short sleep makes hunger harder to read." Gains the Sleep Opportunity guide. |
-| **5. `mb_sleep`** | Unchanged. | "Time in bed, not time asleep. Give yourself the opportunity." Gains the Sleep Opportunity guide. |
+| **4. `fl_sleep`** | Unchanged: a number and no sentence. | "Hours set aside to sleep, lights out — not time in bed on your phone." Gains the Sleep Opportunity guide. |
+| **5. `mb_sleep`** | Unchanged. | Same wording, same guide. |
 
 **Two judgement calls inside those, worth your eye.**
 
@@ -166,14 +166,67 @@ separate requirements are intended. Read together, that points at prayer moving
 to its own habit for new attempts. Breathwork stays because it is eligible
 today and dropping it would narrow the rule without being asked for.
 
+**Sleep Opportunity, as finally worded.** The hours are the ones you
+*deliberately set aside* to sleep — lights out and genuinely trying. That is
+narrower than time in bed: an hour spent in bed on your phone, reading or
+working is not part of the window. What is explicitly *not* required is falling
+asleep, because how much of the window you sleep through is not something
+anyone can decide. The mode's figure is untouched and stays on the row. Both
+guides say all of this in "How to complete it", and both carry a worked example
+of the distinction.
+
+Energy Reset, Hormone Health and LOCK IN keep their own sleep wording. Their
+rules were already stated and were not among your decisions, so applying this
+refinement to them would change what their existing attempts are being held to
+— exactly the thing the versioning exists to prevent.
+
 **On decision 5's second clause** — nothing auto-completes a sleep habit from
 logged hours, and nothing ever did. The Daily Log completes itself when any one
 metric is saved, and that is the only automatic completion in the app. Now
 tested explicitly: nine hours logged ticks the Daily Log and nothing else.
 
+**Flagged for later, per decision 4.** `fl_water` keeps "Your usual daily
+hydration target. Not a weight-manipulation tool." and names no figure, because
+no configured numeric target exists anywhere in Forge — no profile field, no
+default, no setting. Giving Fat Loss a hydration target at setup, the way it
+configures protein, is a real improvement and is recorded as one in the source
+beside the habit. Nothing invents a universal number in the meantime.
+
 ---
 
-## 5. Four defects found while auditing
+## 5. Verifying that nothing misrepresents its original rule
+
+Four ways a description or guide could tell somebody a rule they were not
+started under, each now checked rather than assumed:
+
+1. **A version could ship new wording at version 1**, reaching every attempt
+   ever started. Version 1 entries are asserted to add nothing of their own.
+   `mt_mind` is the single listed exception, because its version 1 text
+   restates the rule the challenge's own rationale copy already stated — and
+   adding a second name to that list has to be an argued decision.
+2. **A version entry could be inert**, in which case the new rule is reaching
+   version 1 attempts by some other route. Every versioned habit is asserted to
+   actually differ between versions.
+3. **A guide for a new rule is readable in the Habit Library** by somebody whose
+   attempt is on the old one — the library is deliberately independent of
+   enrolment. Every guide a version introduces is asserted to say, in its own
+   completion rules, which attempts it describes.
+4. **A guide could name a figure the row contradicts.** Guides shared by rows
+   that disagree about the number must not name one, and guides whose habits
+   are built from the setup form must send you to the row.
+
+That fourth check found a real case. The Fat Loss protein guide stated
+"0.8–1 g per pound of your goal body weight" — true in Beginner and Standard,
+but Hard Mode lets you choose a **fixed daily gram figure** instead, and for
+anyone on that setting the guide was describing a rule that was not theirs. The
+requirement now names both routes and points at the row.
+
+A full side-by-side of every guide's stated requirement against the habit rows
+that open it was read by hand as well; nothing else disagreed.
+
+---
+
+## 6. Four defects found while auditing
 
 **A tap in the middle of a habit row stopped completing the habit.** Adding a
 description to "Walk 8,000+ steps" pushed it to three lines, which put "Show
@@ -207,7 +260,7 @@ Forge does not ask for the photo and does not store it.
 
 ---
 
-## 6. Safeguards
+## 7. Safeguards
 
 No challenge requirement, XP figure, rank, attempt, archive, profile or
 notification is changed by any of this. Descriptions and guides are

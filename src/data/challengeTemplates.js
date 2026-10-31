@@ -572,6 +572,11 @@ export const CHALLENGE_TEMPLATES = [
           { id: 'fl_protein', name: 'Hit protein goal (0.8–1 g/lb goal weight)', desc: 'Goal weight in lb × 0.8–1 = grams per day. A 170 lb goal is about 140–170 g.', icon: '🥩', color: '#FF6B6B', xp: 40, keystone: 3, keystoneHabit: true, habitKey: HABIT_KEYS.PROTEIN_TARGET, guideId: flGuide('protein') },
           { id: 'fl_steps',   name: 'Walk 6,000+ steps', desc: 'Your day’s total, not one walk. Ten minutes is about 1,000 steps.',                   icon: '🚶', color: '#FFB347', xp: 25, keystone: 2, habitKey: HABIT_KEYS.DAILY_STEPS, target: { value: 6000, unit: 'steps', direction: 'atLeast' }, guideId: flGuide('steps') },
           { id: 'fl_whole',   name: 'Eat mostly whole foods (80%+)',       icon: '🥗', color: '#6BCB77', xp: 40, keystone: 3, keystoneHabit: true, habitKey: HABIT_KEYS.WHOLE_FOODS },
+          // No numeric hydration target exists anywhere in Forge: there is no
+          // profile field, no default and no setting, so the row deliberately
+          // names no figure and invents no universal one. Giving Fat Loss a
+          // configured target at setup — the way it configures protein — is a
+          // flagged future improvement, not something to guess at here.
           { id: 'fl_water',   name: 'Hit water goal', desc: 'Your usual daily hydration target. Not a weight-manipulation tool.', icon: '💧', color: '#45B7D1', xp: 15, keystone: 1, habitKey: HABIT_KEYS.HYDRATION },
           { id: 'fl_sleep',   name: 'Sleep 7.5+ hours',                    icon: '😴', color: '#A78BFA', xp: 25, keystone: 2, habitKey: HABIT_KEYS.SLEEP_TARGET, target: { value: 7.5, unit: 'hours', direction: 'atLeast' } },
           { ...DAILY_LOG_TASK, xp: 10, keystone: 1 },
