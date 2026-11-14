@@ -234,6 +234,33 @@ export async function syncPushSchedule(profileId, prefs, ctx, todayStr) {
   }
 }
 
+/**
+ * Tell the server what to hold for this profile's past-self messages.
+ *
+ * `body` comes from buildSyncBody (utils/pastSelf.js), which is where the
+ * privacy boundary is drawn: unless the user has switched on lock-screen
+ * display it contains no words they wrote. This function adds only the install
+ * and profile ids, and reports back what the server says it stored — a count —
+ * so the screen can state it as a fact rather than an assumption.
+ *
+ * Returns { ok, stored, contentStored } or { ok: false, reason }.
+ */
+export async function syncPastSelf(profileId, body) {
+  if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) return { ok: false, reason: 'no-vapid-key' };
+  try {
+    const res = await fetch('/api/push/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, kind: 'pastSelf', installId: getInstallId(), profileId }),
+    });
+    if (!res.ok) return { ok: false, reason: 'server-error', status: res.status };
+    const data = await res.json().catch(() => ({}));
+    return { ok: true, stored: !!data.stored, contentStored: Number(data.contentStored) || 0 };
+  } catch {
+    return { ok: false, reason: 'sync-failed' };
+  }
+}
+
 /** Trigger a real server-originated push to this install/profile's stored subs. */
 export async function backgroundTestPush(profileId) {
   try {
@@ -337,7 +364,7 @@ export async function getPushStatus(profileId) {
 
 // ─── Showing notifications (via service worker, with tags) ──────────────────
 
-export async function showNotification({ title, body, tag, view = 'today' }) {
+export async function showNotification({ title, body, tag, view = 'today', renotify = false, data = null }) {
   const support = getNotificationSupport();
   if (!support.supported || support.permission !== 'granted') return false;
   try {
@@ -345,10 +372,12 @@ export async function showNotification({ title, body, tag, view = 'today' }) {
     await reg.showNotification(title, {
       body,
       tag,                      // duplicates replace instead of stacking
-      renotify: false,
+      renotify: renotify === true,
       icon: '/icon.svg',
       badge: '/icon.svg',
-      data: { view },
+      // `data` carries identifiers for a past-self message (which message,
+      // which profile, which date) alongside the view. Reminders pass none.
+      data: { view, ...(data || {}) },
     });
     return true;
   } catch {

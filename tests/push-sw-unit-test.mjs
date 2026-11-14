@@ -31,10 +31,11 @@ function check(name, cond, extra = '') {
 const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8');
 
 /** Load sw.js in a sandbox and return handles to its stubbed world. */
-function loadSW({ identity = { installId: 'install-abc', profileId: 'me' }, showThrows = false } = {}) {
+function loadSW({ identity = { installId: 'install-abc', profileId: 'me' }, showThrows = false, windows = [] } = {}) {
   const listeners = {};
   const shown = [];
   const posted = [];
+  const opened = [];              // URLs handed to clients.openWindow
   const cacheStore = new Map();   // name -> Map(url -> body)
   const deleted = [];
 
@@ -66,7 +67,11 @@ function loadSW({ identity = { installId: 'install-abc', profileId: 'me' }, show
         shown.push({ title, ...opts });
       },
     },
-    clients: { claim: async () => {}, matchAll: async () => [] },
+    clients: {
+      claim: async () => {},
+      matchAll: async () => windows,
+      openWindow: async (url) => { opened.push(url); return {}; },
+    },
     location: { origin: 'https://75-hard-v2.vercel.app' },
     skipWaiting: () => {},
   };
@@ -75,6 +80,7 @@ function loadSW({ identity = { installId: 'install-abc', profileId: 'me' }, show
     self,
     caches: fakeCaches,
     URL,
+    URLSearchParams,
     console,
     Response: class { constructor(body) { this.__body = body; } },
     fetch: async (url, init) => { posted.push({ url, init }); return { ok: true, status: 200 }; },
@@ -90,7 +96,7 @@ function loadSW({ identity = { installId: 'install-abc', profileId: 'me' }, show
     return ev;
   }
 
-  return { fire, shown, posted, listeners, cacheStore, deleted, ctx };
+  return { fire, shown, posted, opened, listeners, cacheStore, deleted, ctx };
 }
 
 const pushEvent = data => ({ data: { json: () => data, text: () => JSON.stringify(data) } });
@@ -215,6 +221,78 @@ check('7: the cache version is a current 75hard-v* string',
   /const CACHE_VER\s*=\s*'75hard-v(\d+)'/.test(source) &&
   Number(source.match(/const CACHE_VER\s*=\s*'75hard-v(\d+)'/)[1]) >= 55,
   source.match(/const CACHE_VER\s*=\s*'([^']+)'/)?.[1]);
+
+// ══ 8: a message from a past self carries its identity through the tap ═════
+// A reminder only needs to say which screen to open. A past-self message also
+// has to say which message it was, whose it is and the date it was sent for —
+// and it has to survive both routes into the app: a message to a window that
+// is already open, and the URL of one that has to be launched.
+const pastSelfPush = {
+  title: 'Forge', body: 'A message from your past self is ready.',
+  tag: 'forge-pastself-girlfriend', renotify: true,
+  view: 'message', profile: 'girlfriend', date: '2026-11-16', msg: 'm_abc123',
+};
+sw = loadSW();
+await sw.fire('push', pushEvent(pastSelfPush));
+const shownData = sw.shown[0]?.data || {};
+check('8: the notification keeps the view, message id, profile and date',
+  shownData.view === 'message' && shownData.msg === 'm_abc123'
+  && shownData.profile === 'girlfriend' && shownData.date === '2026-11-16',
+  JSON.stringify(shownData));
+check('8: the default private wording is shown exactly as sent',
+  sw.shown[0].title === 'Forge' && sw.shown[0].body === 'A message from your past self is ready.');
+check('8: nothing but identifiers is kept on the notification — no message text',
+  Object.keys(shownData).sort().join() === 'date,msg,profile,view');
+
+sw = loadSW();
+await sw.fire('push', pushEvent({ ...pastSelfPush, msg: undefined, extra: 'ignored', profile: 42 }));
+check('8: unknown or malformed fields are not carried',
+  JSON.stringify(sw.shown[0].data) === JSON.stringify({ view: 'message', date: '2026-11-16' }),
+  JSON.stringify(sw.shown[0].data));
+
+sw = loadSW();
+await sw.fire('push', pushEvent({ title: 'Water', body: 'Drink up', tag: 'forge-water', view: 'today' }));
+check('8: an ordinary reminder still carries only its view',
+  JSON.stringify(sw.shown[0].data) === JSON.stringify({ view: 'today' }));
+
+// Tapped with Forge closed: the app is launched at a URL that says everything.
+sw = loadSW();
+let closed = 0;
+await sw.fire('notificationclick', { notification: { close: () => { closed++; }, data: shownData } });
+check('8: tapping closes the notification', closed === 1);
+check('8: with Forge closed, exactly one window is opened', sw.opened.length === 1);
+{
+  const u = new URL(sw.opened[0] || '/', 'https://75-hard-v2.vercel.app');
+  check('8: the launch URL carries the view, message, profile and date',
+    u.pathname === '/' && u.searchParams.get('view') === 'message' && u.searchParams.get('msg') === 'm_abc123'
+    && u.searchParams.get('profile') === 'girlfriend' && u.searchParams.get('date') === '2026-11-16',
+    sw.opened[0]);
+}
+
+// Tapped with Forge open: the existing window is told, focused, and nothing new opens.
+{
+  const messages = []; let focused = 0;
+  const win = { url: 'https://75-hard-v2.vercel.app/', postMessage: m => messages.push(m), focus: async () => { focused++; } };
+  sw = loadSW({ windows: [win] });
+  await sw.fire('notificationclick', { notification: { close: () => {}, data: shownData } });
+  check('8: with Forge open, the open window is messaged once', messages.length === 1);
+  check('8: the message carries the view, message id, profile and date',
+    messages[0]?.type === 'FORGE_NAVIGATE' && messages[0].view === 'message' && messages[0].msg === 'm_abc123'
+    && messages[0].profile === 'girlfriend' && messages[0].date === '2026-11-16', JSON.stringify(messages[0]));
+  check('8: the window is focused and no second window is opened', focused === 1 && sw.opened.length === 0);
+
+  // A reminder tap is unchanged by any of this.
+  messages.length = 0;
+  await sw.fire('notificationclick', { notification: { close: () => {}, data: { view: 'today' } } });
+  check('8: a reminder tap still sends just its view',
+    JSON.stringify(messages[0]) === JSON.stringify({ type: 'FORGE_NAVIGATE', view: 'today' }), JSON.stringify(messages[0]));
+}
+sw = loadSW();
+await sw.fire('notificationclick', { notification: { close: () => {}, data: { view: 'today' } } });
+check('8: a reminder tap with Forge closed opens /?view=today, as before', sw.opened[0] === '/?view=today', sw.opened[0]);
+sw = loadSW();
+await sw.fire('notificationclick', { notification: { close: () => {}, data: undefined } });
+check('8: a notification with no data still opens Today', sw.opened[0] === '/?view=today', sw.opened[0]);
 
 const failed = results.filter(x => !x.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);

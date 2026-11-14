@@ -164,6 +164,46 @@ export async function removeSchedule(installId, profileId) {
   await kvSRem(INDEX_KEY, `${installId}:${profileId}`);
 }
 
+// ── Messages from a user's past self ─────────────────────────────────────────
+//
+// Kept in its OWN key rather than inside the reminder schedule, on purpose:
+//
+//   • it is the one record here that can hold words a person wrote, so being
+//     able to say "this key, and only this key" is what makes deleting them a
+//     single verifiable operation;
+//   • it has its own on/off switch, independent of the reminders master switch,
+//     and saveSchedule/removeSchedule replace or drop the whole schedule;
+//   • two writers to one key would race. With separate keys the reminder sync
+//     and this one cannot overwrite each other.
+//
+// Same 60-day lifetime as a subscription, refreshed on every sync — so text a
+// user once chose to show on their lock screen does not outlive two months of
+// them not opening the app.
+
+function pastSelfKey(installId, profileId) {
+  return `push:pastself:${installId}:${profileId}`;
+}
+export const PAST_SELF_INDEX_KEY = 'push:pastself:index';
+
+export async function savePastSelf(installId, profileId, record) {
+  await kvSetEx(pastSelfKey(installId, profileId), record, SUB_TTL);
+  await kvSAdd(PAST_SELF_INDEX_KEY, `${installId}:${profileId}`);
+}
+
+export async function getPastSelf(installId, profileId) {
+  return kvGet(pastSelfKey(installId, profileId));
+}
+
+/** Delete the record — schedule and any message text with it. */
+export async function removePastSelf(installId, profileId) {
+  await kvDel(pastSelfKey(installId, profileId));
+  await kvSRem(PAST_SELF_INDEX_KEY, `${installId}:${profileId}`);
+}
+
+export async function getAllPastSelfIds() {
+  return kvSMembers(PAST_SELF_INDEX_KEY);
+}
+
 // ── Idempotency (one send per install/profile/type/local-date) ──────────────
 
 export async function alreadySent(installId, profileId, type, localDate) {

@@ -5,10 +5,11 @@
 
 import {
   getSubscriptions, getSchedule, getDiagnostics, kvGet,
-  storeConfigured, CRON_LAST_KEY, getCronRuns, pendingOneShots,
+  storeConfigured, CRON_LAST_KEY, getCronRuns, pendingOneShots, getPastSelf,
 } from '../_lib/store.js';
 import { vapidConfigured } from '../_lib/push.js';
 import { evaluateSchedule, cadenceMinutes, SCHEDULER_STALE_MINUTES } from '../_lib/schedule.js';
+import { storedSummary } from '../_lib/pastSelf.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -66,8 +67,16 @@ export default async function handler(req, res) {
       } catch { evaluation = null; }
     }
 
+    // Messages from a past self: what the server is holding, as facts and a
+    // count. The text itself is never returned from here (see storedSummary).
+    let pastSelf = { stored: false, contentStored: 0 };
+    try {
+      pastSelf = storedSummary(await getPastSelf(installId, profileId), profileId);
+    } catch { /* diagnostics only */ }
+
     return res.status(200).json({
       ...base,
+      pastSelf,
       subscriptionActive: subs.length > 0,
       subscriptionCount: subs.length,
       scheduleSynced: !!schedule,

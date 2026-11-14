@@ -14,6 +14,9 @@ import {
   BUSY_DAILY_THRESHOLD, TARGET_DAILY_MIN, TARGET_DAILY_MAX, CUSTOM_PREFIX,
 } from '../data/reminderPlan';
 import { reminderPreview } from '../data/reminderCopy';
+import {
+  readPastSelf, deliveryActive, describeDays, formatTime,
+} from '../utils/pastSelf';
 
 // VITE_VAPID_PUBLIC_KEY is inlined at BUILD time. If it was missing when the
 // production bundle was built, this is false and no push subscription can ever
@@ -39,7 +42,7 @@ function fmtRelative(iso) {
   return `${Math.abs(mins)} min ago`;
 }
 
-export default function NotificationSettings() {
+export default function NotificationSettings({ onOpenFutureSelf = null }) {
   const {
     activeProfile, profile, notifPrefs, updateNotifPrefs,
     getChallengeMeta, getRawDayNumber, getDayData,
@@ -92,11 +95,18 @@ export default function NotificationSettings() {
     }
   }
 
+  // Messages from a past self have their own switch and are not reminders.
+  const pastSelf = readPastSelf(profile);
+  const pastSelfOn = deliveryActive(pastSelf);
+
   async function handleMasterToggle() {
     const next = !prefs.masterEnabled;
     updateNotifPrefs({ masterEnabled: next });
-    if (!next) await unsubscribeFromPush(activeProfile).catch(() => {});
-    else if (support.permission === 'granted') await subscribeToPush(activeProfile);
+    // Switching reminders off used to drop the push subscription outright. It
+    // must not when past-self messages are on: they are sent through the same
+    // subscription, and the user has not asked for those to stop.
+    if (!next && !pastSelfOn) await unsubscribeFromPush(activeProfile).catch(() => {});
+    else if (next && support.permission === 'granted') await subscribeToPush(activeProfile);
     setTimeout(refreshDiag, 800);
   }
 
@@ -244,6 +254,26 @@ export default function NotificationSettings() {
         >
           {prefs.masterEnabled ? 'On' : 'Off'}
         </button>
+      </div>
+
+      {/* Messages from your past self — managed in their own place, with their
+          own switch. Shown here whether or not reminders are on, so nobody
+          switches reminders off and wonders why a notification still arrives. */}
+      <div className="settings-row ps-settings-row" data-testid="settings-past-self">
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>💌 Messages from your past self</div>
+          <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+            {pastSelfOn
+              ? `On · ${describeDays(pastSelf.delivery)}, around ${formatTime(pastSelf.delivery.time)}`
+              : 'Off'}
+            {' · separate from reminders'}
+          </div>
+        </div>
+        {onOpenFutureSelf && (
+          <button className="btn btn-ghost ps-settings-btn" onClick={() => onOpenFutureSelf('delivery')}>
+            Manage
+          </button>
+        )}
       </div>
 
       {/* Delivery status */}

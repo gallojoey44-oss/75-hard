@@ -17,7 +17,11 @@
 // Pre-rendered payloads are computed by the app (single source of truth for
 // notification copy) so the server never fabricates dynamic values.
 
-import { saveSchedule, removeSchedule, updateDiagnostics, storeConfigured } from '../_lib/store.js';
+import {
+  saveSchedule, removeSchedule, updateDiagnostics, storeConfigured,
+  savePastSelf, removePastSelf,
+} from '../_lib/store.js';
+import { sanitizeRecord } from '../_lib/pastSelf.js';
 
 function validTimezone(tz) {
   if (typeof tz !== 'string' || !tz) return false;
@@ -37,6 +41,39 @@ export default async function handler(req, res) {
 
   if (!installId || typeof installId !== 'string') return res.status(400).json({ error: 'Missing installId' });
   if (!['me', 'girlfriend'].includes(profileId)) return res.status(400).json({ error: 'Invalid profile' });
+
+  // ── Messages from a past self ──────────────────────────────────────────────
+  // A separate kind of sync with its own record (see store.js). It shares this
+  // endpoint rather than getting one of its own only because the deployment has
+  // a limited number of functions; nothing below this block runs for it, and it
+  // never touches the reminder schedule.
+  //
+  // Body: { kind: 'pastSelf', installId, profileId, enabled, timezone, time,
+  //         days, quietHours, showContent, rotation }
+  // `rotation` — the user's own short messages — is accepted ONLY alongside
+  // showContent: true, which is the explicit "show my words on the lock screen"
+  // consent. Without it the server stores no text at all.
+  if (b.kind === 'pastSelf') {
+    try {
+      const record = b.enabled === true ? sanitizeRecord(b) : null;
+      if (!record) {
+        // Off, or not a usable schedule: delete whatever is stored, text included.
+        await removePastSelf(installId, profileId);
+        return res.status(200).json({ ok: true, stored: false, contentStored: 0 });
+      }
+      await savePastSelf(installId, profileId, {
+        ...record, installId, profileId, syncedAt: new Date().toISOString(),
+      });
+      return res.status(200).json({
+        ok: true, stored: true,
+        // Echoed as a COUNT, never as text, so the app can confirm what the
+        // server is holding without the endpoint becoming a way to read it.
+        contentStored: record.rotation.length,
+      });
+    } catch (err) {
+      return res.status(500).json({ error: 'Failed to sync past-self messages', detail: String(err?.message || err) });
+    }
+  }
   if (!validTimezone(timezone)) return res.status(400).json({ error: 'Invalid timezone' });
 
   try {

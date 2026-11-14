@@ -4,7 +4,7 @@
 // Body: { installId, profileId, endpoint }
 
 import {
-  removeSubscription, getSubscriptions, removeSchedule, storeConfigured,
+  removeSubscription, getSubscriptions, removeSchedule, storeConfigured, removePastSelf,
 } from '../_lib/store.js';
 
 export default async function handler(req, res) {
@@ -29,7 +29,12 @@ export default async function handler(req, res) {
     // If this was the last subscription for the profile, drop its schedule too
     // so the cron sender stops considering it.
     const remaining = await getSubscriptions(installId, profileId);
-    if (remaining.length === 0) await removeSchedule(installId, profileId);
+    if (remaining.length === 0) {
+      await removeSchedule(installId, profileId);
+      // With nowhere left to send to, the past-self record is dead weight — and
+      // it may hold message text, which should not sit on the server unused.
+      await removePastSelf(installId, profileId);
+    }
     return res.status(200).json({ ok: true });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to unsubscribe', detail: String(err?.message || err) });

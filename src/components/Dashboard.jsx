@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useApp, DISCIPLINE_75_META, discipline75Tasks } from '../context/AppContext';
 import BuildBanner from './BuildBanner';
 import QuoteOfTheDay from './QuoteOfTheDay';
+import HomeFutureSelfCard from './pastself/HomeFutureSelfCard';
 import RankUpCeremony from './RankUpCeremony';
 import ChallengePerformance from './ChallengePerformance';
 import SupportProgress from './SupportProgress';
@@ -806,7 +807,7 @@ function ComebackCard({ dayNum, comebackMode, setback, onStart, onDismiss, onCom
   );
 }
 
-export default function Dashboard({ setView }) {
+export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPastSelf = null }) {
   const {
     activeProfile, profile, profiles, days, allDays, archives, todayStr,
     getChallengeMeta, getDayNumber, getRawDayNumber, getDayCompletion, getStreak, getLongestStreak, getWeeklyRequirements,
@@ -1092,6 +1093,10 @@ export default function Dashboard({ setView }) {
           </button>
         </div>
         <ScheduledStartCard onChangeChallenge={() => setView('challenges')} />
+        {/* The days before a challenge starts are when people most want to write. */}
+        {onOpenFutureSelf && (
+          <HomeFutureSelfCard onOpen={onOpenFutureSelf} onRead={onReadPastSelf} />
+        )}
       </div>
     );
   }
@@ -1169,6 +1174,10 @@ export default function Dashboard({ setView }) {
         />
         <AchievementsCard badges={badges} milestones={milestones} />
         <RecentWins wins={wins} />
+        {/* Writing to yourself does not need a challenge to be running. */}
+        {onOpenFutureSelf && (
+          <HomeFutureSelfCard onOpen={onOpenFutureSelf} onRead={onReadPastSelf} />
+        )}
       </div>
     );
   }
@@ -1295,6 +1304,11 @@ export default function Dashboard({ setView }) {
 
       {/* 6. What you have actually done lately */}
       <RecentWins wins={wins} />
+
+      {/* Your own words — the way in to Letters to My Future Self */}
+      {onOpenFutureSelf && (
+        <HomeFutureSelfCard onOpen={onOpenFutureSelf} onRead={onReadPastSelf} />
+      )}
 
       {/* Quote of the Day — identity and motivation live on Home */}
       <QuoteOfTheDay />

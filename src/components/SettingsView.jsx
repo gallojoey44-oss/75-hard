@@ -27,7 +27,7 @@ function exportData() {
   URL.revokeObjectURL(url);
 }
 
-export default function SettingsView({ setView }) {
+export default function SettingsView({ setView, onOpenFutureSelf = null }) {
   const {
     activeProfile, profile, profiles, allDays,
     updateProfile, startForgeDaily, setChallengeStart,
@@ -296,7 +296,7 @@ export default function SettingsView({ setView }) {
 
       {/* Notifications */}
       <div className="settings-section">
-        <NotificationSettings />
+        <NotificationSettings onOpenFutureSelf={onOpenFutureSelf} />
       </div>
 
       {/* Quote Library */}

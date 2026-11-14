@@ -31,9 +31,11 @@ import {
   getAllScheduleIds, getSchedule, getSubscriptions,
   alreadySent, markSent, unmarkSent, updateDiagnostics, storeConfigured, kvSet, CRON_LAST_KEY,
   recordCronRun, listOneShots, removeOneShot,
+  getAllPastSelfIds, getPastSelf,
 } from '../_lib/store.js';
 import { sendPush, vapidConfigured } from '../_lib/push.js';
 import { evaluateSchedule } from '../_lib/schedule.js';
+import { dispatchPastSelf, PAST_SELF_TYPE } from '../_lib/pastSelf.js';
 
 function authorized(req) {
   const secret = process.env.CRON_SECRET;
@@ -153,6 +155,34 @@ export default async function handler(req, res) {
         }
       }
     }
+    // ── Messages from a past self ────────────────────────────────────────────
+    // Runs after the reminders and inside its own try/catch: whatever happens
+    // here, the reminder results above have already been sent and counted. It
+    // uses the same send-once claim as every reminder, under its own type, so
+    // one scheduled message is one notification however often this runs.
+    try {
+      const ps = await dispatchPastSelf({
+        listIds: getAllPastSelfIds,
+        getRecord: getPastSelf,
+        getSubscriptions,
+        alreadySent, markSent, unmarkSent,
+        send: sendPush,
+        onResult: (installId, profileId, r) => updateDiagnostics(installId, profileId, {
+          lastPushAttempt: new Date().toISOString(),
+          lastPushType: PAST_SELF_TYPE,
+          lastPushResult: r.accepted > 0 ? 'accepted' : 'failed',
+          ...(r.accepted > 0 ? { lastPushAccepted: new Date().toISOString() } : {}),
+          failureReason: r.accepted > 0 ? null : String(r.error || 'no active subscriptions'),
+        }).catch(() => {}),
+      });
+      summary.pastSelfSent = ps.sent;
+      summary.sent += ps.sent;
+      summary.errors += ps.errors;
+      summary.cleaned += ps.cleaned;
+    } catch {
+      summary.errors++;
+    }
+
     return res.status(200).json({ ok: true, ranAt: startedAt, ...summary });
   } catch (err) {
     return res.status(500).json({ error: 'Dispatch failed', detail: String(err?.message || err), ...summary });

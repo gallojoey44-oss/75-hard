@@ -36,6 +36,7 @@ import { displayXP, scaleOfMeta, scaleOfArchive } from '../utils/xpDisplay';
 import { checkStackEras } from '../utils/eraSafety';
 import { recentGap, shouldShowComeback, missedDayDetail, buildXPHistory } from '../utils/missedDays';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
+import { readPastSelf } from '../utils/pastSelf';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -2072,6 +2073,25 @@ export function AppProvider({ children }) {
     }));
   }, [activeProfile, setProfiles]);
 
+  /**
+   * Letters to my future self and the short messages sent back — one field on
+   * the profile, `pastSelf`, changed only through this.
+   *
+   * It takes a function of the CURRENT stored value rather than a new value, so
+   * two edits made in quick succession cannot overwrite each other. Nothing but
+   * `pastSelf` is written: no task, day record, XP figure or archive is ever
+   * touched from here, which is the structural reason reading or receiving a
+   * message can never complete a habit or award anything.
+   */
+  const updatePastSelf = useCallback((fn, profId = activeProfile) => {
+    if (!profId || typeof fn !== 'function') return;
+    setProfiles(prev => {
+      if (!prev[profId]) return prev;
+      const next = fn(readPastSelf(prev[profId]));
+      return { ...prev, [profId]: { ...prev[profId], pastSelf: next } };
+    });
+  }, [activeProfile, setProfiles]);
+
   const addTask = useCallback((taskData) => {
     if (!activeProfile) return;
     const tasks = profile?.tasks || [];
@@ -3112,7 +3132,7 @@ export function AppProvider({ children }) {
       completeChallenge, dismissCompletion, startForgeDaily,
       getDayCompletion, getStreak, getLongestStreak,
       updateDay, toggleTask,
-      startChallenge, setChallengeStart, updateProfile,
+      startChallenge, setChallengeStart, updateProfile, updatePastSelf,
       // Archives
       archives, restoreArchive, deleteArchive, deleteAllProfileData,
       // Template sync

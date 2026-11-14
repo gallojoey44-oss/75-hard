@@ -9,7 +9,16 @@ import SettingsView from './components/SettingsView';
 import BottomNav from './components/BottomNav';
 import { applyUpdate } from './utils/swUtils.js';
 import { getTodayStr } from './utils/dateUtils';
-import { getDueReminders, getNotificationSupport, showNotification, markFired, syncPushSchedule } from './utils/notificationUtils';
+import {
+  getDueReminders, getNotificationSupport, showNotification, markFired, syncPushSchedule,
+  syncPastSelf, subscribeToPush, localSubscriptionState, alreadyFiredToday, inQuietHours,
+} from './utils/notificationUtils';
+import FutureSelfSpace from './components/pastself/FutureSelfSpace';
+import PastSelfReveal from './components/pastself/PastSelfReveal';
+import { readPastSelf, buildSyncBody, deliveryActive, eligibleMessages, scheduledDays, todayLocalDate } from './utils/pastSelf';
+import { buildPayload, isScheduledDay, PAST_SELF_TYPE, PAST_SELF_VIEW } from '../api/_lib/pastSelf.js';
+import { CATCH_UP_MINUTES } from '../api/_lib/schedule.js';
+import { setPastSelfStatus, onPastSelfSyncRequested } from './utils/pastSelfStatus';
 import { challengeOf, isSharedTask, LANE } from './utils/challengeStack';
 import { getTimezone } from './utils/installId';
 import { computeTotalXP, getMWDComplete } from './utils/gamification';
@@ -164,6 +173,124 @@ function NotificationScheduler() {
   return null;
 }
 
+// Messages from your past self: keeps the server in step, and delivers in-app
+// when the server cannot.
+//
+// A separate component from NotificationScheduler on purpose. The reminder
+// scheduler replaces the whole reminder schedule on every sync and returns
+// early when reminders are off or no challenge day exists; none of that should
+// decide whether somebody receives their own words, and none of this should be
+// able to disturb a reminder. They share nothing but the send-once log.
+//
+// ONE notification per scheduled message is guaranteed in two layers. The
+// server claims a slot per profile per local date before it sends. And the
+// in-app path below runs only when there is NO background push for this device
+// to deliver through — so the two can never both fire for the same day.
+const PUSH_BACKEND_CONFIGURED = !!import.meta.env.VITE_VAPID_PUBLIC_KEY;
+
+function PastSelfScheduler() {
+  const { activeProfile, profile, notifPrefs } = useApp();
+  const lastSig = useRef({});            // profileId → signature last accepted by the server
+  const ensuredSub = useRef({});         // profileId → subscription registered this session
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => onPastSelfSyncRequested(() => {
+    lastSig.current = {};
+    setRetry(n => n + 1);
+  }), []);
+
+  useEffect(() => {
+    if (!activeProfile || !profile) return undefined;
+    let cancelled = false;
+    const quietHours = notifPrefs?.[activeProfile]?.quietHours || null;
+
+    async function sync() {
+      const state = readPastSelf(profile);
+      const body = buildSyncBody(state, { timezone: getTimezone(), quietHours });
+      // The date is part of the signature so an app opened on a new day syncs
+      // once, which is what keeps the server record from expiring.
+      const sig = JSON.stringify({ body, day: getTodayStr() });
+      if (lastSig.current[activeProfile] === sig) return;
+
+      if (!PUSH_BACKEND_CONFIGURED) {
+        lastSig.current[activeProfile] = sig;
+        setPastSelfStatus(activeProfile, { state: 'unavailable', stored: false, contentStored: 0 });
+        return;
+      }
+      setPastSelfStatus(activeProfile, { state: 'syncing' });
+      if (body.enabled && !ensuredSub.current[activeProfile] && getNotificationSupport().permission === 'granted') {
+        // The server needs somewhere to send to, so make sure this device's
+        // subscription is registered for this profile — once per session, and
+        // NOT awaited: it waits on the service worker and the browser's push
+        // service, either of which can stall, and the schedule must not be
+        // held hostage to them. The two requests are independent server-side.
+        ensuredSub.current[activeProfile] = true;
+        subscribeToPush(activeProfile)
+          .then(r => { if (!r?.ok) ensuredSub.current[activeProfile] = false; })
+          .catch(() => { ensuredSub.current[activeProfile] = false; });
+      }
+      const res = await syncPastSelf(activeProfile, body);
+      if (cancelled) return;
+      if (res.ok) {
+        lastSig.current[activeProfile] = sig;
+        setPastSelfStatus(activeProfile, { state: 'ok', stored: res.stored, contentStored: res.contentStored });
+      } else {
+        // Not recorded as synced, so the next tick tries again. Until it
+        // succeeds the screen says the server's state is unknown.
+        setPastSelfStatus(activeProfile, { state: 'error' });
+      }
+    }
+
+    async function deliverInApp() {
+      const state = readPastSelf(profile);
+      if (!deliveryActive(state)) return;
+      const support = getNotificationSupport();
+      if (!support.supported || support.permission !== 'granted') return;
+
+      const now = new Date();
+      const today = todayLocalDate(now);
+      const d = state.delivery;
+      const days = scheduledDays(d);
+      if (!isScheduledDay(today, days)) return;
+      if (inQuietHours(quietHours, now)) return;
+      const [h, m] = d.time.split(':').map(Number);
+      const late = now.getHours() * 60 + now.getMinutes() - (h * 60 + m);
+      if (late < 0 || late > CATCH_UP_MINUTES) return;
+      if (alreadyFiredToday(activeProfile, PAST_SELF_TYPE, today)) return;
+
+      // Background push exists for this device: the server delivers, not us.
+      // Asked fresh every time rather than remembered, because a subscription
+      // created or dropped mid-session would otherwise leave both senders, or
+      // neither, believing the message was theirs to send.
+      if (PUSH_BACKEND_CONFIGURED) {
+        const hasSub = !!(await localSubscriptionState()).hasSubscription;
+        if (cancelled || hasSub) return;
+        // Checked again: another tick may have sent while this one waited.
+        if (alreadyFiredToday(activeProfile, PAST_SELF_TYPE, today)) return;
+      }
+
+      const messages = eligibleMessages(state);
+      const payload = buildPayload({
+        showContent: d.showContent && messages.length > 0,
+        rotation: messages.map(x => ({ id: x.id, text: x.text })),
+        days,
+      }, today, activeProfile);
+      markFired(activeProfile, PAST_SELF_TYPE, today);
+      showNotification({
+        title: payload.title, body: payload.body, tag: payload.tag, renotify: true, view: payload.view,
+        data: { profile: activeProfile, date: today, ...(payload.msg ? { msg: payload.msg } : {}) },
+      });
+    }
+
+    // Debounced: a change to the time picker fires on every step.
+    const first = setTimeout(() => { sync(); deliverInApp(); }, 700);
+    const id = setInterval(() => { sync(); deliverInApp(); }, 60 * 1000);
+    return () => { cancelled = true; clearTimeout(first); clearInterval(id); };
+  }, [activeProfile, profile, notifPrefs, retry]);
+
+  return null;
+}
+
 // Challenge lifecycle: when a fixed-duration challenge has run past its final
 // day, auto-complete it (archive + return to Forge Daily) so the app never
 // stays frozen on "Day N of N". Checks on mount and every minute (to catch a
@@ -209,21 +336,36 @@ function ChallengeLifecycle() {
 function AppContent() {
   const { activeProfile } = useApp();
   const [view, setView] = useState('home');
+  // Letters to My Future Self is a place, not a tab: it remembers which screen
+  // it was opened from so Back returns there, and which of its parts to show.
+  const [space, setSpace] = useState({ from: 'home', tab: 'letters' });
+  // A message from a past self being read. Held here, above the views, so a
+  // notification can open it whatever screen the app happens to be on.
+  const [reveal, setReveal] = useState(null);
 
   // Notification taps: the service worker posts FORGE_NAVIGATE with the
   // target view (also honors a ?view= param when opened cold).
   useEffect(() => {
+    // A past-self message is not a screen to switch to. It opens over whatever
+    // is showing, carrying the identifiers the notification was sent with.
+    const openMessage = (src) => setReveal({
+      msg: src.msg || null, profile: src.profile || null, date: src.date || null,
+    });
+
     const params = new URLSearchParams(window.location.search);
     const target = params.get('view');
-    if (target && ['home', 'today', 'insights', 'challenges', 'settings'].includes(target)) {
+    if (target === PAST_SELF_VIEW) {
+      openMessage({ msg: params.get('msg'), profile: params.get('profile'), date: params.get('date') });
+      window.history.replaceState({}, '', '/');
+    } else if (target && ['home', 'today', 'insights', 'challenges', 'settings'].includes(target)) {
       setView(target);
       window.history.replaceState({}, '', '/');
     }
     if (!('serviceWorker' in navigator)) return undefined;
     const handler = (e) => {
-      if (e.data?.type === 'FORGE_NAVIGATE' && e.data.view) {
-        setView(e.data.view === 'calendar' ? 'today' : e.data.view);
-      }
+      if (e.data?.type !== 'FORGE_NAVIGATE' || !e.data.view) return;
+      if (e.data.view === PAST_SELF_VIEW) { openMessage(e.data); return; }
+      setView(e.data.view === 'calendar' ? 'today' : e.data.view);
     };
     navigator.serviceWorker.addEventListener('message', handler);
     return () => navigator.serviceWorker.removeEventListener('message', handler);
@@ -239,16 +381,43 @@ function AppContent() {
     setView(v === 'calendar' ? 'today' : v);
   }
 
+  function openFutureSelf(tab) {
+    setSpace({ from: view === 'futureself' ? space.from : view, tab: tab || 'letters' });
+    setView('futureself');
+  }
+
   return (
     <div className="app" data-profile={activeProfile}>
       <main className="main-content">
-        {view === 'home' && <Dashboard setView={navigate} />}
+        {view === 'home' && (
+          <Dashboard
+            setView={navigate}
+            onOpenFutureSelf={openFutureSelf}
+            onReadPastSelf={() => setReveal({ profile: activeProfile, date: null, msg: null })}
+          />
+        )}
         {view === 'today' && <DailyView editDayNum={null} setView={navigate} />}
         {view === 'insights'   && <InsightsView />}
         {view === 'challenges' && <ChallengesView setView={navigate} />}
-        {view === 'settings'   && <SettingsView setView={navigate} />}
+        {view === 'settings'   && <SettingsView setView={navigate} onOpenFutureSelf={openFutureSelf} />}
+        {view === 'futureself' && (
+          <FutureSelfSpace
+            key={`${activeProfile}:${space.tab}`}
+            initialTab={space.tab}
+            onBack={() => setView(space.from || 'home')}
+            onPreviewMessage={(id) => setReveal({ profile: activeProfile, msg: id, date: null })}
+          />
+        )}
       </main>
-      <BottomNav view={view} setView={navigate} />
+      {/* The bottom bar has no tab for it; the screen it was opened from stays lit. */}
+      <BottomNav view={view === 'futureself' ? (space.from || 'home') : view} setView={navigate} />
+      {reveal && (
+        <PastSelfReveal
+          target={reveal}
+          onClose={() => setReveal(null)}
+          onOpenSpace={openFutureSelf}
+        />
+      )}
     </div>
   );
 }
@@ -259,6 +428,7 @@ export default function App() {
       {/* Banner lives outside AppContent so it renders on every screen */}
       <UpdateBanner />
       <NotificationScheduler />
+      <PastSelfScheduler />
       <ChallengeLifecycle />
       <AppContent />
     </AppProvider>

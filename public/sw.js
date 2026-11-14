@@ -164,7 +164,7 @@ self.addEventListener('push', event => {
         renotify: data.renotify === true,
         icon: '/icon.svg',
         badge: '/icon.svg',
-        data: { view: data.view || 'today' },
+        data: notificationData(data),
       });
     } catch {
       // Still try to confirm receipt — the push DID arrive even if the display
@@ -193,6 +193,21 @@ self.addEventListener('push', event => {
   })());
 });
 
+// What a notification carries back to the app when it is tapped.
+//
+// Reminders only ever needed a view. A message from a past self also has to say
+// WHICH message it was, which profile it belongs to, and the local date it was
+// sent for — so that tapping it tomorrow morning, or on a phone two people
+// share, still opens the right words for the right person. The extra fields are
+// identifiers and a date; the message text itself is never put in here.
+function notificationData(data) {
+  const out = { view: (data && data.view) || 'today' };
+  for (const key of ['msg', 'profile', 'date']) {
+    if (data && typeof data[key] === 'string' && data[key]) out[key] = data[key];
+  }
+  return out;
+}
+
 // The SW has no access to localStorage, so the app mirrors the install id and
 // active profile into a Cache entry it can read. Written by the app on every
 // subscribe/sync (see notificationUtils.publishInstallIdentity).
@@ -211,16 +226,24 @@ async function readInstallIdentity() {
 // ── Notification click: focus the app (or open it) and navigate to the right page
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const view = event.notification.data?.view || 'today';
+  const data = event.notification.data || {};
+  const view = data.view || 'today';
+  // Identifiers for a past-self message ride along with the view, both to an
+  // app that is already open and in the URL of one that has to be launched.
+  const extra = {};
+  for (const key of ['msg', 'profile', 'date']) {
+    if (typeof data[key] === 'string' && data[key]) extra[key] = data[key];
+  }
+  const query = new URLSearchParams({ view, ...extra }).toString();
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
       for (const client of clients) {
         if (client.url.startsWith(self.location.origin)) {
-          client.postMessage({ type: 'FORGE_NAVIGATE', view });
+          client.postMessage({ type: 'FORGE_NAVIGATE', view, ...extra });
           return client.focus();
         }
       }
-      return self.clients.openWindow(`/?view=${encodeURIComponent(view)}`);
+      return self.clients.openWindow(`/?${query}`);
     })
   );
 });
