@@ -403,6 +403,82 @@ check('8: the preview shows the private sentence by default and the real words o
   client.previewNotification(active, '2026-11-16', { reveal: false }).body === 'A message from your past self is ready.' &&
   client.previewNotification(active, '2026-11-16', { reveal: true }).body === 'm');
 
+// ══ 9: one profile opting out never silences the other ═════════════════════
+// A device has ONE push subscription. Both profiles share it in the browser,
+// and on the server it is stored once, under its endpoint. So unsubscribing on
+// behalf of one profile takes the other's notifications with it — which is why
+// anything about to unsubscribe has to ask whether something else still needs it.
+{
+  const on = client.updateDelivery(client.saveMessage(client.readPastSelf({}), { text: 'm' }), { enabled: true });
+  const off = client.readPastSelf({});
+  const profs = (me, gf) => ({ me: { pastSelf: me }, girlfriend: { pastSelf: gf } });
+  const prefs = (me, gf) => ({ me: { masterEnabled: me }, girlfriend: { masterEnabled: gf } });
+  const need = client.pushStillNeeded;
+
+  check('9: with everything off, nothing needs the subscription',
+    need(profs(off, off), prefs(false, false)) === false);
+  check('9: switching off my own messages, with nothing else on, frees it',
+    need(profs(on, off), prefs(false, false), { pastSelf: 'me' }) === false);
+  check('9: …but not while my reminders are still on',
+    need(profs(on, off), prefs(true, false), { pastSelf: 'me' }) === true);
+  check('9: …and not while the OTHER profile still has messages on',
+    need(profs(on, on), prefs(false, false), { pastSelf: 'me' }) === true);
+  check('9: …or the other profile still has reminders on',
+    need(profs(on, off), prefs(false, true), { pastSelf: 'me' }) === true);
+  check('9: switching off my reminders keeps it while my own messages are on',
+    need(profs(on, off), prefs(true, false), { reminders: 'me' }) === true);
+  check('9: switching off my reminders keeps it while the other profile uses it',
+    need(profs(off, on), prefs(true, false), { reminders: 'me' }) === true &&
+    need(profs(off, off), prefs(true, true), { reminders: 'me' }) === true);
+  check('9: switching off my reminders, with nothing else on, frees it',
+    need(profs(off, off), prefs(true, false), { reminders: 'me' }) === false);
+  check('9: messages switched on with nothing written do not count as needing it',
+    need(profs(client.updateDelivery(off, { enabled: true }), off), prefs(false, false)) === false);
+  check('9: missing profiles or preferences are read as off, not as an error',
+    need(undefined, undefined) === false && need({}, {}) === false);
+
+  // The server-side half of the same fact: the two profiles' subscriptions on
+  // one device are ONE stored record.
+  db.clear(); sets.clear();
+  const shared = { endpoint: 'https://push.example.test/send/device-1', keys: { p256dh: 'p', auth: 'a' } };
+  await store.saveSubscription('inst-9', 'me', shared);
+  await store.saveSubscription('inst-9', 'girlfriend', shared);
+  check('9: both profiles can be reached through the one stored subscription',
+    (await store.getSubscriptions('inst-9', 'me')).length === 1 &&
+    (await store.getSubscriptions('inst-9', 'girlfriend')).length === 1);
+  await store.removeSubscription('inst-9', 'me', shared.endpoint);
+  check('9: removing it for one profile removes it for both — hence the guard',
+    (await store.getSubscriptions('inst-9', 'girlfriend')).length === 0);
+}
+
+// ══ 10: nothing was added that Forge would have to pay for or migrate ══════
+{
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const root = process.cwd();
+  const functions = [
+    ...readdirSync(resolve(root, 'api/push')).map(f => `push/${f}`),
+    ...readdirSync(resolve(root, 'api/cron')).map(f => `cron/${f}`),
+  ].filter(f => f.endsWith('.js')).sort();
+  check('10: there are still exactly nine serverless functions — none was added',
+    functions.length === 9, functions.join(', '));
+  check('10: no past-self endpoint exists; it rides on /api/push/sync and the dispatcher',
+    !functions.some(f => /past|letter|message/i.test(f)));
+
+  const settings = readFileSync(resolve(root, 'src/components/SettingsView.jsx'), 'utf8');
+  const keys = settings.match(/const LS_KEYS = \[([^\]]+)\]/)?.[1].replace(/['\s]/g, '').split(',') || [];
+  check('10: the backup still covers the same nine keys, in the same order',
+    keys.join() === 'profiles,allDays,activeProfile,quoteData,experiments,dismissedHints,archives,notifPrefs,weeklyReflections',
+    keys.join());
+  check('10: letters and messages need no key of their own — they live on the profile',
+    client.readPastSelf({ pastSelf: client.saveLetter(client.readPastSelf({}), { body: 'kept' }) }).letters[0].body === 'kept');
+
+  const nav = readFileSync(resolve(root, 'src/components/BottomNav.jsx'), 'utf8');
+  const tabs = [...nav.matchAll(/id:\s*'([a-z]+)'/g)].map(m => m[1]);
+  check('10: the bottom bar still has its five tabs and no sixth',
+    tabs.join() === 'home,today,insights,challenges,settings', tabs.join());
+}
+
 const failed = results.filter(x => !x.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
 process.exit(failed.length ? 1 : 0);

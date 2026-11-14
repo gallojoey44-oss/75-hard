@@ -227,6 +227,24 @@ export function deliveryActive(state) {
 }
 
 /**
+ * Whether anything on this device still sends through its push subscription.
+ *
+ * There is ONE subscription per device. Both profiles share it — in the
+ * browser, and on the server, where it is stored once under its endpoint — so
+ * dropping it on behalf of one profile silences the other as well. Anything
+ * that is about to unsubscribe asks this first, naming in `ignore` the one
+ * thing being switched off right now:
+ *
+ *   pushStillNeeded(profiles, notifPrefs, { pastSelf: 'me' })     // me's messages going off
+ *   pushStillNeeded(profiles, notifPrefs, { reminders: 'me' })    // me's reminders going off
+ */
+export function pushStillNeeded(profiles, notifPrefs, ignore = {}) {
+  return ['me', 'girlfriend'].some(id =>
+    (notifPrefs?.[id]?.masterEnabled === true && ignore.reminders !== id)
+    || (ignore.pastSelf !== id && deliveryActive(readPastSelf(profiles?.[id]))));
+}
+
+/**
  * Exactly what is sent to the server for this profile.
  *
  * This function is the privacy boundary, and it is short on purpose. With

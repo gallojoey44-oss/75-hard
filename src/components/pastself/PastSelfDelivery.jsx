@@ -8,7 +8,7 @@ import {
 import {
   updateDelivery, eligibleMessages, hasSomethingToSend, deliveryActive,
   previewNotification, nextDelivery, describeNext, describeDays, formatTime,
-  todayLocalDate, WEEKDAYS, readPastSelf,
+  todayLocalDate, WEEKDAYS, pushStillNeeded,
 } from '../../utils/pastSelf';
 import { buildPayload } from '../../../api/_lib/pastSelf.js';
 import {
@@ -90,7 +90,7 @@ export default function PastSelfDelivery({ state, update, onGoToMessages }) {
     // The push subscription itself is dropped too when nothing else on this
     // device still needs it — it is one subscription per device, shared by
     // both profiles, so it stays if either profile has anything switched on.
-    if (!pushStillNeeded(activeProfile, profiles, notifPrefs)) {
+    if (!pushStillNeeded(profiles, notifPrefs, { pastSelf: activeProfile })) {
       unsubscribeFromPush(activeProfile).catch(() => {}).finally(refreshLocal);
     }
   }
@@ -147,6 +147,14 @@ export default function PastSelfDelivery({ state, update, onGoToMessages }) {
         {support.supported && support.permission === 'denied' && !notice && (
           <div className="notif-banner warn">
             Notifications are blocked for Forge in your device settings, so nothing can be delivered. Allow them there to use this.
+          </div>
+        )}
+        {d.enabled && support.supported && support.permission === 'default' && !notice && (
+          // Reached by restoring a backup onto a new phone, or after the phone
+          // itself forgot the permission: the setting is on, the device is not.
+          <div className="notif-banner warn" data-testid="needs-permission">
+            This is switched on, but this device has not allowed notifications yet, so nothing can arrive.{' '}
+            <button type="button" className="ps-inline-link" onClick={turnOn}>Allow notifications</button>
           </div>
         )}
         {support.iosNeedsInstall && !notice && (
@@ -336,17 +344,6 @@ export default function PastSelfDelivery({ state, update, onGoToMessages }) {
       </section>
     </div>
   );
-}
-
-/**
- * Whether anything on this device still sends through the push subscription
- * once `leaving` has switched past-self messages off: that profile's own
- * reminders, or the other profile's reminders or past-self messages.
- */
-function pushStillNeeded(leaving, profiles, notifPrefs) {
-  return ['me', 'girlfriend'].some(id =>
-    notifPrefs?.[id]?.masterEnabled
-    || (id !== leaving && deliveryActive(readPastSelf(profiles?.[id]))));
 }
 
 /** What the server says it is holding, said plainly — including "unknown". */

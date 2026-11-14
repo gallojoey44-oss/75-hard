@@ -202,11 +202,21 @@ function PastSelfScheduler() {
   useEffect(() => {
     if (!activeProfile || !profile) return undefined;
     let cancelled = false;
-    const quietHours = notifPrefs?.[activeProfile]?.quietHours || null;
+    // The same default the reminders and the Delivery screen use, so what the
+    // screen warns about and what the server honours cannot differ.
+    const quietHours = notifPrefs?.[activeProfile]?.quietHours || { start: '22:30', end: '07:00' };
 
     async function sync() {
       const state = readPastSelf(profile);
-      const body = buildSyncBody(state, { timezone: getTimezone(), quietHours });
+      // A device that cannot show a notification has no use for a schedule on
+      // the server, and certainly none for the user's words. So when permission
+      // is missing — never granted, or taken away in the phone's settings —
+      // whatever was stored for this device is removed rather than kept.
+      const support = getNotificationSupport();
+      const canReceive = support.supported && support.permission === 'granted';
+      const body = canReceive
+        ? buildSyncBody(state, { timezone: getTimezone(), quietHours })
+        : { kind: 'pastSelf', enabled: false };
       // The date is part of the signature so an app opened on a new day syncs
       // once, which is what keeps the server record from expiring.
       const sig = JSON.stringify({ body, day: getTodayStr() });
@@ -218,7 +228,10 @@ function PastSelfScheduler() {
         return;
       }
       setPastSelfStatus(activeProfile, { state: 'syncing' });
-      if (body.enabled && !ensuredSub.current[activeProfile] && getNotificationSupport().permission === 'granted') {
+      // Switched off: the subscription may be dropped, so it is not assumed
+      // to be there the next time this is switched on.
+      if (!body.enabled) ensuredSub.current[activeProfile] = false;
+      if (body.enabled && !ensuredSub.current[activeProfile]) {
         // The server needs somewhere to send to, so make sure this device's
         // subscription is registered for this profile — once per session, and
         // NOT awaited: it waits on the service worker and the browser's push

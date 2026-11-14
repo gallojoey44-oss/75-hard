@@ -15,7 +15,7 @@ import {
 } from '../data/reminderPlan';
 import { reminderPreview } from '../data/reminderCopy';
 import {
-  readPastSelf, deliveryActive, describeDays, formatTime,
+  readPastSelf, deliveryActive, describeDays, formatTime, pushStillNeeded,
 } from '../utils/pastSelf';
 
 // VITE_VAPID_PUBLIC_KEY is inlined at BUILD time. If it was missing when the
@@ -44,7 +44,7 @@ function fmtRelative(iso) {
 
 export default function NotificationSettings({ onOpenFutureSelf = null }) {
   const {
-    activeProfile, profile, notifPrefs, updateNotifPrefs,
+    activeProfile, profile, profiles, notifPrefs, updateNotifPrefs,
     getChallengeMeta, getRawDayNumber, getDayData,
   } = useApp();
   const prefs = notifPrefs[activeProfile] || makeDefaultNotifPrefs();
@@ -102,10 +102,11 @@ export default function NotificationSettings({ onOpenFutureSelf = null }) {
   async function handleMasterToggle() {
     const next = !prefs.masterEnabled;
     updateNotifPrefs({ masterEnabled: next });
-    // Switching reminders off used to drop the push subscription outright. It
-    // must not when past-self messages are on: they are sent through the same
-    // subscription, and the user has not asked for those to stop.
-    if (!next && !pastSelfOn) await unsubscribeFromPush(activeProfile).catch(() => {});
+    // Switching reminders off used to drop the push subscription outright.
+    // The subscription is one per DEVICE, though, shared by both profiles and
+    // by messages from a past self — so dropping it here also silenced
+    // whatever else was still switched on. It is dropped only when nothing is.
+    if (!next && !pushStillNeeded(profiles, notifPrefs, { reminders: activeProfile })) await unsubscribeFromPush(activeProfile).catch(() => {});
     else if (next && support.permission === 'granted') await subscribeToPush(activeProfile);
     setTimeout(refreshDiag, 800);
   }
