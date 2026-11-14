@@ -403,6 +403,19 @@ check('8: the preview shows the private sentence by default and the real words o
   client.previewNotification(active, '2026-11-16', { reveal: false }).body === 'A message from your past self is ready.' &&
   client.previewNotification(active, '2026-11-16', { reveal: true }).body === 'm');
 
+// A bare date is a calendar day: west of Greenwich it must not slip to the day before.
+{
+  const tz = process.env.TZ;
+  process.env.TZ = 'America/Los_Angeles';
+  check('8: a letter dated 2026-11-05 reads as the 5th in Los Angeles, not the 4th',
+    /\b5\b/.test(client.formatWritten('2026-11-05')) && !/\b4\b/.test(client.formatWritten('2026-11-05')), client.formatWritten('2026-11-05'));
+  process.env.TZ = 'Pacific/Auckland';
+  check('8: and as the 5th in Auckland too', /\b5\b/.test(client.formatWritten('2026-11-05')), client.formatWritten('2026-11-05'));
+  if (tz === undefined) delete process.env.TZ; else process.env.TZ = tz;
+  check('8: a date that cannot be read is shown as it is, never as "Invalid Date"',
+    client.formatWritten('sometime in spring') === 'sometime in spring' && client.formatWritten('') === '');
+}
+
 // ══ 9: one profile opting out never silences the other ═════════════════════
 // A device has ONE push subscription. Both profiles share it in the browser,
 // and on the server it is stored once, under its endpoint. So unsubscribing on

@@ -25,11 +25,15 @@ import {
  */
 export default function PastSelfReveal({ target, onClose, onOpenSpace }) {
   const { activeProfile, profile, profiles, setActiveProfile } = useApp();
-  const closeRef = useRef(null);
+  const dialogRef = useRef(null);
   const [reading, setReading] = useState(null);     // a letter opened from here
 
   useEffect(() => {
-    closeRef.current?.focus();
+    // Focus moves to the dialog itself, not to a button inside it: a screen
+    // reader announces the dialog, a keyboard reaches its controls with Tab,
+    // and nobody who simply tapped a notification is greeted by a focus ring
+    // around the close button.
+    dialogRef.current?.focus();
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -50,9 +54,9 @@ export default function PastSelfReveal({ target, onClose, onOpenSpace }) {
   const letter = reading || (shown.kind === 'letter' ? shown.letter : null);
 
   return (
-    <div className="ps-reveal" role="dialog" aria-modal="true" aria-label="A message from your past self" data-testid="past-self-reveal">
+    <div ref={dialogRef} tabIndex={-1} className="ps-reveal" role="dialog" aria-modal="true" aria-label="A message from your past self" data-testid="past-self-reveal">
       <div className="ps-reveal-glow" aria-hidden="true" />
-      <button ref={closeRef} type="button" className="ps-reveal-close" onClick={onClose} aria-label="Close">✕</button>
+      <button type="button" className="ps-reveal-close" onClick={onClose} aria-label="Close">✕</button>
 
       <div className="ps-reveal-inner">
         {shown.kind === 'other' && (

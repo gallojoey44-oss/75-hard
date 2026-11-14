@@ -28,6 +28,8 @@ node tests/run.mjs fatloss-duration      # matches by name
 | --- | --- | --- |
 | `fatloss-duration-unit-test.mjs` | unit | Fat Loss 14/30/60 duration options, defaults, labels, per-duration completion bonuses and XP balance, duration-aware program copy, scoping to other templates |
 | `fatloss-duration-e2e-test.mjs` | e2e | Duration setup UI, persistence per attempt, completion timing at day 14/30/60, archives, legacy 30-day attempts, backup/restore, current-day fairness |
+| `past-self-unit-test.mjs` | unit | Letters to My Future Self: weekday and time-zone scheduling across both DST changes, rotation, the privacy boundary (what is and is not uploaded), send-once dispatch, the shared-subscription guard, and that no function, storage key or tab was added |
+| `past-self-e2e-test.mjs` | e2e | The same feature in a browser: letters, messages, scheduling, both profiles, refused permission, backup and restore, and delivery through the real dispatcher and service worker. Builds a second copy of the app with a placeholder VAPID key on **:4174** and needs full Chromium (`channel: 'chromium'`), because the headless shell reports notifications as denied. `PS_ONLY=A,C,D,E` runs chosen parts |
 | `smoke-e2e-test.mjs` | e2e | Broad regression pass: navigation, task logging, XP, challenge performance, current-day neutrality, bonus-mission exclusion, insights, settings, backup/restore, profile separation |
 
 ## Note on history

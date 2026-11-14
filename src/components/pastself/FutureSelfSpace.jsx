@@ -186,7 +186,7 @@ function LettersTab({ state, update, challengeLetters }) {
                   <span className="ps-letter-card-title">{c.name}</span>
                   <span className="ps-letter-card-date">
                     {c.current ? 'Current challenge' : 'Completed challenge'}
-                    {c.letter.writtenAt ? ` · written ${c.letter.writtenAt}` : ''}
+                    {c.letter.writtenAt ? ` · written ${formatWritten(c.letter.writtenAt)}` : ''}
                   </span>
                 </button>
               </li>

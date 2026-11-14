@@ -162,6 +162,32 @@ On Pro, change `vercel.json` to `"schedule": "* * * * *"` and drop options A/B.
    Notifications → e.g. Water), reopen the Today screen once so the schedule
    syncs, then close Forge and lock the phone again.
 
+## Messages from your past self
+
+Letters to My Future Self (Home → *A Message to My Future Self*) sends through
+this same pipeline. It needs **no extra setup**: no new environment variable, no
+new serverless function, no new cron. If reminders arrive in the background, so
+will these.
+
+What the server holds for it, per install and profile, under `push:pastself:*`:
+
+| Setting on the phone | Stored on the server |
+|---|---|
+| Delivery off | Nothing. Switching it off deletes the record. |
+| Delivery on (default, private) | A time, the chosen weekdays, the time zone and quiet hours. **No text.** The notification reads *Forge — A message from your past self is ready.* |
+| Delivery on + *Show my message in the notification* | The above, plus the **short messages that are switched on** (or the one chosen message). Switching the option off deletes them. |
+
+Letters are never uploaded under any setting. `/api/push/status` reports how
+many messages are stored, never what they say.
+
+The dispatcher sends at most one of these per profile per local day, using the
+same send-once claim as the reminders. Like the reminders it arrives *shortly
+after* the chosen time — within one dispatcher interval — not on the minute, and
+a message more than 90 minutes overdue is skipped for that day.
+
+To verify on the phone: Home → A Message to My Future Self → Delivery, set the
+time a few minutes ahead, switch it on, then close Forge and lock the phone.
+
 ## Troubleshooting
 
 | Symptom | Cause |
@@ -173,3 +199,4 @@ On Pro, change `vercel.json` to `"schedule": "* * * * *"` and drop options A/B.
 | *Dispatcher running: Never run* | Step 5 not done, or the GitHub secrets are unset |
 | Queued test never arrives, dispatcher live | Check *Last error* in diagnostics; a `410 Gone` means the subscription was revoked — toggle Notifications off and on |
 | Nothing fires at a reminder time | Check *In quiet hours* and *Due now* in diagnostics |
+| A past-self message did not arrive | Its time is inside quiet hours (the Delivery screen warns), today is not one of the chosen days, or notifications are not allowed on this device — in which case nothing is stored for it at all |

@@ -201,6 +201,14 @@ function driver(page) {
     /** Hand the app what the service worker would post when a notification is tapped. */
     deliver: (message) => page.evaluate((m) => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: m })), message),
     reveal: () => page.locator('[data-testid="past-self-reveal"]'),
+    /** True when the bottom bar is at the bottom of the screen and the page itself cannot scroll away from it. */
+    anchored: () => page.evaluate(() => {
+      window.scrollTo(0, 99999);
+      const nav = document.querySelector('.bottom-nav').getBoundingClientRect();
+      const ok = document.documentElement.scrollHeight <= window.innerHeight + 1 && Math.abs(nav.bottom - window.innerHeight) <= 1;
+      window.scrollTo(0, 0);
+      return ok;
+    }),
     xp: () => page.evaluate(() => document.querySelector('.xp-value')?.textContent?.trim() || null),
   };
   return d;
@@ -426,6 +434,9 @@ async function lettersAndProfiles() {
   const fromChallenges = pa.locator('.ps-section', { hasText: 'From your challenges' });
   check('A4: the challenge letters are listed alongside', (await fromChallenges.locator('.ps-letter-card').count()) === 2,
     `${await fromChallenges.locator('.ps-letter-card').count()} listed`);
+  check('A4: each dated the day it was written, in words rather than as a raw date',
+    !/\d{4}-\d{2}-\d{2}/.test(await fromChallenges.innerText()) && /written \w+ \d{1,2}, \d{4}/i.test(await fromChallenges.innerText()),
+    (await fromChallenges.innerText()).replace(/\s+/g, ' ').slice(-90));
   await fromChallenges.locator('.ps-letter-card', { hasText: 'Current challenge' }).click();
   check('A4: the running challenge\'s letter opens in the existing viewer',
     (await pa.locator('.letter-modal').innerText()).includes(ACTIVE_WHY));
@@ -519,6 +530,37 @@ async function lettersAndProfiles() {
     && !/\bXP\b/.test(await A.reveal().innerText()));
   await pa.keyboard.press('Escape');
   check('A6: Escape closes it', (await A.reveal().count()) === 0);
+
+  // A long letter — longer than the screen — opened from a message.
+  const longBody = Array.from({ length: 60 }, (_, i) => `Line ${i + 1} of a long letter to myself.`).join('\n');
+  await A.tab('Letters');
+  await A.writeLetter({ title: 'The long one', body: longBody });
+  const longId = (await A.ps()).letters.find(l => l.title === 'The long one').id;
+  await A.tab('Messages');
+  await pa.locator('.ps-msg', { hasText: 'MSG-CANARY-A3' }).locator('.ps-link', { hasText: 'Preview' }).click();
+  await pa.waitForSelector('[data-testid="past-self-reveal"]');
+  await pa.locator('.ps-reveal .btn-ghost', { hasText: 'Read my letter' }).click();
+  await pa.waitForTimeout(1500);
+  const tall = await pa.evaluate(() => {
+    const box = document.querySelector('.ps-reveal');
+    const top = (sel) => Math.round(document.querySelector(sel).getBoundingClientRect().top);
+    const before = { scrollTop: box.scrollTop, title: top('.ps-reveal-letter-title'), taller: box.scrollHeight > box.clientHeight + 50 };
+    box.scrollTop = box.scrollHeight;
+    const close = document.querySelector('.ps-reveal-close').getBoundingClientRect();
+    const done = [...document.querySelectorAll('.ps-reveal .btn-primary')].at(-1).getBoundingClientRect();
+    return { ...before, closeVisible: close.top >= 0 && close.bottom <= innerHeight, doneVisible: done.bottom <= innerHeight + 1, h: innerHeight };
+  });
+  check('A6: a letter longer than the screen starts at its beginning, not cut off above the top',
+    tall.taller && tall.scrollTop === 0 && tall.title > 0 && tall.title < tall.h / 2, JSON.stringify(tall));
+  check('A6: it scrolls to its end, and the way out stays on screen throughout', tall.doneVisible && tall.closeVisible, JSON.stringify(tall));
+  await pa.locator('.ps-reveal-close').click();
+  await A.tab('Letters');
+  await pa.locator('.ps-letter-card', { hasText: 'The long one' }).click();
+  await pa.locator('button', { hasText: 'Edit letter' }).click();
+  await pa.locator('.ps-link.danger', { hasText: 'Delete this letter' }).click();
+  await pa.locator('.btn-danger', { hasText: 'Delete letter' }).click();
+  await pa.waitForTimeout(200);
+  check('A6: (the long letter is removed again)', !(await A.ps()).letters.some(l => l.id === longId));
 
   await A.nav('Home');
   check('A6: Home shows how much is kept, and none of the words',
@@ -688,6 +730,11 @@ async function settingsAndPrivacy() {
     ['Forge', 'A message from your past self is ready.']);
   check('C2: the switch says when the next one is due', /^Next: .+, around 7:30 AM$/m.test(await pc.locator('.ps-switch-sub').first().innerText()));
   check('C2: and it is saved as switched on', (await C.ps()).delivery.enabled === true);
+  // The layout: only the content scrolls. The page itself must not, or the
+  // bottom bar lifts off the bottom of the phone.
+  const anchoredOn = {};
+  for (const t of ['Letters', 'Messages', 'Delivery']) { await C.tab(t); anchoredOn[t] = await C.anchored(); }
+  eq('C2: on every part of the screen the bottom bar stays at the bottom', anchoredOn, { Letters: true, Messages: true, Delivery: true });
 
   // ── C3: scheduling ─────────────────────────────────────────────────────────
   mark = api.calls.length;

@@ -355,11 +355,18 @@ export function describeNext(next) {
   return next.at.toLocaleDateString([], { weekday: 'long' });
 }
 
-/** A date the way a letter is dated: "14 November 2026". */
+/**
+ * A date the way a letter is dated: "November 14, 2026" in the device's own
+ * convention. Takes a full timestamp or a bare 'YYYY-MM-DD'.
+ */
 export function formatWritten(iso) {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' });
+    // A bare date is a calendar day, not an instant. Parsed as it stands it
+    // means midnight UTC — the evening BEFORE, anywhere west of Greenwich.
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? new Date(`${iso}T00:00:00`) : new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' });
   } catch {
     return '';
   }

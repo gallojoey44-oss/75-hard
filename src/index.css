@@ -8327,7 +8327,11 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 }
 
 /* ── The space ───────────────────────────────────────────────────────────── */
-.ps-space { padding: 0 16px 24px; }
+/* Positioned, so anything absolutely placed inside (a screen-reader label, a
+   glow) is measured against this screen and scrolls with it. Left static, such
+   an element is laid out against the page itself and makes the whole document
+   scroll, lifting the bottom bar off the bottom of the phone. */
+.ps-space { padding: 0 16px 24px; position: relative; }
 .ps-head { padding: 12px 0 4px; }
 .ps-back {
   background: none; border: none; color: var(--accent2); cursor: pointer;
@@ -8569,6 +8573,7 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 
 /* The notification, drawn as a phone shows it. */
 .ps-lock {
+  position: relative;
   border-radius: var(--f4-r); padding: 16px 12px;
   background:
     radial-gradient(120% 90% at 20% 0%, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 60%),
@@ -8612,20 +8617,28 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 .ps-reveal {
   position: fixed; inset: 0; z-index: 900;
   background: #06060B;
-  display: flex; align-items: center; justify-content: center;
+  /* The words are centred by .ps-reveal-inner's auto margins, NOT by
+     align-items: a centred flex item taller than the screen overflows above
+     the top edge, where no amount of scrolling can reach it — and a letter is
+     often taller than the screen. Auto margins centre a short message and
+     simply start a long letter at the top. */
+  display: flex; align-items: flex-start; justify-content: center;
   padding: calc(var(--safe-top, 0px) + 56px) 26px calc(var(--safe-bottom, 0px) + 32px);
-  overflow-y: auto;
+  overflow-y: auto; overscroll-behavior: contain;
   animation: psFade 420ms var(--f4-ease) both;
 }
+/* Focus is moved to the dialog when it opens; the screen itself needs no ring. */
+.ps-reveal:focus { outline: none; }
+/* Fixed, so the glow stays behind a long letter and the way out stays in reach. */
 .ps-reveal-glow {
-  position: absolute; inset: 0; pointer-events: none;
+  position: fixed; inset: 0; pointer-events: none;
   background:
     radial-gradient(70% 46% at 50% 26%, color-mix(in srgb, var(--accent) 30%, transparent) 0%, transparent 70%),
     radial-gradient(90% 60% at 50% 100%, color-mix(in srgb, var(--accent2) 12%, transparent) 0%, transparent 72%);
   animation: psGlow 1400ms var(--f4-ease) both;
 }
 .ps-reveal-close {
-  position: absolute; top: calc(var(--safe-top, 0px) + 12px); right: 14px;
+  position: fixed; top: calc(var(--safe-top, 0px) + 12px); right: 14px;
   width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
   color: rgba(255,255,255,0.78); font-size: 15px; z-index: 1;
