@@ -180,6 +180,12 @@ What the server holds for it, per install and profile, under `push:pastself:*`:
 Letters are never uploaded under any setting. `/api/push/status` reports how
 many messages are stored, never what they say.
 
+A record whose device can no longer be reached — Forge removed, or
+notifications switched off in the phone's settings — is deleted by the
+dispatcher when it next falls due: at once if the push service reports the
+subscription gone, otherwise once it has had no subscription for 30 minutes.
+Opening Forge with notifications allowed stores it again.
+
 The dispatcher sends at most one of these per profile per local day, using the
 same send-once claim as the reminders. Like the reminders it arrives *shortly
 after* the chosen time — within one dispatcher interval — not on the minute, and

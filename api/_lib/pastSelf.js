@@ -236,18 +236,39 @@ export function storedSummary(record, profileId, now = new Date()) {
 // ── Sending ──────────────────────────────────────────────────────────────────
 
 /**
+ * How long a stored schedule may have no device to send to before it is
+ * deleted. Long enough to cover the moment after delivery is switched on, when
+ * the schedule has reached the server and the device's subscription has not
+ * yet; short enough that words left behind by an uninstalled app, or by
+ * notifications switched off in the phone's settings, do not sit on the server.
+ */
+export const ORPHAN_GRACE_MINUTES = 30;
+
+function orphaned(record, now) {
+  const at = Date.parse(record?.syncedAt || '');
+  return !Number.isFinite(at) || now.getTime() - at > ORPHAN_GRACE_MINUTES * 60000;
+}
+
+/**
  * Deliver every past-self message that is due, at most once per local day.
  *
  * Takes its collaborators as arguments so the exactly-once behaviour can be
  * tested without a network or a live store. The claim is taken BEFORE sending,
  * so two overlapping dispatcher runs cannot both deliver, and released if every
  * send fails, so one transient error does not cost the day's message.
+ *
+ * Given `removeRecord`, a record whose device can no longer be reached is
+ * deleted when it falls due — words and all — rather than waiting out its
+ * expiry: when the push service says every subscription it was sent to has
+ * been withdrawn, or when there has been no subscription at all for longer
+ * than ORPHAN_GRACE_MINUTES. The app stores it again the next time it is
+ * opened with delivery on and notifications allowed.
  */
 export async function dispatchPastSelf({
   listIds, getRecord, getSubscriptions, alreadySent, markSent, unmarkSent,
-  send, onResult = async () => {}, now = new Date(),
+  send, removeRecord = null, onResult = async () => {}, now = new Date(),
 }) {
-  const summary = { checked: 0, sent: 0, skipped: 0, errors: 0, cleaned: 0 };
+  const summary = { checked: 0, sent: 0, skipped: 0, errors: 0, cleaned: 0, removed: 0 };
   for (const id of await listIds()) {
     const cut = String(id).lastIndexOf(':');
     if (cut <= 0) continue;
@@ -262,21 +283,36 @@ export async function dispatchPastSelf({
       summary.checked++;
       if (await alreadySent(installId, profileId, PAST_SELF_TYPE, localDate)) { summary.skipped++; continue; }
       const subs = await getSubscriptions(installId, profileId);
-      if (!subs.length) { summary.skipped++; continue; }
+      if (!subs.length) {
+        if (removeRecord && orphaned(record, now)) {
+          await removeRecord(installId, profileId);
+          summary.removed++;
+        } else {
+          summary.skipped++;
+        }
+        continue;
+      }
 
       await markSent(installId, profileId, PAST_SELF_TYPE, localDate);
       let accepted = 0;
+      let gone = 0;
       let lastError = null;
       for (const sub of subs) {
         const r = await send(sub, due);
         if (r?.ok) accepted++;
-        else { if (r?.gone) summary.cleaned++; lastError = r?.error || r?.statusCode; }
+        else { if (r?.gone) { summary.cleaned++; gone++; } lastError = r?.error || r?.statusCode; }
       }
       if (accepted > 0) {
         summary.sent++;
       } else {
         summary.errors++;
         await unmarkSent(installId, profileId, PAST_SELF_TYPE, localDate);
+        // Every device it was sent to has withdrawn its subscription: the
+        // device is gone, so the record goes with it.
+        if (removeRecord && gone === subs.length) {
+          await removeRecord(installId, profileId);
+          summary.removed++;
+        }
       }
       await onResult(installId, profileId, { accepted, error: lastError, localDate, revealed: !!due.msg });
     } catch {

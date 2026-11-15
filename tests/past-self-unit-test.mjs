@@ -331,6 +331,57 @@ const n1 = await ps.dispatchPastSelf({ ...deps(okSend), listIds: only(`${I5}:me`
 check('5: with no device to send to, the day\'s slot is not used up',
   n1.sent === 0 && !(await store.alreadySent(I5, 'me', ps.PAST_SELF_TYPE, '2026-11-16')));
 
+// A device that can no longer be reached takes its record — and its words — with it.
+{
+  const removed = [];
+  const removeRecord = async (i, p) => { removed.push(`${i}:${p}`); await store.removePastSelf(i, p); };
+  const stored = (minutesBefore) => ({
+    ...ps.sanitizeRecord(revealBody), syncedAt: new Date(at0730.getTime() - minutesBefore * 60000).toISOString(),
+  });
+  const run = (id, sendImpl = okSend) =>
+    ps.dispatchPastSelf({ ...deps(sendImpl), listIds: only(`${id}:me`), removeRecord, now: at0730 });
+
+  // Synced two hours before it fell due, and no device left to send to.
+  await store.savePastSelf('ps-orphan', 'me', stored(120));
+  const o = await run('ps-orphan');
+  check('5: a schedule with no device left to send to is deleted when it falls due',
+    o.removed === 1 && (await store.getPastSelf('ps-orphan', 'me')) === null && removed.includes('ps-orphan:me'));
+  check('5: …taking the words with it, and leaving nothing in the index',
+    ![...db.keys()].some(k => k.includes('ps-orphan'))
+    && (await store.getAllPastSelfIds()).every(id => !id.startsWith('ps-orphan')));
+
+  // Synced a minute ago: the device's subscription may simply not have arrived yet.
+  await store.savePastSelf('ps-new', 'me', stored(1));
+  const n = await run('ps-new');
+  check('5: one synced moments ago is kept — its subscription may still be on its way',
+    n.removed === 0 && (await store.getPastSelf('ps-new', 'me')) !== null);
+
+  // The push service says the device withdrew its subscription.
+  await store.saveSubscription('ps-revoked', 'me', { endpoint: 'https://push.test/revoked', keys: { p256dh: 'k', auth: 'a' } });
+  await store.savePastSelf('ps-revoked', 'me', stored(1));
+  const r = await run('ps-revoked', async () => ({ ok: false, gone: true, statusCode: 410 }));
+  check('5: when the push service reports the device gone, the record is deleted at once',
+    r.removed === 1 && r.sent === 0 && (await store.getPastSelf('ps-revoked', 'me')) === null);
+  check('5: …and the day is not marked as sent',
+    !(await store.alreadySent('ps-revoked', 'me', ps.PAST_SELF_TYPE, '2026-11-16')));
+
+  // One of two devices gone, the other still there: delivered, and kept.
+  await store.saveSubscription('ps-two', 'me', { endpoint: 'https://push.test/two-a', keys: { p256dh: 'k', auth: 'a' } });
+  await store.saveSubscription('ps-two', 'me', { endpoint: 'https://push.test/two-b', keys: { p256dh: 'k', auth: 'a' } });
+  await store.savePastSelf('ps-two', 'me', stored(120));
+  let first = true;
+  const t = await run('ps-two', async () => { const g = first; first = false; return g ? { ok: false, gone: true } : { ok: true }; });
+  check('5: with one device gone and another still reachable, it is delivered and kept',
+    t.sent === 1 && t.removed === 0 && (await store.getPastSelf('ps-two', 'me')) !== null);
+
+  // A transient failure is not a departure.
+  await store.saveSubscription('ps-flaky', 'me', { endpoint: 'https://push.test/flaky-2', keys: { p256dh: 'k', auth: 'a' } });
+  await store.savePastSelf('ps-flaky', 'me', stored(120));
+  const f = await run('ps-flaky', async () => ({ ok: false, statusCode: 500, error: 'server error' }));
+  check('5: a push service error that is not "gone" keeps the record for the retry',
+    f.removed === 0 && f.errors === 1 && (await store.getPastSelf('ps-flaky', 'me')) !== null);
+}
+
 // It does not interfere with a reminder's own send-once claim on the same day.
 await store.markSent(I2, 'me', 'u_morning', '2026-11-18');
 const before = sent.length;

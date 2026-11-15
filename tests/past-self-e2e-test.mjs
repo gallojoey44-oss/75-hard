@@ -1190,6 +1190,22 @@ async function backgroundDelivery() {
   check('D8: her letters and messages are still hers, on her device', (await D.ps('girlfriend')).messages.length === 2 && (await D.ps('me')).messages.length === 3);
   run = await api.runCron();
   check('D8: and the dispatcher, run again, sends nothing', run.pastSelfSent === 0 && pastSelfPushes('me').length === 1 && pastSelfPushes('girlfriend').filter(p => p.accepted).length === 1);
+
+  // ── D9: words left behind by a device that has gone away ───────────────────
+  // Forge uninstalled, or notifications switched off in the phone's settings,
+  // and the app never opened again to tidy up. The record is left on the
+  // server with no subscription; the dispatcher deletes it when it falls due.
+  const orphan = 'install-gone-away';
+  await api.store.savePastSelf(orphan, 'me', {
+    timezone: ZONE, time: hhmm(-1), days: null, quietHours: null,
+    showContent: true, rotation: [{ id: 'msg_left', text: 'MSG-CANARY-LEFT-BEHIND on a phone that is gone' }],
+    installId: orphan, profileId: 'me', syncedAt: new Date(Date.now() - 3 * 3600000).toISOString(),
+  });
+  run = await api.runCron();
+  check('D9: a schedule whose device has gone away is deleted by the dispatcher when it falls due, words and all',
+    api.get(`push:pastself:${orphan}:me`) === null && !api.dump().includes('LEFT-BEHIND') && run.pastSelfRemoved >= 1,
+    JSON.stringify({ removed: run.pastSelfRemoved, sent: run.pastSelfSent }));
+  check('D9: and nothing is sent anywhere for it', !api.pushed.some(p => (p.raw || '').includes('LEFT-BEHIND')));
   await ctxD.close();
 
 }

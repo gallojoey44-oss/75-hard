@@ -31,7 +31,7 @@ import {
   getAllScheduleIds, getSchedule, getSubscriptions,
   alreadySent, markSent, unmarkSent, updateDiagnostics, storeConfigured, kvSet, CRON_LAST_KEY,
   recordCronRun, listOneShots, removeOneShot,
-  getAllPastSelfIds, getPastSelf,
+  getAllPastSelfIds, getPastSelf, removePastSelf,
 } from '../_lib/store.js';
 import { sendPush, vapidConfigured } from '../_lib/push.js';
 import { evaluateSchedule } from '../_lib/schedule.js';
@@ -167,6 +167,8 @@ export default async function handler(req, res) {
         getSubscriptions,
         alreadySent, markSent, unmarkSent,
         send: sendPush,
+        // A record whose device has gone away is deleted, words and all.
+        removeRecord: removePastSelf,
         onResult: (installId, profileId, r) => updateDiagnostics(installId, profileId, {
           lastPushAttempt: new Date().toISOString(),
           lastPushType: PAST_SELF_TYPE,
@@ -176,6 +178,7 @@ export default async function handler(req, res) {
         }).catch(() => {}),
       });
       summary.pastSelfSent = ps.sent;
+      summary.pastSelfRemoved = ps.removed;
       summary.sent += ps.sent;
       summary.errors += ps.errors;
       summary.cleaned += ps.cleaned;
