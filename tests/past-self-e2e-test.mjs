@@ -1206,6 +1206,61 @@ async function backgroundDelivery() {
     api.get(`push:pastself:${orphan}:me`) === null && !api.dump().includes('LEFT-BEHIND') && run.pastSelfRemoved >= 1,
     JSON.stringify({ removed: run.pastSelfRemoved, sent: run.pastSelfSent }));
   check('D9: and nothing is sent anywhere for it', !api.pushed.some(p => (p.raw || '').includes('LEFT-BEHIND')));
+
+  // ── D10: the past-self-only pass a release candidate uses ──────────────────
+  // A candidate on a preview deployment can share the production store. Its
+  // dispatcher must then send past-self messages and nothing else: never
+  // anyone's reminders or one-shot tests, and never a run into the history the
+  // production diagnostics read.
+  const someoneElse = api.newDevice('someone-else');
+  const candidate = api.newDevice('candidate');
+  await api.store.saveSubscription('install-someone-else', 'me', someoneElse);
+  await api.store.saveSchedule('install-someone-else', 'me', {
+    installId: 'install-someone-else', profileId: 'me', timezone: ZONE, localDate: TODAY, masterEnabled: true,
+    quietHours: { start: '22:30', end: '07:00' },
+    reminders: { u_morning: { time: hhmm(-1), payload: { title: 'Morning', body: 'Their reminder', tag: 'forge-me-u_morning', view: 'today' }, fallback: null } },
+    syncedAt: new Date().toISOString(),
+  });
+  await api.store.saveSubscription('install-candidate', 'me', candidate);
+  await api.store.savePastSelf('install-candidate', 'me', {
+    timezone: ZONE, time: hhmm(-1), days: null, quietHours: null, showContent: false, rotation: [],
+    installId: 'install-candidate', profileId: 'me', syncedAt: new Date().toISOString(),
+  });
+  const runsBefore = JSON.stringify(api.get('push:cron:runs'));
+  const toDevice = (dev) => api.pushed.filter(p => p.endpoint === dev.endpoint && p.accepted);
+  run = await api.runCron({ only: 'pastSelf' });
+  check('D10: the past-self-only pass sends the candidate\'s message',
+    run.only === 'pastSelf' && run.pastSelfSent === 1 && toDevice(candidate).length === 1, JSON.stringify(run));
+  check('D10: …and never another install\'s reminder that is due at the same moment',
+    toDevice(someoneElse).length === 0 && run.oneShots === 0);
+  check('D10: …and adds nothing to the run history production\'s diagnostics read',
+    JSON.stringify(api.get('push:cron:runs')) === runsBefore);
+  // A preview deployment runs the past-self pass only, however it is called:
+  // asked for a full run, it still leaves the due reminder alone.
+  const previewDue = { reminders: { u_morning: { time: hhmm(-1), payload: { title: 'Morning', body: 'Their reminder again', tag: 'forge-me-u_morning', view: 'today' }, fallback: null } } };
+  await api.store.saveSchedule('install-preview-guard', 'me', {
+    installId: 'install-preview-guard', profileId: 'me', timezone: ZONE, localDate: TODAY, masterEnabled: true,
+    quietHours: { start: '22:30', end: '07:00' }, ...previewDue, syncedAt: new Date().toISOString(),
+  });
+  const guarded = api.newDevice('preview-guard');
+  await api.store.saveSubscription('install-preview-guard', 'me', guarded);
+  const runsBeforePreview = JSON.stringify(api.get('push:cron:runs'));
+  const envBefore = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = 'preview';
+  try {
+    run = await api.runCron();                       // no ?only — a full run, as asked
+  } finally {
+    if (envBefore === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = envBefore;
+  }
+  check('D10: on a preview deployment, a full run is still the past-self pass only',
+    run.only === 'pastSelf' && toDevice(guarded).length === 0 && toDevice(someoneElse).length === 0,
+    JSON.stringify({ only: run.only, sent: run.sent }));
+  check('D10: …and it adds nothing to the run history either',
+    JSON.stringify(api.get('push:cron:runs')) === runsBeforePreview);
+
+  run = await api.runCron();
+  check('D10: an ordinary run then sends those reminders, once — they were only waiting',
+    toDevice(someoneElse).length === 1 && toDevice(guarded).length === 1 && toDevice(candidate).length === 1);
   await ctxD.close();
 
 }

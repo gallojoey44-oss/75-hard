@@ -154,8 +154,8 @@ export async function createFakePushApi() {
     setPushResponse(fn) { respondWith = fn || (() => 201); },
 
     /** Run the real scheduled dispatcher once, authorised the way the cron is. */
-    async runCron() {
-      const out = await invoke(dispatch, 'GET', undefined, { headers: { authorization: `Bearer ${CRON_SECRET}` } });
+    async runCron(query = {}) {
+      const out = await invoke(dispatch, 'GET', undefined, { query, headers: { authorization: `Bearer ${CRON_SECRET}` } });
       return { status: out.status, ...out.json };
     },
 

@@ -21,6 +21,17 @@
 // The slot is claimed BEFORE sending and released if every send fails, so a
 // transient error does not silently lose the reminder for the rest of the day.
 //
+// `?only=pastSelf` runs the past-self pass and nothing else: no one-shot tests,
+// no reminders, and no entry in the cron-run history. It exists for a release
+// candidate on a preview deployment that shares the production store. Such a
+// deployment must never send anyone's reminders — production's own dispatcher
+// does that — and before a release only installs running the candidate hold
+// past-self records, so this pass cannot reach anyone else.
+//
+// A preview deployment (VERCEL_ENV=preview) runs that pass ONLY, whatever it
+// is asked: the guarantee that a preview never touches anyone's reminders,
+// one-shot tests or run history is enforced here, not left to whoever calls.
+//
 // Stale day (in evaluateSchedule): if the schedule's localDate no longer
 // matches the user's current local date, the pre-rendered payloads are stale,
 // so the reminder falls back to date-independent copy rather than being
@@ -53,19 +64,24 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: 'Push service or store not configured' });
   }
 
+  const pastSelfOnly = (req.query && req.query.only) === 'pastSelf'
+    || process.env.VERCEL_ENV === 'preview';
   const startedAt = new Date().toISOString();
-  await kvSet(CRON_LAST_KEY, startedAt).catch(() => {});
-  // A rolling list of run times, so the diagnostics panel can prove the real
-  // cadence instead of just showing "last run".
-  await recordCronRun(startedAt).catch(() => {});
+  if (!pastSelfOnly) {
+    await kvSet(CRON_LAST_KEY, startedAt).catch(() => {});
+    // A rolling list of run times, so the diagnostics panel can prove the real
+    // cadence instead of just showing "last run".
+    await recordCronRun(startedAt).catch(() => {});
+  }
 
   const summary = { checked: 0, sent: 0, skipped: 0, cleaned: 0, errors: 0, oneShots: 0 };
+  if (pastSelfOnly) summary.only = 'pastSelf';
 
   try {
     // ── One-shot queue first ────────────────────────────────────────────────
     // These are the "prove it works" sends: a single payload with a due time,
     // attempted once and then removed whatever the outcome.
-    for (const item of await listOneShots()) {
+    for (const item of pastSelfOnly ? [] : await listOneShots()) {
       if (!item?.dueAt || new Date(item.dueAt) > new Date()) continue;   // not due yet
       await removeOneShot(item.id).catch(() => {});
       const subs = await getSubscriptions(item.installId, item.profileId);
@@ -98,7 +114,7 @@ export default async function handler(req, res) {
       }).catch(() => {});
     }
 
-    const ids = await getAllScheduleIds();
+    const ids = pastSelfOnly ? [] : await getAllScheduleIds();
     for (const id of ids) {
       const [installId, profileId] = id.split(':');
       const schedule = await getSchedule(installId, profileId);
