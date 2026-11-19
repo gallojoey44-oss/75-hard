@@ -6,7 +6,7 @@ import * as HH from '../src/data/hormoneHealthConfig.js';
 import * as ER from '../src/data/energyResetConfig.js';
 import * as LI from '../src/data/lockInConfig.js';
 import { HABIT_RULES_VERSION, VERSIONED_HABITS, versionedRule, rulesVersionOf } from '../src/data/habitRules.js';
-import { presentTasks, presentationFor, guideIdMap } from '../src/data/habitPresentation.js';
+import { presentTasks, presentationFor, guideIdMap, isSleepOpportunity } from '../src/data/habitPresentation.js';
 import { NEW_ATTEMPT_DEFAULTS } from '../src/data/challengeAttempt.js';
 
 /**
@@ -406,6 +406,37 @@ check('10: the guide map covers every habit that has one',
   check('11: (source) which matches what photo storage says about itself',
     /never leave the device/i.test(src('src/utils/photoStore.js'))
     && /NOT included\s+\*?\s*in Settings → Export/i.test(src('src/utils/photoStore.js')));
+}
+
+// ── 12: an opportunity habit is never ticked from hours asleep ────────────
+// Decision 5: sleep opportunity is time deliberately set aside for sleep, and
+// actual sleep is not required — so logged hours must never tick it, or untick
+// it. Version 2 made Fat Loss and Muscle Building opportunity habits while
+// their stored names kept the hours, so the Daily Log has to ask the attempt.
+{
+  const fl = { id: 'fl_sleep', name: 'Sleep 7.5–9 hours', habitKey: 'sleep_target', target: { value: 7.5, unit: 'hours', direction: 'atLeast' } };
+  const mb = { id: 'mb_sleep', name: 'Sleep 8+ hours', habitKey: 'sleep_target', target: { value: 8, unit: 'hours', direction: 'atLeast' } };
+  const fatLoss = (v) => ({ templateId: 'fat_loss_phase', variant: 'standard', ...(v ? { habitRulesVersion: v } : {}) });
+  const muscle = (v) => ({ templateId: 'muscle_building_phase', variant: 'standard', ...(v ? { habitRulesVersion: v } : {}) });
+
+  check('12: a version-2 Fat Loss sleep habit is an opportunity habit', isSleepOpportunity(fl, fatLoss(2)) === true);
+  check('12: so is a version-2 Muscle Building one', isSleepOpportunity(mb, muscle(2)) === true);
+  check('12: and a later version inherits it', isSleepOpportunity(fl, fatLoss(3)) === true);
+  check('12: an attempt started before version 2 keeps the hours rule it began with',
+    isSleepOpportunity(fl, fatLoss(null)) === false && isSleepOpportunity(mb, muscle(1)) === false);
+  check('12: LOCK IN and Energy Reset are opportunity habits on any version, by their own wording',
+    isSleepOpportunity({ id: 'li_sleep', name: 'Sleep opportunity: 8+ hours', habitKey: 'sleep_target' }, { templateId: 'lock_in', variant: 'standard' }) === true
+    && isSleepOpportunity({ id: 'er_sleep', name: 'Sleep opportunity: 8+ hours', habitKey: 'sleep_target' }, { templateId: 'energy_reset_10_day' }) === true);
+  check('12: Hormone Health and Forge Daily keep their hours habits — they were not part of decision 5',
+    isSleepOpportunity({ id: 'hh_sleep', name: 'Sleep 7.5–9 hours', habitKey: 'sleep_target' }, { templateId: 'womens_hormone_health', habitRulesVersion: 2 }) === false
+    && isSleepOpportunity({ id: 'fd_sleep', name: 'Hit sleep goal', habitKey: 'sleep_target' }, { templateId: 'forge_daily', habitRulesVersion: 2 }) === false);
+  check('12: a support-lane habit follows ITS attempt\'s version, as its row does',
+    isSleepOpportunity({ ...mb, challenges: ['support'] }, fatLoss(null), muscle(2)) === true
+    && isSleepOpportunity({ ...mb, challenges: ['support'] }, fatLoss(2), muscle(null)) === false);
+  check('12: no habit or no attempt is simply "no"', isSleepOpportunity(null, fatLoss(2)) === false && isSleepOpportunity(fl, null) === false);
+  check('12: the flag withholds only — it is set on version 2 entries and nowhere else',
+    Object.entries(VERSIONED_HABITS).every(([id, byV]) => Object.entries(byV).every(([v, rule]) =>
+      !rule.sleepOpportunity || (Number(v) >= 2 && ['fl_sleep', 'mb_sleep'].includes(id)))));
 }
 
 const failed = results.filter(r => !r.ok);

@@ -119,6 +119,29 @@ export function presentationFor(task, meta) {
 }
 
 /**
+ * Whether a sleep habit is about OPPORTUNITY — time deliberately set aside for
+ * sleep — rather than hours asleep, for the attempt it belongs to.
+ *
+ * True when the habit's own stored wording says so (LOCK IN and Energy Reset
+ * always have), or when the attempt's rules version makes it so (Fat Loss and
+ * Muscle Building from version 2). The Daily Log asks this before ticking a
+ * sleep habit from logged hours: no number of hours asleep can show how much
+ * time somebody set aside, so an opportunity habit is always ticked by hand.
+ * The attempt is chosen exactly as presentTasks chooses it, so the row and the
+ * log can never disagree about which rule applies.
+ */
+export function isSleepOpportunity(task, meta, support = null) {
+  if (!task) return false;
+  if (/opportunity/i.test(`${task.name || ''} ${task.desc || ''}`)) return true;
+  const lanes = task.challenges;
+  const supportOnly = support && Array.isArray(lanes) &&
+    lanes.includes('support') && !lanes.includes('primary');
+  const attempt = supportOnly ? support : meta;
+  if (!attempt) return false;
+  return versionedRule(task.id, rulesVersionOf(attempt), attempt.variant || null)?.sleepOpportunity === true;
+}
+
+/**
  * A task list with its display-only fields resolved against the live challenge
  * definition. Returns the SAME array when nothing differs, so React sees no
  * change where there is none.

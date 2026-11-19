@@ -688,7 +688,7 @@ check('15.3: nine hours slept does NOT tick a sleep-opportunity habit',
   (await days())[3]?.tasks?.li_sleep !== true,
   JSON.stringify((await days())[3]?.tasks || {}));
 check('15.3: and the card explains why rather than failing silently',
-  /time in bed/i.test(await page.textContent('.daily-log-card')));
+  /sleep opportunity, not hours asleep/i.test(await page.textContent('.daily-log-card')));
 check('15.3: the hours are still recorded', (await days())[3]?.hoursSlept === 9);
 
 // Where the habit really is about hours slept, it still auto-completes —

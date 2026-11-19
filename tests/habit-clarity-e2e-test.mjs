@@ -99,7 +99,9 @@ const STALE_FAT_LOSS = [
   { id: 'fl_steps',   name: 'Walk 8,000+ steps', icon: '🚶', xp: 25, keystone: 2, target: { value: 8000, unit: 'steps', direction: 'atLeast' } },
   { id: 'fl_whole',   name: 'Eat mostly whole foods (90%)', icon: '🥗', xp: 40, keystone: 3, keystoneHabit: true },
   { id: 'fl_water',   name: 'Hit water goal', icon: '💧', xp: 15, keystone: 1 },
-  { id: 'fl_sleep',   name: 'Sleep 7.5–9 hours', icon: '😴', xp: 25, keystone: 2, target: { value: 7.5, unit: 'hours', direction: 'atLeast' } },
+  // The sleep tag is on it because every started attempt has it: it is what
+  // the Daily Log looks for before ticking a sleep habit from logged hours.
+  { id: 'fl_sleep',   name: 'Sleep 7.5–9 hours', icon: '😴', xp: 25, keystone: 2, habitKey: 'sleep_target', target: { value: 7.5, unit: 'hours', direction: 'atLeast' } },
   { id: 'daily_log',  name: 'Complete Daily Log', icon: '📊', xp: 20, keystone: 0 },
 ];
 await seed({ templateId: 'fat_loss_phase', name: 'Fat Loss Challenge', tasks: STALE_FAT_LOSS });
@@ -142,7 +144,7 @@ check('2: no "Update template tasks" button appears',
 await gotoTab('Today');
 
 // ══ 3: a versioned rule follows the attempt, not the app ══════════════════
-// Sleep was settled as "time in bed, not time asleep". An attempt started
+// Sleep was settled as "time set aside for sleep, not time asleep". An attempt started
 // before that keeps what it started with; one started after gets the new
 // reading. Same build, same habit, two attempts.
 const v1Sleep = (await rows()).find(r => /Sleep 7\.5/.test(r.name));
@@ -207,21 +209,33 @@ await page.waitForTimeout(300);
 check('4: and unticking it puts it back',
   (await days())[3]?.tasks?.fl_protein !== true);
 
-// ══ 5: logging how long you slept never ticks the sleep habit ═════════════
-// A sleep-opportunity habit is about the window you gave yourself, which no
-// logged number can establish. The Daily Log completes itself and nothing else.
-await page.evaluate(() => {
-  const el = [...document.querySelectorAll('button, .f4-collapse-head')]
-    .find(x => /daily log/i.test(x.textContent || ''));
-  if (el) el.click();
-});
-await page.waitForTimeout(400);
-const slept = page.locator('input[type="number"], .ql-sleep input').first();
-if (await slept.count()) {
-  await slept.fill('9');
-  await slept.blur();
+// ══ 5: hours slept never tick — or untick — a sleep-OPPORTUNITY habit ═════
+// Decision 5: sleep opportunity is time deliberately set aside for sleep, and
+// actual sleep is not required. No number of hours asleep can show how much
+// time somebody set aside, so the Daily Log must leave such a habit alone. The
+// habit here is stored exactly as a started attempt stores it — sleep tag
+// included — because without the tag the log never looks at it and this
+// check would prove nothing. (An earlier version of it did exactly that.)
+async function openLog() {
+  await page.evaluate(() => {
+    const el = [...document.querySelectorAll('button, .f4-collapse-head')]
+      .find(x => /daily log/i.test(x.textContent || ''));
+    if (el) el.click();
+  });
+  await page.waitForTimeout(400);
+}
+async function logHours(h) {
+  const input = page.locator('.sleep-hours-input').first();
+  await input.fill(String(h));
+  await input.blur();
   await page.waitForTimeout(600);
 }
+const sleepHint = () => page.evaluate(() =>
+  [...document.querySelectorAll('.sleep-target-hint')].map(e => e.textContent.trim()).join(' | '));
+
+await openLog();
+check('5: (the hours field is on screen)', (await page.locator('.sleep-hours-input').count()) === 1);
+await logHours(9);
 await page.evaluate(() => {
   const r = document.querySelector('.rating-track input, input[type="range"]');
   if (r) {
@@ -234,9 +248,29 @@ await page.evaluate(() => {
 await page.waitForTimeout(800);
 const afterLog = (await days())[3]?.tasks || {};
 check('5: saving a metric completes the Daily Log', afterLog.daily_log === true, JSON.stringify(afterLog));
-check('5: and completes NOTHING else — nine hours logged does not tick the sleep habit',
+check('5: on a version-2 attempt, nine hours logged does NOT tick the sleep-opportunity habit',
   afterLog.fl_sleep !== true && Object.keys(afterLog).filter(k => afterLog[k]).join() === 'daily_log',
   Object.keys(afterLog).filter(k => afterLog[k]).join() || 'none');
+check('5: and the log says why, without redefining the rule the row states',
+  /sleep opportunity, not hours asleep/.test(await sleepHint()) && !/time in bed/.test(await sleepHint()),
+  await sleepHint());
+
+// Ticked by hand after a short night: a short night is not a missed window.
+await page.locator('.check-item', { hasText: 'Sleep 7.5' }).first().click();
+await page.waitForTimeout(400);
+check('5: (ticked by hand)', (await days())[3]?.tasks?.fl_sleep === true);
+await logHours(6);
+check('5: logging six hours afterwards does not untick it',
+  (await days())[3]?.tasks?.fl_sleep === true, JSON.stringify((await days())[3]?.tasks));
+
+// The same habit on an attempt started BEFORE version 2 keeps the behaviour it
+// started with: its rule was always read as hours, and the log ticks it from them.
+await seed({ templateId: 'fat_loss_phase', name: 'Fat Loss Challenge', tasks: STALE_FAT_LOSS });
+await openLog();
+await logHours(9);
+check('5: on an attempt started before version 2, nine hours still tick it, as they always did',
+  (await days())[3]?.tasks?.fl_sleep === true, JSON.stringify((await days())[3]?.tasks));
+check('5: and the log says so beside the field', /completes/.test(await sleepHint()), await sleepHint());
 
 // ══ 6: every startable challenge now has guidance on its rows ═════════════
 // Seeded from each challenge's own habit ids, with no descriptions and no

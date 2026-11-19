@@ -21,6 +21,13 @@
  * what Forge TELLS you a habit means; it cannot retroactively mark a day
  * complete or incomplete.
  *
+ * One narrow exception, and it only ever withholds: `sleepOpportunity` tells
+ * the Daily Log that a sleep habit is about time set aside for sleep, so the
+ * hours-slept auto-tick must leave it alone. Without it, version 2 would say
+ * "actual sleep is not required" on the row while the log ticked and unticked
+ * the same habit from hours asleep. It can stop an automatic tick; it never
+ * adds one, and it changes nothing for an attempt on version 1.
+ *
  * Adding a version: bump HABIT_RULES_VERSION, add the new entry under the
  * habit's id, and leave every earlier entry exactly as it is.
  */
@@ -80,11 +87,11 @@ export const VERSIONED_HABITS = {
   // name and its target, exactly where it was.
   fl_sleep: {
     1: { desc: null, guideId: null },
-    2: { desc: 'Hours set aside to sleep, lights out — not time in bed on your phone.', guideId: 'fatloss:sleep' },
+    2: { desc: 'Hours set aside to sleep, lights out — not time in bed on your phone.', guideId: 'fatloss:sleep', sleepOpportunity: true },
   },
   mb_sleep: {
     1: { desc: null, guideId: null },
-    2: { desc: 'Hours set aside to sleep, lights out — not time in bed on your phone.', guideId: 'muscle:sleep' },
+    2: { desc: 'Hours set aside to sleep, lights out — not time in bed on your phone.', guideId: 'muscle:sleep', sleepOpportunity: true },
   },
 
   // ── Whole foods: the unit is meals ──────────────────────────────────────
@@ -124,5 +131,5 @@ export function versionedRule(taskId, version, variant = null) {
   }
   if (!found) return null;
   const desc = (variant && found.descByVariant?.[variant]) || found.desc || null;
-  return { desc, guideId: found.guideId ?? null };
+  return { desc, guideId: found.guideId ?? null, sleepOpportunity: found.sleepOpportunity === true };
 }

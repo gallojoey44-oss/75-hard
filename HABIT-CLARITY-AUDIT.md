@@ -180,10 +180,38 @@ rules were already stated and were not among your decisions, so applying this
 refinement to them would change what their existing attempts are being held to
 — exactly the thing the versioning exists to prevent.
 
-**On decision 5's second clause** — nothing auto-completes a sleep habit from
-logged hours, and nothing ever did. The Daily Log completes itself when any one
-metric is saved, and that is the only automatic completion in the app. Now
-tested explicitly: nine hours logged ticks the Daily Log and nothing else.
+**On decision 5's second clause — corrected.** An earlier version of this
+paragraph said nothing auto-completes a sleep habit from logged hours, and that
+the Daily Log was the only automatic completion in the app. Both were wrong.
+Three things complete without a tap on the habit itself:
+
+- the Daily Log, when any one metric is saved;
+- Fat Loss Hard Mode's progress photo, when today's photo is saved in the Hard
+  Mode panel (see the Hard Mode photo note in section 6);
+- a sleep habit measured in hours, when Hours Slept is entered and Settings →
+  "Auto-complete sleep task" is on, which it is by default. It is ticked at or
+  above the habit's target and unticked below it.
+
+The third reached the new sleep-opportunity habits. Version 2 changed what Fat
+Loss and Muscle Building's sleep rows say, but the auto-tick read only the
+habit's stored name, which still carries the hours. A version-2 attempt would
+have been ticked at 7.5 logged hours and unticked below them — the opposite of
+"actual sleep duration is not required". The Daily Log now asks the attempt's
+own rules (`isSleepOpportunity`, chosen the same way the row's wording is): a
+sleep-opportunity habit is never ticked or unticked from logged hours, and the
+log says so beside the field — "about your sleep opportunity, not hours
+asleep", which leaves the habit's own row to say what the opportunity is
+(LOCK IN still says time in bed; Fat Loss and Muscle Building say time set
+aside, not time in bed on your phone). That covers Fat Loss and Muscle Building from version 2, and LOCK IN
+and Energy Reset, whose own wording always said opportunity. Attempts started
+before version 2 keep the hours-based tick they began with, and Hormone Health
+and Forge Daily keep theirs: they were not part of decision 5.
+
+The check meant to prove this passed for the wrong reason: its seeded habit had
+no sleep tag, so the log never looked at it. It now uses the habit exactly as a
+started attempt stores it and checks both versions. Run against the build
+before this fix, it fails: nine hours ticked the version-2 habit and six hours
+unticked it.
 
 **Flagged for later, per decision 4.** `fl_water` keeps "Your usual daily
 hydration target. Not a weight-manipulation tool." and names no figure, because
