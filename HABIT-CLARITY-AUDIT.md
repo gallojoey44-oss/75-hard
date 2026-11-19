@@ -251,12 +251,19 @@ down-regulation habit printed `meditation,diaphragmatic breathing,nsdr,prayer`
 into "nsdr". Muscle Building's recovery habit had the same defect. Both now
 read properly.
 
-**A flag describing a feature that does not exist.** Hard Mode's `fl_photo`
-carries `photoCapture: true`, commented as "the daily panel renders a real
-camera/upload control". Nothing in the app reads that flag and no such control
-exists. Left in place — removing it is a separate decision about whether the
-feature is still wanted — and the Progress Photo guide is written on the truth:
-Forge does not ask for the photo and does not store it.
+**Hard Mode's photo control — corrected.** An earlier version of this audit
+said Hard Mode had no photo control and that Forge neither asks for the photo
+nor stores it. That was wrong. The Hard Mode panel on Today and Home
+(`FatLossHardPanel`) renders `ProgressPhoto`, a real take-or-choose control.
+Saving today's photo stores it in IndexedDB on the device (`photoStore`,
+downscaled, never uploaded, not in Settings → Export, deleted with the
+profile's data) and ticks `fl_photo`; removing it unticks the habit. If the
+browser cannot store images the control says so and the habit is ticked by
+hand. What is true is narrower: nothing reads the `photoCapture: true` flag
+itself — the panel renders the control for every Hard Mode attempt. The
+Progress Photo guide now describes both: Beginner and Standard are a plain
+checkbox with nothing stored, and Hard Mode records the photo and completes the
+habit from it.
 
 ---
 

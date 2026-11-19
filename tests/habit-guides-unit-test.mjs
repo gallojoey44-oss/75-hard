@@ -367,6 +367,47 @@ const guidedCount = guideIdMap().size;
 check('10: the guide map covers every habit that has one',
   guidedCount >= 20, `${guidedCount} habits map to a guide`);
 
+// ── 11: the Progress Photo guide says what each mode actually does ────────
+// An earlier version said Forge never asks for the photo and never stores it.
+// Hard Mode has a real photo control that saves the photo on the device and
+// completes the habit from it, so the guide has to say so — and still say that
+// Beginner and Standard store nothing. The source checks keep the guide honest
+// if either behaviour is ever changed.
+{
+  const { readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const src = (f) => readFileSync(resolve(process.cwd(), f), 'utf8');
+  const g = getGuide('fatloss:photo');
+  const how = [g.how.requirement, ...g.how.earns, g.how.notes].join(' ');
+  const all = JSON.stringify(g);
+
+  check('11: (source) Hard Mode\'s panel renders the photo control',
+    /<ProgressPhoto\b/.test(src('src/components/FatLossHardPanel.jsx')));
+  check('11: (source) saving a photo ticks fl_photo and removing it unticks it',
+    /if \(!done\) toggleTask\(dayNumber, 'fl_photo'\)/.test(src('src/components/ProgressPhoto.jsx'))
+    && /if \(done\) toggleTask\(dayNumber, 'fl_photo'\)/.test(src('src/components/ProgressPhoto.jsx')));
+  check('11: (source) the other modes\' photo habit is a plain checkbox with no capture flag',
+    CHALLENGE_TEMPLATES.find(t => t.id === 'fat_loss_phase').variants
+      && ['beginner', 'standard'].every(v => {
+        const t = CHALLENGE_TEMPLATES.find(x => x.id === 'fat_loss_phase').variants[v].start_tasks.find(x => x.id === 'fl_photo');
+        return t && !t.photoCapture;
+      }));
+
+  check('11: the guide no longer says, for every mode, that Forge does not store the photo',
+    !/Forge does not ask you to upload it, and does not store it/.test(all));
+  check('11: it says Beginner and Standard store nothing and are ticked by hand',
+    /In Beginner and Standard, Forge does not ask for the photo and does not store it/.test(how)
+    && /tick the habit yourself/.test(how));
+  check('11: it says Hard Mode saves the photo and ticks the habit for you',
+    /In Hard Mode/.test(how) && /saves it and ticks the habit for you/.test(how)
+    && /removing it unticks the habit/.test(how));
+  check('11: and where a Hard Mode photo is kept: on the device, never uploaded, not in Export',
+    /stays on this device/.test(how) && /never uploaded/.test(how) && /not included in Settings → Export/.test(how));
+  check('11: (source) which matches what photo storage says about itself',
+    /never leave the device/i.test(src('src/utils/photoStore.js'))
+    && /NOT included\s+\*?\s*in Settings → Export/i.test(src('src/utils/photoStore.js')));
+}
+
 const failed = results.filter(r => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
 process.exit(failed.length ? 1 : 0);

@@ -554,9 +554,11 @@ export const GUIDES = {
     how: {
       requirement: 'Take one photo of yourself today.',
       earns: [
-        'Checking this habit earns the XP shown on its row, once per day.',
+        'Completing this habit earns the XP shown on its row, once per day.',
         'One photo is the requirement. More angles are useful and entirely optional.',
-        'Forge does not ask you to upload it, and does not store it. Where the photo lives is up to you — the habit is that you took it.',
+        'In Beginner and Standard, Forge does not ask for the photo and does not store it. Take it with your camera, keep it wherever you like, and tick the habit yourself.',
+        'In Hard Mode, the Hard Mode panel on Today and Home has a photo control. Taking or choosing today\'s photo there saves it and ticks the habit for you; removing it unticks the habit. If this browser cannot store images, the panel says so and you tick the habit by hand.',
+        'A photo saved in Hard Mode stays on this device. It is never uploaded, it is not included in Settings → Export, and deleting the profile\'s data deletes it.',
       ],
       notes: 'It is a required habit in every mode, including Hard Mode, where it is explicitly not optional. It is worth little XP because it takes thirty seconds, not because it matters little.',
     },
@@ -608,7 +610,7 @@ export const GUIDES = {
       { title: 'Comparing today to yesterday', body: 'There is nothing in a one-day difference but light, posture and the last meal. The series is a monthly instrument.' },
       { title: 'Only taking it on good days', body: 'A set of photos taken when you felt lean is a record of your mood, not your progress. The bloated days are part of the data.' },
       { title: 'Changing the conditions once you start seeing change', body: 'Better light and a flattering angle feel like an upgrade and silently break the comparison. Keep the setup boring.' },
-      { title: 'Deleting the early photos', body: 'The first week is the only baseline you will ever have, and it is the photo you will most want in a month. Keep it somewhere you will not tidy it away.' },
+      { title: 'Deleting the early photos', body: 'The first week is the only baseline you will ever have, and it is the photo you will most want in a month. Keep it somewhere you will not tidy it away. In Hard Mode, removing today\'s photo from the panel also unticks today\'s habit.' },
       { title: 'Skipping it because nothing has changed yet', body: 'Of course nothing has changed yet — that is what a baseline is. The photo you take on a day when it feels pointless is the one that makes week six worth looking at.' },
     ],
     examples: [
@@ -618,7 +620,7 @@ export const GUIDES = {
           '07:05 — out of bed, bathroom, before any food or water.',
           'Hallway light on, phone on the second shelf, feet on the tape mark.',
           'Two-second timer, standing relaxed, front on. One photo, thirty seconds in total.',
-          'It goes into a dedicated album on your phone so the series stays together. Tick the habit and get on with the day.',
+          'It goes into a dedicated album on your phone so the series stays together, and you tick the habit. In Hard Mode, save it in the photo control on Today instead — that ticks the habit for you.',
         ],
       },
       {
@@ -627,7 +629,7 @@ export const GUIDES = {
           'You are in a hotel, so the fixed spot does not exist and the light is wrong. Take it anyway.',
           'Pick the most neutral light in the room, away from the window, and stand a sensible distance back.',
           'Note mentally that this one is off-series — useful for continuity, not for comparison.',
-          'Tick the habit. A slightly inconsistent photo keeps the streak and the routine; a missed one breaks both.',
+          'Record it as usual. A slightly inconsistent photo keeps the streak and the routine; a missed one breaks both.',
         ],
       },
     ],
