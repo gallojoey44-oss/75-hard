@@ -10,6 +10,7 @@ import {
   getWeeklyRequirementDefs, hasWeeklyRequirements, computeWeeklyRequirements,
 } from '../utils/weeklyRequirements';
 import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
+import { HABIT_RULES_VERSION } from './habitRules';
 
 /**
  * Building an attempt — once, for both the preview and the start.
@@ -46,6 +47,11 @@ export const NEW_ATTEMPT_DEFAULTS = {
   passingScore: DEFAULT_PASSING_SCORE,
   keystoneRequirement: DEFAULT_KEYSTONE_REQUIREMENT,
   completionBonusXP: 0,
+  // Which reading of the loosely-defined habits this attempt was started
+  // under. See data/habitRules.js: an attempt begun before the stamp existed
+  // has none and is version 1 for life, and nothing ever rewrites it. It
+  // decides what a habit row SAYS, never what it requires or pays.
+  habitRulesVersion: HABIT_RULES_VERSION,
 };
 
 /**

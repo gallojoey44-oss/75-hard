@@ -79,6 +79,17 @@ export default function CheckItem({
     if (expanded) return;
     setClamped(el.scrollHeight > el.clientHeight + 1);
   }, [desc, expanded]);
+  // Only for a habit with no guide. Both controls live in the right-hand
+  // column — the one place in the row where a tap-swallowing control cannot
+  // reach the centre — and the column is too narrow to stack two 44px touch
+  // targets without them overlapping: with both present, the disclosure's
+  // touch area sat over the Guide chip and swallowed taps meant for it.
+  //
+  // So the guide carries the habit's own sentence instead. HabitGuide is
+  // handed the row's description and shows it in full at the top of "How to
+  // complete it", which means nothing is lost by hiding this control — the
+  // text is one tap away rather than in place.
+  const showMore = !onOpenGuide && desc && (clamped || expanded);
 
   return (
     <div
@@ -124,16 +135,6 @@ export default function CheckItem({
             {desc}
           </span>
         )}
-        {desc && (clamped || expanded) && (
-          <button
-            type="button"
-            className="check-desc-more"
-            aria-expanded={expanded}
-            onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
-          >
-            {expanded ? 'Show less' : 'Show full requirement'}
-          </button>
-        )}
         {/* Chips and the guide share one line under the habit, so the row
             stays three columns wide. Giving the guide a column of its own
             squeezed the name into a word-per-line column on a phone. */}
@@ -146,9 +147,19 @@ export default function CheckItem({
         </span>
       </span>
 
-      {/* The XP a habit is worth and the way into its guide share the right
+      {/* The XP a habit is worth and the ways into its detail share the right
           column. The guide used to sit in the chip row, which cost every habit
-          without a target an entire extra line. */}
+          without a target an entire extra line.
+
+          Everything in here stops propagation, which is exactly why it all
+          lives in this column and not among the text: a control that swallows
+          a tap must never be able to occupy the row's centre, and the centre
+          of a row is the one place a person is most likely to tap to tick the
+          habit. "Show full requirement" used to sit under the description, and
+          on a row whose text ran to three lines its 44px touch area landed
+          dead centre — so tapping the middle of "Walk 8,000+ steps" expanded
+          the text instead of completing the habit. Pinned to the right-hand
+          column, no control can reach the centre at any width or text length. */}
       <span className="f4-task-aside">
         {typeof xp === 'number' && (
           <span className={`check-xp${checked ? ' earned' : ''}`}>{xp.toLocaleString()} XP</span>
@@ -162,6 +173,19 @@ export default function CheckItem({
             title="Strategy guide"
           >
             Guide
+          </button>
+        )}
+        {showMore && (
+          <button
+            type="button"
+            className="check-desc-more"
+            aria-expanded={expanded}
+            aria-label={expanded
+              ? `Hide the rest of the ${task.name} requirement`
+              : `Read the full ${task.name} requirement`}
+            onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+          >
+            {expanded ? 'Less' : 'More'}
           </button>
         )}
       </span>

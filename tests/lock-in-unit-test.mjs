@@ -198,8 +198,13 @@ check('8: guide ids are namespaced, so two challenges can both have a "sleep" gu
   habitTasks.every(t => t.guideId.startsWith(`${LI.GUIDE_SOURCE}:`)));
 check('8: every task\'s guide resolves through the shared registry',
   habitTasks.every(t => !!getGuide(t.guideId) && guideForTask(t) === getGuide(t.guideId)));
-check('8: the registry exposes exactly these eight guides',
-  Object.keys(HABIT_GUIDES).length === 8);
+// The registry is no longer LOCK IN's alone — Fat Loss and Mental Training
+// have guides of their own. What LOCK IN is responsible for is its own eight,
+// and that none of them has gone missing from the shared registry.
+const lockinKeys = Object.keys(HABIT_GUIDES).filter(k => k.startsWith(`${LI.GUIDE_SOURCE}:`));
+check('8: LOCK IN contributes exactly its eight guides to the shared registry',
+  lockinKeys.length === 8 && Object.keys(HABIT_GUIDES).length >= 8,
+  `${lockinKeys.length} of ${Object.keys(HABIT_GUIDES).length}`);
 check('8: each guide resolves to the habit it belongs to',
   guideForTask(byId.li_sleep).id === 'sleep' &&
   guideForTask(byId.li_flow).id === 'flow' &&
@@ -377,9 +382,23 @@ check('14: the other configured challenges still build',
       const b = buildersFor(t);
       return !!b && b.buildTasks().length > 0 && !!b.buildMeta().templateId;
     }));
-check('14: no existing challenge gained a guide by accident',
+// These three had no guides when LOCK IN introduced them, and this check
+// existed so LOCK IN's could not leak sideways. They have guides of their own
+// now, so what is still worth guarding is that none of them is wired to
+// ANOTHER challenge's guide: a Muscle Building habit must not open an Energy
+// Reset article because two challenges happen to share a habit id.
+check('14: no challenge is wired to another challenge\'s guide',
+  [['muscle_building_phase', 'muscle'], ['womens_hormone_health', 'hormone'],
+   ['energy_reset_10_day', 'energy']]
+    .every(([id, source]) => buildersFor(getTemplateById(id)).buildTasks()
+      .every(t => !t.guideId || t.guideId.startsWith(`${source}:`))),
   ['muscle_building_phase', 'womens_hormone_health', 'energy_reset_10_day']
-    .every(id => buildersFor(getTemplateById(id)).buildTasks().every(t => !t.guideId)));
+    .flatMap(id => buildersFor(getTemplateById(id)).buildTasks().map(t => t.guideId).filter(Boolean))
+    .join(' '));
+check('14: and LOCK IN\'s guides did not leak into any of them',
+  ['muscle_building_phase', 'womens_hormone_health', 'energy_reset_10_day']
+    .every(id => buildersFor(getTemplateById(id)).buildTasks()
+      .every(t => !String(t.guideId || '').startsWith(`${LI.GUIDE_SOURCE}:`))));
 check('14: the 75-day challenge is still in the library',
   !!getTemplateById('75_day_discipline_challenge'));
 check('14: existing habit keys are unchanged',
@@ -566,7 +585,9 @@ check('18: lighter-day lookup respects the attempt\'s own list',
 check('19: all eight guides resolve from the registry with no challenge involved',
   LI.GUIDE_ORDER.every(id => !!getGuide(`${LI.GUIDE_SOURCE}:${id}`)));
 check('19: every registry entry records its source, so the library can group them',
-  Object.values(HABIT_GUIDES).every(g => g.source === LI.GUIDE_SOURCE));
+  Object.values(HABIT_GUIDES).every(g => !!g.source) &&
+  LI.GUIDE_ORDER.every(id => getGuide(`${LI.GUIDE_SOURCE}:${id}`).source === LI.GUIDE_SOURCE),
+  [...new Set(Object.values(HABIT_GUIDES).map(g => g.source))].sort().join(', '));
 check('19: the registry carries no XP, completion or progress fields',
   Object.values(HABIT_GUIDES).every(g =>
     g.xp === undefined && g.checked === undefined && g.completed === undefined &&
@@ -576,7 +597,8 @@ check('19: a guide can be resolved from a task snapshot alone — no live attemp
 check('19: the Daily Log stays a tracking requirement, not an educational habit',
   !LI.GUIDE_ORDER.includes('dailyLog') && !LI.GUIDE_ORDER.includes('log') &&
   LI.DAILY_HABITS.find(h => h.id === 'daily_log').guideId === null &&
-  Object.keys(HABIT_GUIDES).length === 8);
+  !Object.keys(HABIT_GUIDES).some(k => /log$/i.test(k)),
+  Object.keys(HABIT_GUIDES).filter(k => /log$/i.test(k)).join(', ') || 'no logging guide anywhere');
 check('19: the eight library guides are exactly the eight specified habits',
   LI.GUIDE_ORDER.map(id => LI.GUIDES[id].title).sort().join('|') ===
   ['Attention Training', 'Daily Mission', 'Execute Your Priorities', 'Flow Training',

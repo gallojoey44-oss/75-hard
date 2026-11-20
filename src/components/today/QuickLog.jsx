@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import RatingSlider from '../RatingSlider';
 import { makeTaskXP } from '../../utils/xpDisplay';
+import { isSleepOpportunity } from '../../data/habitPresentation';
 
 /**
  * 📊 The Daily Log.
@@ -63,10 +64,13 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
   // So the habit is resolved from THIS attempt's own task list, and auto-
   // completion applies only where the habit really is about hours slept. An
   // opportunity habit is left for the user to tick, and the card says why.
+  //
+  // Whether it is an opportunity habit is the ATTEMPT's question, not the
+  // wording's alone: Fat Loss and Muscle Building became opportunity habits in
+  // rules version 2 while their stored names kept the hours, so the wording
+  // check by itself would have ticked a version-2 habit from hours asleep.
   const sleepHabit = (profile?.tasks || []).find(t => t.habitKey === 'sleep_target');
-  const isOpportunity = sleepHabit
-    ? /opportunity/i.test(`${sleepHabit.name || ''} ${sleepHabit.desc || ''}`)
-    : false;
+  const isOpportunity = isSleepOpportunity(sleepHabit, profile?.activeChallenge, profile?.supportChallenge || null);
   const sleepAuto = profile?.sleepAutoComplete !== false;
   const canAutoComplete = sleepAuto && !!sleepHabit && !isOpportunity;
   // The habit's OWN target when it carries one — a challenge asking for 7.5
@@ -129,7 +133,7 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
             )}
             {sleepAuto && isOpportunity && (
               <div className="sleep-target-hint">
-                Tracked only — “{sleepHabit.name}” is about time in bed, so tick it yourself
+                Tracked only — “{sleepHabit.name}” is about your sleep opportunity, not hours asleep, so tick it yourself
               </div>
             )}
           </div>
