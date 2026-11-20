@@ -12,6 +12,10 @@ import { dateOffsetFromToday } from '../utils/challengeSchedule';
 import { getTodayStr, formatDateLong } from '../utils/dateUtils';
 import { previewAttempt } from '../data/challengeAttempt';
 import { displayXP } from '../utils/xpDisplay';
+import {
+  TRAINING_MINUTE_OPTIONS, allowedMinutes, recommendedMinutes, resolveMinutes,
+  buildTrainingConfig, applyTrainingSetup,
+} from '../data/mentalPractices';
 
 /**
  * "Add a Support Challenge" — pick a second challenge to run alongside the
@@ -62,6 +66,9 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
   const [variant, setVariant] = useState('standard');
   const [duration, setDuration] = useState(null);
   const [startDate, setStartDate] = useState(getTodayStr());
+  // Mental Training's daily minutes. Null follows the chosen mode's
+  // recommendation; a length the mode does not allow is never used.
+  const [trainingChoice, setTrainingChoice] = useState(null);
   const [step, setStep] = useState('list'); // list → warn (conditional) → confirm
   const [error, setError] = useState('');
   // Which option is showing its full compatibility reasoning. One at a time:
@@ -91,19 +98,25 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
     setPick(item);
     setVariant('standard');
     setDuration(getDefaultDuration(item.template));
+    setTrainingChoice(null);
     if (item.compatibility.rating === COMPATIBILITY.CONFLICTING) setStep('conflict');
     else if (item.compatibility.rating === COMPATIBILITY.CONDITIONAL) setStep('warn');
     else setStep('confirm');
   }
 
   const configured = pick ? buildersFor(pick.template) : null;
+  const isMT = pick?.template?.id === MENTAL_TRAINING_TEMPLATE_ID;
+  const trainingMinutes = isMT ? resolveMinutes(variant, trainingChoice) : null;
+  const training = isMT ? buildTrainingConfig(variant, trainingChoice) : null;
 
   function tasksFor() {
     // A configured challenge builds its own task list from its config module,
     // using that challenge's own defaults — the support lane never invents one.
     if (configured) return configured.buildTasks();
     const def = pick?.template?.variants?.[variant];
-    return def?.start_tasks || [];
+    // Mental Training's habit carries this attempt's daily minutes, exactly as
+    // it would as a primary.
+    return applyTrainingSetup(def?.start_tasks || [], training);
   }
 
   const preview = step === 'confirm' && pick ? previewSupportChallenge(tasksFor()) : null;
@@ -127,6 +140,7 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
       variant,
       durationDays: duration,
       configuredSetup: configured ? { durationDays: duration } : null,
+      trainingMinutes,
     });
     if (!attempt) return null;
     const sharedIds = new Set(preview.merges.map(m => m.habitKey));
@@ -166,6 +180,7 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
         keystoneRequirement: tpl.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
         badgeId: tpl.rewards?.badge_id || null,
         coldExposureUpgradeEnabled: false,
+        ...(training ? { mentalTraining: training } : {}),
       };
     const ok = addSupportChallenge({
       challenge,
@@ -299,6 +314,33 @@ export default function SupportChallengePicker({ onClose, onSwitchPrimary }) {
             ))}
           </div>
         </div>
+        )}
+
+        {isMT && (
+          <div className="sup-field" data-testid="sup-training-minutes">
+            <label className="sup-label">Mental Training each day</label>
+            <div className="sup-chips">
+              {TRAINING_MINUTE_OPTIONS.map(m => {
+                const allowed = allowedMinutes(variant).includes(m);
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    className={`sup-chip${trainingMinutes === m ? ' active' : ''}`}
+                    aria-pressed={trainingMinutes === m}
+                    disabled={!allowed}
+                    onClick={() => setTrainingChoice(m)}
+                  >
+                    {m} min{m === recommendedMinutes(variant) ? ' · Recommended' : ''}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="sup-hint">
+              Fixed for this attempt, and every length earns the same XP.
+              {' '}{variant.charAt(0).toUpperCase() + variant.slice(1)} trains for at least {recommendedMinutes(variant)} minutes.
+            </div>
+          </div>
         )}
 
         {!configured && durations.length > 1 && (

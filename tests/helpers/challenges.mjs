@@ -119,7 +119,9 @@ export async function backToStep(page, selector) {
  * needs a real answer (the letter, the date, a configured setup screen).
  */
 export async function passReview(page) {
-  for (let i = 0; i < 4; i++) {
+  // Enough for the longest flow: Mental Training is mode, length, daily
+  // minutes, cold upgrade, review — five steps before the letter.
+  for (let i = 0; i < 8; i++) {
     const btn = page.locator('.f4c-setup .f4c-btn.primary').last();
     if (!(await btn.count())) return;
     const label = (await btn.textContent()) || '';

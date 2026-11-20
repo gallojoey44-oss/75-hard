@@ -159,6 +159,13 @@ stating it creates a rule where somebody might have been reading a different
 one. Versioning it is the conservative choice. Flipping it to informational is
 a one-line change if you would rather everyone saw it.
 
+*Later: the six practices.* The Mental Training overhaul replaces this row's
+rule for attempts started after it ships — one of six practices, at a daily
+length chosen at setup — and stamps that onto the attempt itself
+(`meta.mentalTraining`, see `src/data/mentalPractices.js`) rather than adding a
+habit rules version. Attempts on version 1 or 2 without that stamp keep the
+rules in this table.
+
 *`mt_mind` version 2 drops prayer and keeps breathwork.* You asked for
 meditation, mindfulness and visualization to be eligible, for existing prayer
 eligibility to stay intact, and to avoid counting one practice twice where

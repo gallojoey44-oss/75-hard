@@ -11,6 +11,7 @@ import {
 } from '../utils/weeklyRequirements';
 import { DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT } from '../utils/gamification';
 import { HABIT_RULES_VERSION } from './habitRules';
+import { buildTrainingConfig, applyTrainingSetup } from './mentalPractices';
 
 /**
  * Building an attempt — once, for both the preview and the start.
@@ -71,6 +72,10 @@ export function buildAttemptPayload({
   coldExposureUpgradeEnabled = false,
   hardSetup = null,
   legacy = null,
+  // Mental Training's daily minutes. Null means the mode's recommendation,
+  // and a length the mode does not allow is never honoured — see
+  // data/mentalPractices.js.
+  trainingMinutes = null,
 } = {}) {
   if (!template && !legacy) return null;
 
@@ -121,6 +126,10 @@ export function buildAttemptPayload({
   // template's own start_tasks and the legacy weekly requirements.
   const hardFatLoss = template.id === FLH.FAT_LOSS_TEMPLATE_ID && mode === FLH.HARD_VARIANT;
   const setup = hardFatLoss ? (hardSetup || FLH.defaultSetup()) : null;
+  // Mental Training's six practices and daily length, stamped onto THIS
+  // attempt. The habit keeps its id, weight and XP; only what it accepts and
+  // how long it takes are the attempt's own.
+  const training = template.id === MENTAL_TRAINING_TEMPLATE_ID ? buildTrainingConfig(mode, trainingMinutes) : null;
 
   return {
     challenge: {
@@ -140,6 +149,7 @@ export function buildAttemptPayload({
       keystoneRequirement: template.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
       badgeId: template.rewards?.badge_id || null,
       coldExposureUpgradeEnabled: coldEnabled,
+      ...(training ? { mentalTraining: training } : {}),
       ...(hardFatLoss ? {
         fatLossHard: FLH.buildConfig(setup),
         weeklyRequirementDefs: FLH.weeklyRequirementDefs(),
@@ -147,7 +157,7 @@ export function buildAttemptPayload({
     },
     tasks: hardFatLoss
       ? FLH.buildStartTasks(setup)
-      : applyColdExposureUpgrade(variantDef.start_tasks, coldEnabled),
+      : applyTrainingSetup(applyColdExposureUpgrade(variantDef.start_tasks, coldEnabled), training),
     bonusMissions: template.bonus_missions || [],
   };
 }

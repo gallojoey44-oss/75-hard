@@ -39,6 +39,10 @@ import { presentTasks } from '../data/habitPresentation';
 import TodayHeader from './today/TodayHeader';
 import QuickLog from './today/QuickLog';
 import Collapsible from './today/Collapsible';
+import MentalTrainingSpace, { TrainingLauncher } from './training/MentalTrainingSpace';
+import {
+  trainingFor, practiceOfDay, PRACTICE_FIELD, TRAINING_KEYSTONE_WHY,
+} from '../data/mentalPractices';
 
 function DaySelector({ selected, current, onChange, duration = 75 }) {
   const isOtherDay = current && selected !== current;
@@ -376,6 +380,10 @@ export default function DailyView({ editDayNum, setView }) {
   // The task whose strategy guide is open, if any. Held as the task id so the
   // guide always reads live completion state rather than a snapshot.
   const [guideTaskId, setGuideTaskId] = useState(null);
+  // The Mental Training screen, when open: which habit, and the day it was
+  // opened FOR — a session that runs past midnight still counts for the day it
+  // began on, not whichever day Today has rolled over to meanwhile.
+  const [training, setTraining] = useState(null);
 
   useEffect(() => {
     if (editDayNum != null) setSelectedDayNum(editDayNum);
@@ -493,6 +501,41 @@ export default function DailyView({ editDayNum, setView }) {
     setPrevMWDDone(newMWDDone);
   }
 
+  /**
+   * A confirmed Mental Training session.
+   *
+   * Sets the habit's checkbox to TRUE — never toggles it — so a second session
+   * on a day already ticked changes nothing, and the XP, which is derived from
+   * that checkbox, can only ever be paid once. No other habit is touched. The
+   * practice id is recorded beside it for the day's history; nothing reads it
+   * for XP or grading.
+   */
+  function recordTraining({ dayNum, taskId, practiceId }) {
+    const day = dayNum === selectedDayNum ? dayData : getDayData(dayNum);
+    const already = !!day?.tasks?.[taskId];
+    // Already complete: keep the completion exactly as it is, and only fill in
+    // which practice it was if nothing is recorded yet (ticked by hand).
+    const practiceUpdate = (!already || !practiceOfDay(day)) ? { [PRACTICE_FIELD]: practiceId } : null;
+    const taskUpdate = already ? null : { [taskId]: true };
+    if (!practiceUpdate && !taskUpdate) return { awarded: false };
+
+    if (dayNum === selectedDayNum) {
+      handleUpdate({
+        ...(taskUpdate ? { tasks: taskUpdate } : {}),
+        ...(practiceUpdate || {}),
+      });
+    } else {
+      // The session began on a day Today has since rolled past. A day with no
+      // record yet gets its date and number, as Today would have given it.
+      updateDay(dayNum, {
+        ...(day ? {} : { date: getDateForDayNumber(profile?.challengeStart, dayNum), dayNumber: dayNum }),
+        ...(taskUpdate ? { tasks: { ...(day?.tasks || {}), ...taskUpdate } } : {}),
+        ...(practiceUpdate || {}),
+      });
+    }
+    return { awarded: !already };
+  }
+
   function handleToggleMWDTask(taskId) {
     const newMwdTasks = { ...dayData?.mwdTasks, [taskId]: !dayData?.mwdTasks?.[taskId] };
     handleUpdate({ mwdTasks: newMwdTasks });
@@ -541,6 +584,52 @@ export default function DailyView({ editDayNum, setView }) {
   const mentalTaskId = isMe ? 'mental' : 'gf_mental';
   const faithEnabled = profile?.faithEnabled || false;
   const hasGratitudeTask = tasks.some(t => t.id === 'mt_gratitude');
+
+  // Mental Training's six practices, for an attempt started with them. The
+  // attempt is resolved exactly as the row's wording is, so a support-lane
+  // Mental Training follows its own attempt and a legacy attempt gets nothing.
+  const supportMeta = profile.supportChallenge || null;
+  const trainingRow = tasks.find(t => trainingFor(t, profile.activeChallenge, supportMeta)) || null;
+  const trainingRules = trainingRow ? trainingFor(trainingRow, profile.activeChallenge, supportMeta) : null;
+  // Begin Training is offered on the current day only. Any other day is
+  // corrected the way every habit is, with its checkbox.
+  const canTrain = !!trainingRules && selectedDayNum === currentDayNum && !dayData?.isMWD;
+  // The older, general "Mental Training — choose a practice" panel stands in
+  // for a habit this attempt does not have. Where the attempt has the real
+  // thing it would be a second Mental Training on the page that ticks nothing,
+  // so it steps aside — unless this day already holds something entered in it,
+  // which stays visible rather than disappearing.
+  const legacyMental = dayData?.mentalTraining;
+  const legacyMentalUsed = !!(legacyMental && (legacyMental.selected || legacyMental.completed || String(legacyMental.notes || '').trim()));
+  const showLegacyMental = !trainingRules || legacyMentalUsed;
+
+  function renderTaskRow(task, supports, variant) {
+    const row = (
+      <CheckItem
+        key={task.id}
+        task={task}
+        variant={variant}
+        checked={!!dayData?.tasks?.[task.id]}
+        onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
+        keystone={getTaskKeystone(task)}
+        xp={taskXP(task)}
+        supports={supports}
+        onOpenGuide={guideForTask(task) ? () => setGuideTaskId(task.id) : null}
+      />
+    );
+    if (!canTrain || task.id !== trainingRow?.id) return row;
+    const ks = getTaskKeystone(task);
+    return (
+      <div key={task.id} className={`mt-task${ks ? ` keystone keystone-${ks}` : ''}`}>
+        {row}
+        <TrainingLauncher
+          done={!!dayData?.tasks?.[task.id]}
+          practiceId={practiceOfDay(dayData)}
+          onOpen={() => setTraining({ taskId: task.id, dayNum: selectedDayNum })}
+        />
+      </div>
+    );
+  }
   const meta = getChallengeMeta();
   // This attempt's own rate card, read through the display layer: it converts
   // the attempt's stored units to the single ladder Lifetime XP and the ranks
@@ -580,8 +669,12 @@ export default function DailyView({ editDayNum, setView }) {
     }
     return skipped >= 3 ? top : null;
   })();
+  // The six-practice habit has its own reason, stated by its own rule; an
+  // attempt without the practices keeps the challenge's original copy.
   const keystoneWhy = coachingKeystone
-    ? getTemplateById(meta.templateId)?.keystone_why?.[coachingKeystone.id]
+    ? (trainingFor(coachingKeystone, profile.activeChallenge, supportMeta)
+      ? TRAINING_KEYSTONE_WHY
+      : getTemplateById(meta.templateId)?.keystone_why?.[coachingKeystone.id])
     : null;
 
   const isCurrentDay = selectedDayNum === currentDayNum;
@@ -740,18 +833,7 @@ export default function DailyView({ editDayNum, setView }) {
               profile={profile}
               hasKeystones={hasKeystones}
               keystoneExplainer={KEYSTONE_EXPLAINER}
-              renderTask={(task, supports) => (
-                <CheckItem
-                  key={task.id}
-                  task={task}
-                  checked={!!dayData?.tasks?.[task.id]}
-                  onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
-                  keystone={getTaskKeystone(task)}
-                  xp={taskXP(task)}
-                  supports={supports}
-                  onOpenGuide={guideForTask(task) ? () => setGuideTaskId(task.id) : null}
-                />
-              )}
+              renderTask={(task, supports) => renderTaskRow(task, supports, 'row')}
             />
             </div>
           )}
@@ -785,6 +867,29 @@ export default function DailyView({ editDayNum, setView }) {
         );
       })()}
 
+      {/* Mental Training. Opened from Begin Training under the habit; confirming
+          a session sets that one habit's checkbox, through the same day update
+          the row uses, so Today behind it is already up to date on return. */}
+      {training && trainingRules && (() => {
+        const task = tasks.find(t => t.id === training.taskId);
+        if (!task) return null;
+        const day = training.dayNum === selectedDayNum ? dayData : getDayData(training.dayNum);
+        return (
+          <MentalTrainingSpace
+            minutes={trainingRules.minutes}
+            practices={trainingRules.practices}
+            task={task}
+            xp={taskXP(task)}
+            done={!!day?.tasks?.[task.id]}
+            practiceToday={practiceOfDay(day)}
+            dayTasks={tasks}
+            dayProgress={{ done: tasks.filter(t => day?.tasks?.[t.id]).length, total: tasks.length }}
+            onRecord={(practiceId) => recordTraining({ dayNum: training.dayNum, taskId: task.id, practiceId })}
+            onClose={() => setTraining(null)}
+          />
+        );
+      })()}
+
       {/* ── Girlfriend: colored task cards ── */}
       {!isMe && (
         <>
@@ -809,19 +914,7 @@ export default function DailyView({ editDayNum, setView }) {
               profile={profile}
               hasKeystones={hasKeystones}
               keystoneExplainer={KEYSTONE_EXPLAINER}
-              renderTask={(task, supports) => (
-                <CheckItem
-                  key={task.id}
-                  task={task}
-                  variant="card"
-                  checked={!!dayData?.tasks?.[task.id]}
-                  onToggle={() => task.id === 'daily_log' ? scrollToLog() : handleToggleTask(task.id)}
-                  keystone={getTaskKeystone(task)}
-                  xp={taskXP(task)}
-                  supports={supports}
-                  onOpenGuide={guideForTask(task) ? () => setGuideTaskId(task.id) : null}
-                />
-              )}
+              renderTask={(task, supports) => renderTaskRow(task, supports, 'card')}
             />
           </div>
           </div>
@@ -881,7 +974,7 @@ export default function DailyView({ editDayNum, setView }) {
           onToggleComplete={() => handleToggleTask('mt_gratitude')}
         />
       )}
-      {!isMWD && (
+      {!isMWD && showLegacyMental && (
         <MentalTraining
           dayNumber={selectedDayNum}
           dayData={dayData}

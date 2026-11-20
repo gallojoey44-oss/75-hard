@@ -32,6 +32,7 @@ import { displayScaleFor } from '../data/xpEconomy';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
 import { getTemplateById, getCompletionBonusForDuration } from '../data/challengeTemplates';
+import { MENTAL_TRAINING_TEMPLATE, buildTrainingConfig, applyTrainingSetup } from '../data/mentalPractices';
 import { WEEKLY_REQUIREMENT_DEFS } from '../utils/weeklyRequirements';
 import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { formatDateShort, dayNumberForDate } from '../utils/dateUtils';
@@ -893,6 +894,12 @@ export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPast
     const s = profile?.lastCompletion;
     const tpl = s?.templateId ? getTemplateById(s.templateId) : null;
     if (tpl && tpl.start_flow === 'variant' && s.variant && tpl.variants?.[s.variant]?.start_tasks) {
+      // A retried Mental Training Phase is a new attempt, so it trains with the
+      // six practices — at the length the finished attempt used, when it had
+      // one the mode allows, and otherwise at the mode's recommendation.
+      const training = tpl.id === MENTAL_TRAINING_TEMPLATE
+        ? buildTrainingConfig(s.variant, s.mentalTrainingMinutes)
+        : null;
       startChallenge(undefined, {
         challenge: {
           templateId: tpl.id, name: tpl.challenge_name, emoji: tpl.emoji, variant: s.variant,
@@ -901,8 +908,9 @@ export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPast
           rewardXP: tpl.rewards?.xp || 0, completionBonusXP: getCompletionBonusForDuration(tpl, s.durationDays),
           passingScore: tpl.passing_score ?? DEFAULT_PASSING_SCORE, keystoneRequirement: tpl.keystone_requirement ?? DEFAULT_KEYSTONE_REQUIREMENT,
           badgeId: tpl.rewards?.badge_id || null,
+          ...(training ? { mentalTraining: training } : {}),
         },
-        tasks: tpl.variants[s.variant].start_tasks,
+        tasks: applyTrainingSetup(tpl.variants[s.variant].start_tasks, training),
         bonusMissions: tpl.bonus_missions || [],
       });
     } else if (s?.templateId === DISCIPLINE_75_META.templateId) {

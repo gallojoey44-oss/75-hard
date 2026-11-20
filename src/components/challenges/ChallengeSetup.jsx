@@ -14,6 +14,16 @@ import FatLossHardSetup from '../FatLossHardSetup';
 import { getTodayStr, formatDateLong } from '../../utils/dateUtils';
 import { dateOffsetFromToday } from '../../utils/challengeSchedule';
 import { displayXP } from '../../utils/xpDisplay';
+import {
+  TRAINING_MINUTE_OPTIONS, TRAINING_TASK_ID, allowedMinutes, recommendedMinutes, resolveMinutes,
+} from '../../data/mentalPractices';
+
+/** How each daily length reads, so the three are told apart at a glance. */
+const TRAINING_LENGTH_LABELS = {
+  10: 'A focused start',
+  20: 'A full session',
+  30: 'Deep practice',
+};
 
 const MODES = [
   { key: 'beginner', label: 'Beginner' },
@@ -107,6 +117,10 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
   const [mode, setMode] = useState(start?.variant || 'standard');
   const [duration, setDuration] = useState(start?.durationDays ?? getDefaultDuration(template));
   const [coldUpgrade, setColdUpgrade] = useState(false);
+  // Mental Training's daily minutes. Null follows the mode's recommendation,
+  // and going back to choose a harder mode never keeps a length that mode
+  // does not allow — resolveMinutes falls back to its recommendation.
+  const [trainingChoice, setTrainingChoice] = useState(null);
   const [configuredSetup, setConfiguredSetup] = useState(null);
   const [hardSetup, setHardSetup] = useState(null);
   const [letter, setLetter] = useState(null);
@@ -130,6 +144,7 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
     if (modes.length > 1) out.push('mode');
     if (!isConfigured && (template?.duration_options_days?.length || 0) > 1) out.push('duration');
     if (isConfigured) out.push('configure');
+    if (isMT) out.push('training');
     if (isMT) out.push('cold');
     if (isVariant && mode === 'hard') out.push('hardWarn');
     if (template?.id === FLH.FAT_LOSS_TEMPLATE_ID && mode === 'hard') out.push('hardSetup');
@@ -141,6 +156,7 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
 
   const step = steps[Math.min(stepIndex, steps.length - 1)];
   const total = steps.length;
+  const trainingMinutes = isMT ? resolveMinutes(mode, trainingChoice) : null;
 
   const preview = useMemo(() => previewAttempt({
     template,
@@ -153,7 +169,8 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
     coldExposureUpgradeEnabled: isMT ? coldUpgrade : false,
     hardSetup,
     legacy: isLegacy75 ? { meta: DISCIPLINE_75_META, tasks: discipline75Tasks(activeProfile) } : null,
-  }), [template, mode, duration, configuredSetup, coldUpgrade, hardSetup, isVariant, isConfigured, isMT, isLegacy75, activeProfile]);
+    trainingMinutes,
+  }), [template, mode, duration, configuredSetup, coldUpgrade, hardSetup, isVariant, isConfigured, isMT, isLegacy75, activeProfile, trainingMinutes]);
 
   const scale = preview?.displayScale ?? 1;
   const xp = (v) => displayXP(v || 0, scale).toLocaleString();
@@ -176,6 +193,7 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
       coldExposureUpgradeEnabled: isMT ? coldUpgrade : false,
       hardSetup,
       legacy: isLegacy75 ? { meta: DISCIPLINE_75_META, tasks: discipline75Tasks(activeProfile) } : null,
+      trainingMinutes,
     });
     if (!payload) return;
     startChallenge(undefined, { ...payload, futureSelfLetter: letter, startDate: date });
@@ -287,6 +305,45 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
         </section>
       )}
 
+      {step === 'training' && (
+        <section className="f4c-card" data-testid="setup-training">
+          <h3 className="f4c-card-h">Daily Mental Training</h3>
+          <p className="f4c-note">
+            How long you will train each day. How you train is up to you — each day you choose one of
+            six practices, from meditation to reflective reading.
+          </p>
+          <div className="f4c-durations col" role="radiogroup" aria-label="Daily Mental Training">
+            {TRAINING_MINUTE_OPTIONS.map(m => {
+              const allowed = allowedMinutes(mode).includes(m);
+              const on = trainingMinutes === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  disabled={!allowed}
+                  className={`f4c-dur wide mt-length${on ? ' on active' : ''}${allowed ? '' : ' unavailable'}`}
+                  onClick={() => setTrainingChoice(m)}
+                >
+                  <span className="f4c-dur-n">{m} minutes a day</span>
+                  <span className="f4c-dur-l">
+                    {allowed
+                      ? `${TRAINING_LENGTH_LABELS[m] || ''}${m === recommendedMinutes(mode) ? ` · Recommended for ${capitalize(mode)}` : ''}`
+                      : `Below ${capitalize(mode)} Mode’s minimum`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="f4c-note">
+            The length is fixed once the challenge starts. Every length earns the same{' '}
+            {xp(preview?.tasks.find(t => t.id === TRAINING_TASK_ID)?.xp)} XP a day, so choose the one you
+            will keep. {capitalize(mode)} Mode trains for at least {recommendedMinutes(mode)} minutes.
+          </p>
+        </section>
+      )}
+
       {step === 'cold' && (
         <section className="f4c-card">
           <h3 className="f4c-card-h">Cold Exposure Upgrade</h3>
@@ -354,6 +411,9 @@ export default function ChallengeSetup({ start, onCancel, onStarted }) {
                     {t.name}
                     {t.keystone > 0 && <span className="f4c-stars">{'⭐'.repeat(t.keystone)}</span>}
                   </span>
+                  {isMT && t.id === TRAINING_TASK_ID && (
+                    <span className="f4c-req-desc">One of six practices, chosen each day</span>
+                  )}
                 </span>
                 <span className="f4c-req-xp">{xp(t.xp)} XP</span>
               </li>

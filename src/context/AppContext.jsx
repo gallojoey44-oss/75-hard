@@ -26,6 +26,7 @@ import { ENERGY_RESET_TEMPLATE_ID, LAGGED_HABIT_KEYS, windowForDuration, insight
 import { buildEnergySummary } from '../utils/energyTracking';
 import { clearProfilePhotos } from '../utils/photoStore';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
+import { applyTrainingSetup, trainingConfigOf } from '../data/mentalPractices';
 import { makeDefaultNotifPrefs, migrateAllNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS } from '../utils/gamification';
 import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLedger, isReconciled, capToFloor, forgivenessShortfall, archiveDeficit } from '../utils/xpLedger';
@@ -1716,6 +1717,8 @@ export function AppProvider({ children }) {
       // on the lifetime ladder rather than in the attempt's own stored units.
       xpEconomyVersion: archiveEraOf(entry),
       coldExposureEnabled: !!entry.challenge?.coldExposureUpgradeEnabled,
+      // So "Retry" can start the next attempt at the same daily length.
+      mentalTrainingMinutes: entry.challenge?.mentalTraining?.minutes ?? null,
       weeklyRequirements: entry.weeklyRequirements || { tracked: false },
       coldExposureStartDate: entry.challenge?.coldExposureUpgradeStartDate || null,
       challengeStart: entry.challengeStart || null,
@@ -1988,7 +1991,14 @@ export function AppProvider({ children }) {
     // the required Cold Shower task is re-generated into the refreshed template
     // task list (it is not part of the static template start_tasks). A sync
     // never silently removes it or alters the attempt's rule.
-    const baseTemplateTasks = applyColdExposureUpgrade(variantDef.start_tasks, isColdExposureEnabled(meta));
+    // Mental Training's daily length is a rule of the attempt as well, so the
+    // refreshed habit keeps the minutes this attempt was started with. An
+    // attempt without a training stamp gets the template's list unchanged,
+    // exactly as before.
+    const baseTemplateTasks = applyTrainingSetup(
+      applyColdExposureUpgrade(variantDef.start_tasks, isColdExposureEnabled(meta)),
+      trainingConfigOf(meta),
+    );
     const templateTasks = baseTemplateTasks.map(t => ({ ...t, source: 'template' }));
     const customTasks = [...(prof.tasks || [])]
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))

@@ -1,6 +1,9 @@
 import { CHALLENGE_TEMPLATES, getTemplateById } from './challengeTemplates';
 import { CONFIGURED_BUILDERS } from './configuredChallenges';
 import { rulesVersionOf, versionedRule } from './habitRules';
+import {
+  TRAINING_TASK_ID, TRAINING_DESC, TRAINING_GUIDE_ID, trainingConfigOf,
+} from './mentalPractices';
 
 /**
  * What a habit row SAYS, resolved when it is drawn rather than when it was
@@ -85,6 +88,15 @@ export function guideIdMap() {
  */
 export function presentationFor(task, meta) {
   if (!task?.id || !meta?.templateId) return null;
+
+  // Mental Training's habit, for an attempt started with the six practices.
+  // The practice set is stamped on the attempt (data/mentalPractices.js), so
+  // this is decided by the attempt's own rules, exactly like a versioned
+  // habit: an attempt without the stamp falls through to the wording and the
+  // guide it started with.
+  if (task.id === TRAINING_TASK_ID && trainingConfigOf(meta)) {
+    return { desc: TRAINING_DESC, guideId: TRAINING_GUIDE_ID };
+  }
 
   const template = getTemplateById(meta.templateId);
 

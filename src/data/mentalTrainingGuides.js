@@ -9,14 +9,19 @@ import { EVIDENCE } from './evidence';
  * habit row rather than naming one — reading is 2, 5 or 10 pages, the focus
  * block is 30, 60 or 90 minutes, and the row knows which.
  *
- * Two of this challenge's habits have no guide on purpose:
+ * The core habit, `mt_mind`, has a guide that depends on the attempt:
  *
- *  • `mt_mind` — "Mental Training — 2 / 5 / 10 minutes" has never been defined
- *    anywhere except the challenge's rationale copy, which names breathwork,
- *    meditation or prayer. A guide's "How to complete it" IS the rule, so
- *    writing one would settle a question the audit has put to the user.
- *  • `mt_prayer` — the description says it plainly and respectfully. Optimizing
- *    somebody's prayer, with evidence tags, is not Forge's business.
+ *  • `training` — attempts started with the six practices (data/
+ *    mentalPractices.js). Its "How to complete it" is the six-practice rule.
+ *  • `mind` — attempts on habit rules version 2 without the six practices.
+ *  • none — attempts on version 1, whose only statement of the habit was the
+ *    challenge's rationale copy naming breathwork, meditation or prayer. A
+ *    guide's "How to complete it" IS the rule, so writing one for them would
+ *    change the rule of an attempt already running.
+ *
+ * `mt_prayer` has no guide on purpose: the description says it plainly and
+ * respectfully. Optimizing somebody's prayer, with evidence tags, is not
+ * Forge's business.
  */
 
 export const GUIDE_SOURCE = 'mental';
@@ -26,6 +31,107 @@ export function guideRef(id) {
 }
 
 export const GUIDES = {
+  // ─────────────────────────────────── 0a. Mental Training: six practices
+  // Offered only to attempts stamped with a practice set — see
+  // data/mentalPractices.js. The practices' own steps live on the training
+  // screen; this guide is the rule and the reasoning around it.
+  training: {
+    id: 'training',
+    // Distinct from the `mind` guide below, which the Habit Library lists
+    // beside it: the two describe different attempts' rules.
+    title: 'Mental Training — Six Practices',
+    icon: '🧘',
+    tagline: 'One deliberate practice a day, for the minutes on the row. Six ways to do it.',
+    quickStart: [
+      'Tap Begin Training under the habit and choose one of the six practices.',
+      'Read its steps — they take seconds — then do it for the minutes on the row. The timer is optional.',
+      'Come back and confirm. That ticks this habit once and pays its XP once, whichever practice you chose.',
+    ],
+    why: {
+      blurb: 'This is the challenge\'s keystone habit: a set block of time each day spent deliberately directing your attention. The six practices come at that from different directions — stillness, the world outside, the body, an idea, a hard moment ahead, your own thinking — so you can choose the one the day calls for.',
+      points: [
+        'The requirement is the minutes of deliberate practice, not one technique. Varying the practice from day to day is allowed; many people keep one main practice and use the others when a day calls for it.',
+        'A session does not have to go well to count. Noticing that your attention has drifted and bringing it back is the repetition itself.',
+        'Your daily length was chosen when this attempt started and stays fixed for it. Every length pays the same XP, so there is no reward for choosing less.',
+        'This is training, not treatment. If you are struggling with your mental health, it is not a substitute for professional support.',
+      ],
+    },
+    how: {
+      requirement: 'Spend the minutes on the habit row on ONE of the six practices: Dead Calm (meditation & breathwork), Open Sky (mindful nature observation), Moving Stillness (mindful stretching & mobility), Pursuit of Wisdom (reflective reading), Inner Vision (visualization & mental rehearsal) or Inner Mirror (journaling & introspection). Your attention has to be on the practice: walking while scrolling, stretching in front of a screen or skimming pages does not count.',
+      earns: [
+        'Completing it earns the XP shown on its row, once per day, whichever practice you chose.',
+        'Opening a practice, reading its steps or starting the timer earns nothing. Confirming that you did it is what ticks the habit.',
+        'Already ticked today? Another session is welcome, and adds no XP.',
+      ],
+      notes: 'One practice, one habit. Time you count here counts for Mental Training only: Reading, Prayer, Gratitude and the Short Physical Reset are still done separately, and finishing a session never ticks any of them for you. Attempts started before the six practices existed keep the rule they started with.',
+    },
+    optimize: [
+      {
+        title: 'Decide when, not just what',
+        body: 'A fixed time and place each day removes the decision that most often ends a daily habit. Choosing the practice can wait until you sit down; choosing the time cannot.',
+        evidence: EVIDENCE.ESTABLISHED,
+      },
+      {
+        title: 'Really put the phone away',
+        body: 'Open Sky, Moving Stillness, Pursuit of Wisdom and Inner Mirror are designed to be done without it. Read the steps, put the phone in another room, and come back to record the session.',
+        evidence: EVIDENCE.PROMISING,
+      },
+      {
+        title: 'Use a timer that is not your phone',
+        body: 'A watch or kitchen timer keeps the phone out of reach. The timer on the training screen is there if you want it, and never required.',
+        evidence: EVIDENCE.PROMISING,
+      },
+      {
+        title: 'Match the practice to the day',
+        body: 'Inner Vision before something demanding, Dead Calm after something stressful, Open Sky after a day indoors. A reasonable rule of thumb rather than a finding.',
+        evidence: EVIDENCE.EXPERIMENTAL,
+      },
+    ],
+    advanced: [
+      {
+        title: 'Rehearse the setback, not just the success',
+        body: 'In Inner Vision, picturing an obstacle and your planned response to it has more behind it than picturing only the outcome you want.',
+        evidence: EVIDENCE.PROMISING,
+      },
+      {
+        title: 'Turn reading into one action',
+        body: 'In Pursuit of Wisdom, end each session by naming one thing you will do differently today. An idea you act on is easier to remember than one you only agreed with.',
+        evidence: EVIDENCE.EXPERIMENTAL,
+      },
+      {
+        title: 'Lengthen in your next attempt, not this one',
+        body: 'If the minutes start to feel easy, choose a longer length when you start your next Mental Training Phase. This attempt keeps the length it started with.',
+        evidence: EVIDENCE.EXPERIMENTAL,
+      },
+    ],
+    mistakes: [
+      { title: 'Multitasking the minutes', body: 'A practice done while scrolling, listening to something or watching a screen is a different activity. The attention is the requirement.' },
+      { title: 'Counting the same minutes twice', body: 'Reflective reading does not also cover your reading pages, and journaling does not also cover your gratitude line. Each habit gets its own time.' },
+      { title: 'Grading the session', body: 'Judging whether it went well is the most reliable way to stop doing it. Turning up for the minutes is what counts.' },
+      { title: 'Waiting for a calm moment', body: 'The calm moment does not arrive on its own. Pick the time and start.' },
+    ],
+    examples: [
+      {
+        label: 'Twenty minutes of Dead Calm, first thing',
+        lines: [
+          '06:50 — before the phone is unlocked, which is the one reliably quiet part of the day.',
+          'A minute of slow breathing to settle, then nineteen following the breath.',
+          'Your mind wanders perhaps thirty times. Each time you notice, you go back.',
+          'Back to Forge, confirm, done.',
+        ],
+      },
+      {
+        label: 'Thirty minutes of Open Sky after work',
+        lines: [
+          'Phone left on the hall table. A slow loop of the park.',
+          'Five things you can see, four you can hear, three you can feel — then just keep noticing.',
+          'Caught yourself planning dinner twice; came back to the trees both times.',
+          'Home, confirm the session. Your Physical Reset is still its own ten minutes.',
+        ],
+      },
+    ],
+  },
+
   // ─────────────────────────────────────────────────── 0. Mental training
   // Offered only to attempts on habit rules version 2 — see data/habitRules.js.
   // Version 1 attempts were started when the only statement of this habit's
