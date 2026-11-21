@@ -56,8 +56,9 @@ ones, which already carried the five sections asked for:
 
 - **Fat Loss** (`fatLossGuides.js`) — Protein Target, Daily Steps, Stop at ~90%
   Fullness, Progress Photo, Sleep Opportunity, Mostly Whole Foods.
-- **Mental Training** (`mentalTrainingGuides.js`) — Mental Training,
-  Phone-Free Focus Block, Daily Reading, Daily Gratitude, Short Physical Reset.
+- **Mental Training** (`mentalTrainingGuides.js`) — Mental Training — Six
+  Practices, Phone-Free Focus Block, Daily Reading, Daily Gratitude, Short
+  Physical Reset.
 - **Muscle Building** (`muscleBuildingGuides.js`) — Protein Target, Nutrition
   Target, Carb Target, Sleep Opportunity, Daily Recovery Practice.
 - **Energy Reset** (`energyResetGuides.js`) — Sleep Opportunity, Morning Light,
@@ -159,12 +160,14 @@ stating it creates a rule where somebody might have been reading a different
 one. Versioning it is the conservative choice. Flipping it to informational is
 a one-line change if you would rather everyone saw it.
 
-*Later: the six practices.* The Mental Training overhaul replaces this row's
-rule for attempts started after it ships — one of six practices, at a daily
-length chosen at setup — and stamps that onto the attempt itself
-(`meta.mentalTraining`, see `src/data/mentalPractices.js`) rather than adding a
-habit rules version. Attempts on version 1 or 2 without that stamp keep the
-rules in this table.
+*Later: the six practices.* The Mental Training overhaul, released together
+with this work, replaces this row's version 2 for every new attempt — one of
+six practices, at a daily length of 5, 15 or 30 minutes chosen at setup — and
+stamps that onto the attempt itself (`meta.mentalTraining`, see
+`src/data/mentalPractices.js`) rather than adding a habit rules version. Since
+no attempt can be on version 2 without that stamp, the Mental Training guide
+written for version 2 was retired before release; the six practices have their
+own guide. Attempts started before keep version 1, exactly as above.
 
 *`mt_mind` version 2 drops prayer and keeps breathwork.* You asked for
 meditation, mindfulness and visualization to be eligible, for existing prayer

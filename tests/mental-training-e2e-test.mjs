@@ -5,7 +5,7 @@
  * real setup flow, the habit is completed through Begin Training, and every
  * claim is checked against what the app stores as well as what it shows.
  *
- *   A. Setup offers 10 / 20 / 30 minutes, never below the mode's minimum, and
+ *   A. Setup offers 5 / 15 / 30 minutes, never below the mode's minimum, and
  *      stamps the choice onto the attempt without a template update prompt.
  *   B. Today shows ONE Mental Training habit, its sentence, its Guide and a
  *      Begin Training action that lives outside the checkbox row.
@@ -99,7 +99,8 @@ async function toTrainingStep({ mode = null } = {}) {
 const lengths = () => page.evaluate(() => [...document.querySelectorAll('[data-testid="setup-training"] .mt-length')]
   .map(b => ({ text: b.querySelector('.f4c-dur-n').textContent, on: b.getAttribute('aria-checked') === 'true', disabled: b.disabled })));
 async function pickLength(m) {
-  await page.locator('[data-testid="setup-training"] .mt-length', { hasText: `${m} minutes a day` }).click();
+  // Anchored: "5 minutes a day" is also inside "15 minutes a day".
+  await page.locator('[data-testid="setup-training"] .mt-length', { hasText: new RegExp(`^${m} minutes a day`) }).click();
   await page.waitForTimeout(200);
 }
 async function finishSetup() {
@@ -150,9 +151,9 @@ await fresh('me');
 // ══ A: setup ════════════════════════════════════════════════════════════════
 check('A: the setup flow has a Daily Mental Training step', await toTrainingStep({ mode: 'Standard' }));
 let opts = await lengths();
-check('A: it offers 10, 20 and 30 minutes', opts.map(o => o.text).join('|') === '10 minutes a day|20 minutes a day|30 minutes a day');
-check('A: Standard recommends 20 and has it selected', opts.find(o => o.on)?.text === '20 minutes a day');
-check('A: Standard cannot choose less than 20', opts[0].disabled && !opts[1].disabled && !opts[2].disabled);
+check('A: it offers 5, 15 and 30 minutes', opts.map(o => o.text).join('|') === '5 minutes a day|15 minutes a day|30 minutes a day');
+check('A: Standard recommends 15 and has it selected', opts.find(o => o.on)?.text === '15 minutes a day');
+check('A: Standard cannot choose less than 15', opts[0].disabled && !opts[1].disabled && !opts[2].disabled);
 check('A: the step says the length is fixed and pays the same XP',
   /fixed once the challenge starts/i.test(await page.textContent('[data-testid="setup-training"]'))
     && /same \d+ XP a day/i.test(await page.textContent('[data-testid="setup-training"]')));
@@ -173,7 +174,7 @@ for (let i = 0; i < 6 && !(await page.locator('[data-testid="setup-training"]').
   await page.locator('.f4c-setup .f4c-btn.primary').last().click(); await page.waitForTimeout(300);
 }
 opts = await lengths();
-check('A: Beginner allows all three and recommends 10',
+check('A: Beginner allows all three and recommends 5',
   opts.every(o => !o.disabled) && opts[0].on, JSON.stringify(opts));
 await pickLength(30);
 opts = await lengths();
@@ -432,8 +433,8 @@ await page.reload();
 await page.waitForSelector('.dashboard', { timeout: 15000 });
 await startMT({ mode: 'Beginner' });
 const gf = await prof('girlfriend');
-check('K: the other profile starts its own attempt at Beginner\'s 10 minutes',
-  gf.activeChallenge.mentalTraining?.minutes === 10 && gf.tasks.find(t => t.id === 'mt_mind').name === 'Mental Training — 10 minutes');
+check('K: the other profile starts its own attempt at Beginner\'s 5 minutes',
+  gf.activeChallenge.mentalTraining?.minutes === 5 && gf.tasks.find(t => t.id === 'mt_mind').name === 'Mental Training — 5 minutes');
 check('K: its card layout offers Begin Training under the habit',
   (await page.locator('.mt-task .gf-task-card').count()) === 1 && (await page.locator('[data-testid="begin-training"]').count()) === 1);
 const gfAccent = await page.evaluate(() => getComputedStyle(document.querySelector('.mt-launch-go')).color);

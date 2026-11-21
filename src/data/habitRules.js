@@ -60,6 +60,13 @@ export const VERSIONED_HABITS = {
   // out — Mental Training already has a separate Prayer habit worth its own
   // XP, and one practice should not tick two requirements that were meant to
   // be separate. Attempts on version 1 keep prayer, exactly as started.
+  //
+  // Version 2 was overtaken before release by the six practices, which every
+  // new Mental Training attempt is stamped with (data/mentalPractices.js) and
+  // which take precedence over this table. So no attempt can reach this
+  // entry, and the guide written for it was retired rather than left in the
+  // Habit Library describing a rule nobody follows. The sentence stays so an
+  // unstamped version 2 attempt, should one ever exist, still reads correctly.
   mt_mind: {
     1: {
       desc: 'Breathwork, meditation or prayer. Following your breath quietly counts.',
@@ -67,7 +74,7 @@ export const VERSIONED_HABITS = {
     },
     2: {
       desc: 'Meditation, mindfulness, breathwork or visualization.',
-      guideId: 'mental:mind',
+      guideId: null,
     },
   },
 

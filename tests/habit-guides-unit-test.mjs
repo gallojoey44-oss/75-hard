@@ -266,8 +266,10 @@ const STACKED = [
   { id: 'mt_mind', name: 'Mental Training — 5 minutes', order: 2, challenges: ['support'] },
 ];
 const laned = presentTasks(STACKED, META_V1, { templateId: 'mental_training_phase', variant: 'standard', habitRulesVersion: 2 });
+// Version 2's Mental Training rule carries no guide: the guide written for it
+// was retired when the six practices replaced that rule before release.
 check('9: a support habit is resolved against the support attempt',
-  /visualization/.test(laned[1].desc) && laned[1].guideId === 'mental:mind', laned[1].desc);
+  /visualization/.test(laned[1].desc) && (laned[1].guideId ?? null) === null, laned[1].desc);
 check('9: while the primary lane keeps the primary attempt\'s rules',
   (laned[0].desc ?? null) === null);
 

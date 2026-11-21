@@ -20,8 +20,8 @@ import {
 
 /** How each daily length reads, so the three are told apart at a glance. */
 const TRAINING_LENGTH_LABELS = {
-  10: 'A focused start',
-  20: 'A full session',
+  5: 'A focused start',
+  15: 'A full session',
   30: 'Deep practice',
 };
 

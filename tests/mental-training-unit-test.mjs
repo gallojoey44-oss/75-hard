@@ -27,7 +27,7 @@ import {
  *      which keeps its id, keystone weight and XP. No new habits, no new XP.
  *   2. The six practices exist, each with the content the session screen
  *      needs, and none of them promises an outcome.
- *   3. Duration is chosen at setup from 10 / 20 / 30, never below the mode's
+ *   3. Duration is chosen at setup from 5 / 15 / 30, never below the mode's
  *      own minimum, fixed for the attempt — and it never changes the XP.
  *   4. Versioning: the practices are stamped onto an attempt when it starts.
  *      An attempt without the stamp keeps exactly the habit it started with,
@@ -118,21 +118,22 @@ const promising = allCopy.filter(s => PROMISES.test(s));
 check('2: no practice copy promises a psychological or medical outcome', promising.length === 0, promising.join(' | '));
 
 // ══ 3: duration ═════════════════════════════════════════════════════════════
-check('3: the lengths on offer are 10, 20 and 30 minutes', JSON.stringify(TRAINING_MINUTE_OPTIONS) === '[10,20,30]');
-check('3: Beginner recommends 10 and allows all three',
-  recommendedMinutes('beginner') === 10 && JSON.stringify(allowedMinutes('beginner')) === '[10,20,30]');
-check('3: Standard recommends 20 and allows 20 or 30',
-  recommendedMinutes('standard') === 20 && JSON.stringify(allowedMinutes('standard')) === '[20,30]');
+check('3: the lengths on offer are 5, 15 and 30 minutes', JSON.stringify(TRAINING_MINUTE_OPTIONS) === '[5,15,30]');
+check('3: Beginner recommends 5 and allows all three',
+  recommendedMinutes('beginner') === 5 && JSON.stringify(allowedMinutes('beginner')) === '[5,15,30]');
+check('3: Standard recommends 15 and allows 15 or 30',
+  recommendedMinutes('standard') === 15 && JSON.stringify(allowedMinutes('standard')) === '[15,30]');
 check('3: Hard recommends and requires 30', recommendedMinutes('hard') === 30 && JSON.stringify(allowedMinutes('hard')) === '[30]');
 check('3: no mode allows less than its own recommendation',
   MODES.every(m => allowedMinutes(m).every(x => x >= recommendedMinutes(m))));
 check('3: a harder mode never recommends less than an easier one',
   recommendedMinutes('beginner') <= recommendedMinutes('standard') && recommendedMinutes('standard') <= recommendedMinutes('hard'));
 check('3: a length below the mode\'s minimum falls back to the recommendation',
-  resolveMinutes('hard', 10) === 30 && resolveMinutes('standard', 10) === 20 && resolveMinutes('beginner', 30) === 30);
-check('3: nonsense lengths fall back too',
-  resolveMinutes('standard', 45) === 20 && resolveMinutes('standard', '20') === 20 && resolveMinutes('standard', null) === 20
-    && resolveMinutes('nonsense', 10) === 20);
+  resolveMinutes('hard', 5) === 30 && resolveMinutes('hard', 15) === 30 && resolveMinutes('standard', 5) === 15
+    && resolveMinutes('beginner', 30) === 30);
+check('3: lengths that were never offered fall back too',
+  resolveMinutes('standard', 20) === 15 && resolveMinutes('beginner', 10) === 5 && resolveMinutes('standard', 45) === 15
+    && resolveMinutes('standard', '30') === 30 && resolveMinutes('standard', null) === 15 && resolveMinutes('nonsense', 5) === 15);
 check('3: allowedMinutes hands back a copy, so a caller cannot change the rules',
   (() => { const a = allowedMinutes('hard'); a.push(5); return JSON.stringify(allowedMinutes('hard')) === '[30]'; })());
 
@@ -190,18 +191,18 @@ check('4: only Mental Training is stamped',
 
 const legacyMeta = { templateId: MT.id, variant: 'standard', durationDays: 21 };
 const legacyV2Meta = { ...legacyMeta, habitRulesVersion: 2 };
-const newMeta = { ...legacyMeta, habitRulesVersion: 2, mentalTraining: { version: 1, minutes: 20 } };
+const newMeta = { ...legacyMeta, habitRulesVersion: 2, mentalTraining: { version: 1, minutes: 15 } };
 const legacyTasks = MT.variants.standard.start_tasks.map(t => ({ ...t, source: 'template' }));
 const legacyMind = legacyTasks.find(t => t.id === 'mt_mind');
 
 check('4: an unstamped attempt has no training rules', trainingConfigOf(legacyMeta) === null && trainingFor(legacyMind, legacyMeta) === null);
 check('4: a habit-rules-v2 attempt without the stamp has none either', trainingFor(legacyMind, legacyV2Meta) === null);
-check('4: a stamped attempt does', JSON.stringify(trainingConfigOf(newMeta)) === JSON.stringify({ version: 1, minutes: 20 })
+check('4: a stamped attempt does', JSON.stringify(trainingConfigOf(newMeta)) === JSON.stringify({ version: 1, minutes: 15 })
   && trainingFor(legacyMind, newMeta)?.practices?.length === 6);
 check('4: only the training habit is a training habit',
   legacyTasks.filter(t => trainingFor(t, newMeta)).map(t => t.id).join() === 'mt_mind');
 check('4: a stamp on another challenge is ignored',
-  trainingConfigOf({ templateId: 'fat_loss_phase', mentalTraining: { version: 1, minutes: 20 } }) === null);
+  trainingConfigOf({ templateId: 'fat_loss_phase', mentalTraining: { version: 1, minutes: 15 } }) === null);
 check('4: a malformed stamp is ignored',
   trainingConfigOf({ templateId: MT.id, mentalTraining: { minutes: 'x' } }) === null
     && trainingConfigOf({ templateId: MT.id, mentalTraining: 20 }) === null
@@ -211,8 +212,11 @@ const v1Row = presentationFor(legacyMind, legacyMeta);
 check('4: a version-1 attempt keeps its original wording and no guide',
   /prayer/i.test(v1Row.desc) && v1Row.guideId === null, v1Row.desc);
 const v2Row = presentationFor(legacyMind, legacyV2Meta);
-check('4: a version-2 attempt without the practices keeps its own wording and guide',
-  v2Row.desc === 'Meditation, mindfulness, breathwork or visualization.' && v2Row.guideId === 'mental:mind');
+check('4: a version-2 attempt without the practices keeps its own wording, and no guide',
+  v2Row.desc === 'Meditation, mindfulness, breathwork or visualization.' && v2Row.guideId === null);
+check('4: the interim version-2 guide is retired, so the library shows one Mental Training guide',
+  getGuide('mental:mind') === null
+    && Object.values(HABIT_GUIDES).filter(g => g.source === 'mental' && /Mental Training/.test(g.title)).length === 1);
 const newRow = presentationFor(legacyMind, newMeta);
 check('4: a stamped attempt reads "Choose an intentional practice…" with the training guide',
   newRow.desc === TRAINING_DESC && newRow.guideId === TRAINING_GUIDE_ID);
@@ -238,7 +242,7 @@ check('4: presenting never renames a habit', presentTasks(legacyTasks, newMeta).
 const fatLoss = { templateId: 'fat_loss_phase', variant: 'standard', durationDays: 30, habitRulesVersion: 2 };
 const supportMind = { ...legacyMind, challenges: ['support'] };
 check('4: a support-lane Mental Training row follows the support attempt\'s stamp',
-  trainingFor(supportMind, fatLoss, newMeta)?.minutes === 20 && trainingFor(supportMind, fatLoss, legacyMeta) === null);
+  trainingFor(supportMind, fatLoss, newMeta)?.minutes === 15 && trainingFor(supportMind, fatLoss, legacyMeta) === null);
 check('4: …and its wording follows it too',
   presentTasks([supportMind], fatLoss, newMeta)[0].desc === TRAINING_DESC
     && presentTasks([supportMind], fatLoss, legacyMeta)[0].desc !== TRAINING_DESC);
@@ -292,7 +296,7 @@ check('5: every practice pays the same', PRACTICES_V1.every(p => xpFor({ tasks: 
 check('5: the practice field holds a known id or nothing',
   practiceOfDay({ [PRACTICE_FIELD]: 'dead_calm' }) === 'dead_calm' && practiceOfDay({ [PRACTICE_FIELD]: 'made_up' }) === null
     && practiceOfDay({ [PRACTICE_FIELD]: { text: 'journal' } }) === null && practiceOfDay(null) === null);
-check('5: the task name helper matches the stored name', trainingTaskName(20) === 'Mental Training — 20 minutes');
+check('5: the task name helper matches the stored name', trainingTaskName(15) === 'Mental Training — 15 minutes');
 
 // ══ 6: one practice, one habit ══════════════════════════════════════════════
 const dayTasks = buildAttemptPayload({ template: MT, variant: 'standard' }).tasks;

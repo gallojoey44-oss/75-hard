@@ -13,11 +13,15 @@ import { EVIDENCE } from './evidence';
  *
  *  • `training` — attempts started with the six practices (data/
  *    mentalPractices.js). Its "How to complete it" is the six-practice rule.
- *  • `mind` — attempts on habit rules version 2 without the six practices.
- *  • none — attempts on version 1, whose only statement of the habit was the
- *    challenge's rationale copy naming breathwork, meditation or prayer. A
- *    guide's "How to complete it" IS the rule, so writing one for them would
- *    change the rule of an attempt already running.
+ *  • none — attempts started before them, whose only statement of the habit
+ *    was the challenge's rationale copy naming breathwork, meditation or
+ *    prayer. A guide's "How to complete it" IS the rule, so writing one for
+ *    them would change the rule of an attempt already running.
+ *
+ * An interim guide written for habit rules version 2 ("meditation,
+ * mindfulness, breathwork or visualization", at 2, 5 or 10 minutes) was
+ * retired before it was ever released: the six practices replaced that rule
+ * for every attempt it could have applied to.
  *
  * `mt_prayer` has no guide on purpose: the description says it plainly and
  * respectfully. Optimizing somebody's prayer, with evidence tags, is not
@@ -37,8 +41,6 @@ export const GUIDES = {
   // screen; this guide is the rule and the reasoning around it.
   training: {
     id: 'training',
-    // Distinct from the `mind` guide below, which the Habit Library lists
-    // beside it: the two describe different attempts' rules.
     title: 'Mental Training — Six Practices',
     icon: '🧘',
     tagline: 'One deliberate practice a day, for the minutes on the row. Six ways to do it.',
@@ -112,10 +114,10 @@ export const GUIDES = {
     ],
     examples: [
       {
-        label: 'Twenty minutes of Dead Calm, first thing',
+        label: 'Fifteen minutes of Dead Calm, first thing',
         lines: [
           '06:50 — before the phone is unlocked, which is the one reliably quiet part of the day.',
-          'A minute of slow breathing to settle, then nineteen following the breath.',
+          'A minute of slow breathing to settle, then fourteen following the breath.',
           'Your mind wanders perhaps thirty times. Each time you notice, you go back.',
           'Back to Forge, confirm, done.',
         ],
@@ -127,106 +129,6 @@ export const GUIDES = {
           'Five things you can see, four you can hear, three you can feel — then just keep noticing.',
           'Caught yourself planning dinner twice; came back to the trees both times.',
           'Home, confirm the session. Your Physical Reset is still its own ten minutes.',
-        ],
-      },
-    ],
-  },
-
-  // ─────────────────────────────────────────────────── 0. Mental training
-  // Offered only to attempts on habit rules version 2 — see data/habitRules.js.
-  // Version 1 attempts were started when the only statement of this habit's
-  // scope was the challenge's rationale copy, naming breathwork, meditation or
-  // prayer; they keep that, and they are not offered this.
-  mind: {
-    id: 'mind',
-    title: 'Mental Training',
-    icon: '🧘',
-    tagline: 'A few focused minutes of deliberate mental practice. Sitting quietly counts.',
-    quickStart: [
-      'Check the length on the habit row — 2, 5 or 10 minutes, depending on your mode.',
-      'Pick one practice and keep it for the challenge. Switching methods every day is how people conclude they cannot do this.',
-      'Sit somewhere ordinary, set a timer that is not your phone, and start.',
-    ],
-    why: {
-      blurb: 'This is the challenge\'s keystone habit, and it is deliberately short. The point is not to become good at meditating — it is to spend a few minutes every day deliberately directing your attention, which is the capacity every other habit here draws on.',
-      points: [
-        'Brief, regular practice is better supported than occasional long sessions for the things people actually want from it: attention, and a less reactive baseline.',
-        'The length follows your mode, starting at two minutes for a reason. A twenty-minute first session mostly teaches you that you cannot sit for twenty minutes.',
-        'The practice does not have to go well. Noticing you have drifted and coming back IS the repetition — it is not the thing interrupting it.',
-        'Mental Training has a separate Prayer habit with its own XP. Keeping the two apart is why this habit\'s list of methods does not include prayer.',
-      ],
-    },
-    how: {
-      requirement: 'Spend the minutes on the habit row in deliberate mental practice: meditation, mindfulness, breathwork or visualization. The length is on the row and follows your chosen mode.',
-      earns: [
-        'Checking this habit earns the XP shown on its row, once per day.',
-        'Any of the four methods counts in full. There is no hierarchy between them.',
-        'A distracted session still counts. The requirement is the minutes, not the quality.',
-      ],
-      notes: 'Prayer has its own habit in this challenge and its own XP, so one session of prayer does not also satisfy this one. Attempts started before this rule was settled follow the earlier wording, which did include prayer here — those are unchanged, and this guide is not offered to them.',
-    },
-    optimize: [
-      {
-        title: 'Same time, same place, every day',
-        body: 'The decision that kills this habit is "when shall I do it". Removing that decision is worth more than any technique.',
-        evidence: EVIDENCE.ESTABLISHED,
-      },
-      {
-        title: 'Follow the breath when you have no other plan',
-        body: 'Count the exhale to four and start again. It needs no app, no instruction and no belief about what it is doing.',
-        evidence: EVIDENCE.ESTABLISHED,
-      },
-      {
-        title: 'Use a timer that is not your phone',
-        body: 'Unlocking the phone to start is what ends most short practices. A kitchen timer removes the whole problem.',
-        evidence: EVIDENCE.PROMISING,
-      },
-      {
-        title: 'Keep one method for the whole challenge',
-        body: 'Trying a different technique every few days means never getting past the awkward first week of any of them.',
-        evidence: EVIDENCE.PROMISING,
-      },
-    ],
-    advanced: [
-      {
-        title: 'Try visualization for something specific',
-        body: 'Rehearsing a concrete, upcoming thing — a conversation, a lift, a performance — has more support behind it than general visualization does. Keep it specific and keep it short.',
-        evidence: EVIDENCE.PROMISING,
-      },
-      {
-        title: 'Lengthen only after the habit is secure',
-        body: 'Two weeks of unbroken short sessions earns the right to make them longer. Lengthening first is the usual route to stopping.',
-        evidence: EVIDENCE.PROMISING,
-      },
-      {
-        title: 'Put it before the hardest part of the day',
-        body: 'The state is most useful going into something demanding rather than recovering from it.',
-        evidence: EVIDENCE.EXPERIMENTAL,
-      },
-    ],
-    mistakes: [
-      { title: 'Expecting a clear mind', body: 'A wandering mind is the normal condition and the material the practice works on. Coming back is the rep.' },
-      { title: 'Grading the session', body: 'Judging whether it went well is the most reliable way to stop doing it. The minutes are the requirement.' },
-      { title: 'Starting at ten minutes', body: 'Your mode sets the length for a reason. The ramp is the design, not a limitation.' },
-      { title: 'Waiting for a calm moment', body: 'The calm moment does not arrive. The practice is what produces it, not what requires it.' },
-    ],
-    examples: [
-      {
-        label: 'Five minutes, first thing',
-        lines: [
-          '06:50 — before the phone is unlocked, which is the only reliably quiet part of the day.',
-          'Kitchen timer for five minutes, sitting on the edge of the bed.',
-          'Your mind wanders perhaps thirty times. Each time you notice, you go back to the breath.',
-          'Timer goes. Tick the habit.',
-        ],
-      },
-      {
-        label: 'Ten minutes, using visualization',
-        lines: [
-          'There is a difficult conversation tomorrow, so today\'s session has a subject.',
-          'Five minutes following the breath to settle, then five rehearsing the conversation concretely — what you open with, what they are likely to say.',
-          'Specific rather than general, which is the version with something behind it.',
-          'Tick it.',
         ],
       },
     ],

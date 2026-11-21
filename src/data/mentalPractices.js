@@ -16,7 +16,7 @@ import { HABIT_KEYS } from './habitKeys';
  * attempt and stamped when the attempt starts, like the Cold Exposure Upgrade
  * and Fat Loss Hard Mode's setup:
  *
- *   meta.mentalTraining = { version: 1, minutes: 20 }
+ *   meta.mentalTraining = { version: 1, minutes: 15 }
  *
  * An attempt with no stamp was started before this existed. It keeps exactly
  * the habit it started with — its name, its minutes, its wording, its guide
@@ -54,21 +54,21 @@ export const TRAINING_KEYSTONE_WHY =
 // ── Daily minutes ───────────────────────────────────────────────────────────
 
 /** Every daily length a Mental Training attempt can be set to. */
-export const TRAINING_MINUTE_OPTIONS = [10, 20, 30];
+export const TRAINING_MINUTE_OPTIONS = [5, 15, 30];
 
 /**
  * What each mode recommends and what it allows.
  *
  * A mode never allows LESS than its own recommendation. The modes pay
  * differently — Hard Mode's day is worth more than Beginner's — so letting
- * Hard Mode train for ten minutes would make the dearest mode the easiest to
+ * Hard Mode train for five minutes would make the dearest mode the easiest to
  * earn from, which is exactly the contradiction a mode exists to prevent.
  * Training for longer than your mode asks is always allowed; it simply pays
  * what the mode pays.
  */
 export const TRAINING_MINUTES_BY_MODE = {
-  beginner: { recommended: 10, options: [10, 20, 30] },
-  standard: { recommended: 20, options: [20, 30] },
+  beginner: { recommended: 5,  options: [5, 15, 30] },
+  standard: { recommended: 15, options: [15, 30] },
   hard:     { recommended: 30, options: [30] },
 };
 
@@ -115,7 +115,7 @@ export function trainingConfigOf(meta) {
   return { version: Number.isFinite(version) && version >= 1 ? version : 1, minutes };
 }
 
-/** "Mental Training — 20 minutes" */
+/** "Mental Training — 15 minutes" */
 export function trainingTaskName(minutes) {
   return `Mental Training — ${minutes} minutes`;
 }
