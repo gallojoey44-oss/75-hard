@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { getTodayStr, getDayNumberFromStart, getDateForDayNumber, dayNumberForDate } from '../utils/dateUtils';
 import { challengeDayNumber, getChallengeState, isScheduled, isChallengeActive, CHALLENGE_STATE, daysUntilStart, dateOffsetFromToday } from '../utils/challengeSchedule';
 import {
@@ -35,6 +35,7 @@ import { reconciledSegmentBreakdown, toDisplay } from '../utils/xpBreakdown';
 import { CURRENT_ECONOMY_VERSION, economyVersionOf, displayScaleFor } from '../data/xpEconomy';
 import { displayXP, scaleOfMeta, scaleOfArchive } from '../utils/xpDisplay';
 import { checkStackEras } from '../utils/eraSafety';
+import { promotionBasis, promotedDescriptor } from '../utils/supportPromotion';
 import { recentGap, shouldShowComeback, missedDayDetail, buildXPHistory, unacknowledgedPart, acknowledgementKey } from '../utils/missedDays';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 import { readPastSelf } from '../utils/pastSelf';
@@ -801,6 +802,34 @@ export function AppProvider({ children }) {
     });
   }, []);
 
+  // ── One transition at a time ─────────────────────────────────────────────
+  //
+  // A transition reads the profile as it stood at the last render. Called a
+  // second time before React has applied the first call — a button fired twice
+  // inside one task — it sees the same live challenge and closes it again: the
+  // challenge archived twice, or its missed days carried twice, which creates
+  // or erases XP. So while a transition's state is waiting to be committed, any
+  // further transition for that profile is refused. The lock is released the
+  // moment the commit lands (below), so everything after it reads the new state
+  // and behaves exactly as before — a real double tap, two quick taps or Enter
+  // pressed twice are separate input events, with a commit between them.
+  //
+  // Only a call that is about to change state takes the lock, and every
+  // transition changes `profiles`, so a commit always follows. The timer is a
+  // safety net that can only ever release a lock, never hold one.
+  const transitionLocks = useRef(new Map());
+  const transitionSeq = useRef(0);
+  const beginTransition = useCallback((profId) => {
+    if (transitionLocks.current.has(profId)) return false;
+    const token = ++transitionSeq.current;
+    transitionLocks.current.set(profId, token);
+    setTimeout(() => {
+      if (transitionLocks.current.get(profId) === token) transitionLocks.current.delete(profId);
+    }, 2000);
+    return true;
+  }, []);
+  useLayoutEffect(() => { transitionLocks.current.clear(); }, [profiles]);
+
   const setAllDays = useCallback((updater) => {
     setAllDaysState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
@@ -1412,6 +1441,7 @@ export function AppProvider({ children }) {
     // longer exist: both halves arrive together or neither is written.
     if (!options?.challenge?.templateId) return false;
     if (!options?.tasks?.length) return false;
+    if (!beginTransition(profId)) return false;
 
     // Archive BOTH lanes before anything is replaced, so a stacked pair leaves
     // two independent records rather than losing the support challenge. A
@@ -1493,7 +1523,7 @@ export function AppProvider({ children }) {
       return next;
     });
     return true;
-  }, [activeProfile, closeLiveSegment, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
+  }, [activeProfile, beginTransition, closeLiveSegment, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   // ── Support challenge lifecycle ───────────────────────────────────────────
 
@@ -1581,6 +1611,7 @@ export function AppProvider({ children }) {
   const endSupportChallenge = useCallback((profId = activeProfile, reason = 'ended_early') => {
     const prof = profiles[profId];
     if (!hasSupportChallenge(prof)) return false;
+    if (!beginTransition(profId)) return false;
     const nextTasks = stripSupportTasks(prof.tasks || []);
 
     // XP in Forge is DERIVED: the current task list is re-applied to every logged
@@ -1671,7 +1702,7 @@ export function AppProvider({ children }) {
       },
     }));
     return true;
-  }, [activeProfile, profiles, allDays, getDayCompletion, getDayNumber, setProfiles, setArchives, buildSupportArchiveEntry]);
+  }, [activeProfile, profiles, allDays, getDayCompletion, getDayNumber, setProfiles, setArchives, buildSupportArchiveEntry, beginTransition]);
 
   /**
    * True when the support challenge is prepared but has not reached Day 1.
@@ -1695,11 +1726,18 @@ export function AppProvider({ children }) {
   const promoteSupportToPrimary = useCallback((profId = activeProfile) => {
     const prof = profiles[profId];
     if (!hasSupportChallenge(prof)) return false;
+    if (!beginTransition(profId)) return false;
     const oldStart = prof.challengeStart;
     const newStart = prof.supportChallengeStart;
-    const meta = { ...prof.supportChallenge };
+    // The economy the support ran under, and the days its finished primary
+    // already banked (utils/supportPromotion.js). Without the stamp the
+    // promoted attempt was read as the pre-October economy, ten times over;
+    // without the start day it counted the shared days a second time.
+    const basis = promotionBasis(prof, archives[profId] || []);
+    const meta = promotedDescriptor(prof.supportChallenge, basis.era);
     // Support rows become the new primary's rows; primary-only rows retire with
     // the challenge that owned them (exactly as any challenge switch works).
+    // Their XP values are kept as they are: nothing is repriced.
     const tasks = tasksForLane(prof.tasks, LANE.SUPPORT)
       .map((t, i) => { const { mergedFrom, targetConflict, ...rest } = t; return { ...rest, challenges: [LANE.PRIMARY], order: i }; });
 
@@ -1714,12 +1752,19 @@ export function AppProvider({ children }) {
         supportChallengeStart: null,
         pendingPrimaryChoice: null,
         lastCompletion: null,
+        // Counted from the first day the finished primary did not bank. The
+        // slate after a completion is already on the support's numbering, so a
+        // later start it was given is kept.
+        xpStartDay: Math.max(
+          basis.firstUnbanked,
+          prev[profId]?.challengeStart === newStart ? (prev[profId]?.xpStartDay ?? 1) : 1,
+        ),
         weeklySessions: hasWeeklyRequirements(meta) ? (prev[profId].weeklySessions || []) : [],
       },
     }));
     setAllDays(prev => ({ ...prev, [profId]: rekeyDays(prev[profId] || {}, oldStart, newStart) }));
     return true;
-  }, [activeProfile, profiles, setProfiles, setAllDays]);
+  }, [activeProfile, profiles, archives, beginTransition, setProfiles, setAllDays]);
 
   /** Dismiss the "what next?" prompt shown when a primary finishes beside a support. */
   const clearPrimaryChoice = useCallback((profId = activeProfile) => {
@@ -1873,6 +1918,7 @@ export function AppProvider({ children }) {
     if (!prof?.challengeStart) return;
     if (prof.activeChallenge?.templateId === 'forge_daily') return; // baseline never "completes"
     if (isScheduled(prof)) return; // never begun — cannot complete
+    if (!beginTransition(profId)) return;
 
     const { entry, carried } = closeLiveSegment(profId);
     const summary = entry ? buildCompletionSummary(entry, profId) : null;
@@ -1920,6 +1966,11 @@ export function AppProvider({ children }) {
             finishedName: prof.activeChallenge?.name || null,
             supportName: prof.supportChallenge?.name || null,
             supportEmoji: prof.supportChallenge?.emoji || null,
+            // What a promotion needs (utils/supportPromotion.js): the economy
+            // the support ran under — the finished primary's — and the last
+            // day that primary's record banked.
+            supportEconomyVersion: economyVersionOf(prof.activeChallenge),
+            bankedThrough,
           },
           xpOffset: 0,
           xpStartDay: Math.max(1, firstUnbanked),
@@ -1956,7 +2007,7 @@ export function AppProvider({ children }) {
       saveLS('weeklyReflections', next);
       return next;
     });
-  }, [activeProfile, profiles, closeLiveSegment, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
+  }, [activeProfile, profiles, beginTransition, closeLiveSegment, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   /**
    * The SUPPORT challenge has run past its final day: archive it and clear the
@@ -1990,6 +2041,7 @@ export function AppProvider({ children }) {
    * untouched; only the live attempt's own slate is cleared.
    */
   const startForgeDaily = useCallback((profId = activeProfile) => {
+    if (!beginTransition(profId)) return;
     // Both lanes are archived, so ending everything while a support challenge
     // is stacked leaves two records rather than silently dropping the support.
     const { entry, carried } = closeLiveSegment(profId);
@@ -2027,7 +2079,7 @@ export function AppProvider({ children }) {
       saveLS('weeklyReflections', next);
       return next;
     });
-  }, [activeProfile, closeLiveSegment, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
+  }, [activeProfile, beginTransition, closeLiveSegment, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   /**
    * Restore an archived challenge as the active one. If a challenge is
@@ -2037,6 +2089,7 @@ export function AppProvider({ children }) {
     const list = archives[profId] || [];
     const entry = list.find(a => a.id === archiveId);
     if (!entry) return;
+    if (!beginTransition(profId)) return;
 
     let newList = list.filter(a => a.id !== archiveId);
     const { entry: activeEntry, carried } = closeLiveSegment(profId);
@@ -2058,7 +2111,7 @@ export function AppProvider({ children }) {
       },
     }));
     setAllDays(prev => ({ ...prev, [profId]: entry.days || {} }));
-  }, [activeProfile, archives, closeLiveSegment, setArchives, setProfiles, setAllDays]);
+  }, [activeProfile, archives, beginTransition, closeLiveSegment, setArchives, setProfiles, setAllDays]);
 
   /**
    * True when the active challenge was started from an older version of its
@@ -2822,6 +2875,7 @@ export function AppProvider({ children }) {
         carried[k] = { ...rec, dayNumber: k };
       }
 
+      if (!beginTransition(profId)) return;   // another transition is landing; the next pass migrates
       const { entry, carried: carriedSegment } = closeLiveSegment(profId, { throughDay: todayNum - 1 });
       const stamped = stampAttempt({
         meta: { ...meta },
@@ -2851,7 +2905,7 @@ export function AppProvider({ children }) {
       }));
       return;   // one profile per pass; the next render settles the other
     }
-  }, [profiles, allDays, closeLiveSegment, setArchives, setProfiles, setAllDays]);
+  }, [profiles, allDays, beginTransition, closeLiveSegment, setArchives, setProfiles, setAllDays]);
 
   // ── Missed days: recent notice vs permanent record ───────────────────────
 

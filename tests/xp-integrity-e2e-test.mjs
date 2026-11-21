@@ -22,6 +22,8 @@
  *      longer needed.
  *   7. Data stored before the fix reads exactly as it did.
  *   8. Profiles stay independent, and nothing overflows on a phone.
+ *   9. A transition never runs twice: a control fired twice in one task,
+ *      a real double-click, and both lanes finishing at the same moment.
  *
  * Time is a fake clock (Playwright's), so "the next morning" really is a new
  * day for the app rather than an edited start date.
@@ -157,6 +159,24 @@ async function startFromLibrary(cardName) {
   await page.waitForTimeout(700);
 }
 
+/** The library route up to, but not including, the final confirmation. */
+async function toFinalStep(cardName) {
+  await gotoTab('Challenges');
+  await backToChallenges(page);
+  await openChallenge(page, cardName);
+  if (await page.locator('.f4c-mode').count()) {
+    await page.locator('.f4c-mode').filter({ hasText: /^Standard/ }).first().click();
+    await page.waitForTimeout(300);
+  }
+  await beginSetup(page);
+  await passReview(page);
+  const tas = page.locator('textarea');
+  for (let i = 0, n = await tas.count(); i < n; i++) await tas.nth(i).fill('Because I keep the promises I make to myself.');
+  await page.locator('button', { hasText: /Save.*Begin/i }).first().click();
+  await page.waitForTimeout(500);
+  await pickStartDate(page, 'today');
+}
+
 // The Forge Daily baseline exactly as the app stamps it — captured in section 1
 // from the real "Start Forge Daily" button, so every fixture runs its real
 // rate card rather than a copy of it.
@@ -189,6 +209,9 @@ async function seed({ me = null, girlfriend = null, active = 'me' }) {
       p[id].xpOffset = 0;
       if (s.highestRank != null) p[id].highestRank = s.highestRank;
       if (s.ledger) p[id].xpLedger = s.ledger;
+      p[id].supportChallenge = s.support ? s.support.meta : null;
+      p[id].supportChallengeStart = s.support ? s.support.start : null;
+      if (s.highestRank != null) p[id].rankHistory = [];
       allDays[id] = s.days || {};
       archives[id] = s.archives || [];
     }
@@ -486,6 +509,102 @@ await page.evaluate(() => localStorage.setItem('activeProfile', JSON.stringify('
 await reload();
 check('7: a credit larger than today\'s penalties is grandfathered too — 75,420 stays 75,420',
   (await lifetimeXP()) === 75420, `${await lifetimeXP()}`);
+
+// ══ 9: a transition never runs twice ═══════════════════════════════════════
+// A control clicked twice inside one task — before React has re-rendered —
+// used to run its transition twice on the same moment's state: one challenge
+// archived twice, or its missed days carried twice. Real double taps were
+// never affected, and still behave exactly as one tap.
+const fireTwice = (loc) => loc.evaluate((b) => { b.click(); b.click(); });
+const meArchives = async () => (await store('archives')).me || [];
+const carriedCount = async () => ((await prof()).xpLedger?.carried || []).length;
+const RUNNING = () => ({ ...FD_META, templateId: 'mental_training_phase', name: 'Mental Training Phase', isBaseline: false,
+  durationDays: 21, variant: 'standard', effortTier: 'medium', dailyBudget: 160, completionBonusXP: 300 });
+const WITH_RECORDS = () => ({ start: dateAt(-3), meta: RUNNING(), days: { 1: { tasks: FULL() }, 2: { tasks: FULL() } }, archives: [ARCHIVE('a20', 20000)], highestRank: 4 });
+async function archiveAndChooseNew(act) {
+  await gotoTab('Settings');
+  await page.locator('button', { hasText: 'Start New Challenge' }).first().click();
+  await page.waitForTimeout(300);
+  await act(page.locator('.modal-actions .btn-primary').last());
+  await page.waitForTimeout(900);
+  await reload();
+}
+
+await seed({ me: WITH_RECORDS() });
+let xp0 = await lifetimeXP();
+let n0 = (await meArchives()).length;
+await archiveAndChooseNew(fireTwice);
+check('9: "Archive & Choose New" fired twice in one task archives the challenge once',
+  (await meArchives()).length === n0 + 1 && (await prof()).activeChallenge?.templateId === 'forge_daily', `${n0} → ${(await meArchives()).length}`);
+check('9: …and moves no XP', (await lifetimeXP()) === xp0, `${xp0} → ${await lifetimeXP()}`);
+
+await seed({ me: WITH_RECORDS() });
+xp0 = await lifetimeXP();
+n0 = (await meArchives()).length;
+await archiveAndChooseNew((loc) => loc.dblclick());
+check('9: a real double-click still does exactly what one click does', (await meArchives()).length === n0 + 1 && (await lifetimeXP()) === xp0);
+
+// Above the floor this time, so nothing can hide a duplicated week.
+await seed({ me: { start: dateAt(-7), archives: [ARCHIVE('a20', 20000)], highestRank: 4 } });
+xp0 = await lifetimeXP();
+await toFinalStep('Fat Loss Challenge');
+await fireTwice(page.locator('.f4c-setup .f4c-btn.primary').last());
+await page.waitForTimeout(900);
+await reload();
+check('9: "Start" fired twice keeps the empty Forge Daily week once',
+  (await carriedCount()) === 1 && (await prof()).activeChallenge?.templateId === 'fat_loss_phase', `${await carriedCount()} carried`);
+check('9: …and moves no XP — the week is not charged twice', (await lifetimeXP()) === xp0, `${xp0} → ${await lifetimeXP()}`);
+
+const SUPPORT_META = { templateId: 'mental_training_phase', name: 'Mental Training Phase', emoji: '🧠', variant: 'standard', durationDays: 21, passingScore: 70, keystoneRequirement: 65 };
+const STACKED_TASKS = () => [...FD_TASKS.map(t => ({ ...t, challenges: ['primary'] })),
+  { id: 'mt_focus', name: 'Focus', xp: 20, keystone: 1, source: 'template', order: 20, challenges: ['support'] },
+  { id: 'mt_physical', name: 'Physical', xp: 30, keystone: 1, source: 'template', order: 21, challenges: ['support'] }];
+const PRIMARY = () => ({ ...RUNNING(), templateId: 'fat_loss_phase', name: 'Fat Loss Challenge', durationDays: 30 });
+const stackedDays = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => [i + 1, { tasks: { ...FULL(), mt_focus: true, mt_physical: true } }]));
+await seed({ me: { start: dateAt(-3), meta: PRIMARY(), tasks: STACKED_TASKS(), days: stackedDays(3), archives: [ARCHIVE('a20', 20000)], highestRank: 4,
+  support: { meta: SUPPORT_META, start: dateAt(-3) } } });
+xp0 = await lifetimeXP();
+await gotoTab('Challenges');
+await page.locator('.acc-support-end').click();
+await page.waitForTimeout(400);
+await fireTwice(page.locator('.end-support-modal button', { hasText: /^End Support Challenge$/ }));
+await page.waitForTimeout(900);
+await reload();
+check('9: "End Support Challenge" fired twice archives the support once',
+  (await meArchives()).filter(a => a.lane === 'support').length === 1 && (await prof()).supportChallenge === null);
+check('9: …and moves no XP', (await lifetimeXP()) === xp0, `${xp0} → ${await lifetimeXP()}`);
+
+// Promote, fired twice: the primary finished yesterday beside the support.
+await seed({ me: { start: dateAt(-30), meta: PRIMARY(), tasks: STACKED_TASKS(), days: stackedDays(30), archives: [ARCHIVE('a20', 20000)], highestRank: 4,
+  penalties: false, support: { meta: SUPPORT_META, start: dateAt(-5) } } });
+await gotoTab('Home');
+const choice = (await prof()).pendingPrimaryChoice;
+const daysBefore = JSON.stringify((await store('allDays')).me);
+await fireTwice(page.locator('.primary-choice-card button', { hasText: 'Promote' }));
+await page.waitForTimeout(900);
+const promoted = await prof();
+check('9: "Promote" fired twice promotes once',
+  !!choice && promoted.activeChallenge?.templateId === 'mental_training_phase' && promoted.supportChallenge === null
+    && promoted.xpStartDay === 6 && JSON.stringify((await store('allDays')).me) === daysBefore,
+  `${promoted.activeChallenge?.templateId} start day ${promoted.xpStartDay}`);
+await reload();
+
+// Both lanes past their final day at the same moment: the support finishes,
+// then — once that is committed — the primary, reading the state the support
+// left behind rather than the moment before it.
+await seed({ me: { start: dateAt(-15), meta: { ...PRIMARY(), durationDays: 14 }, tasks: STACKED_TASKS(), days: stackedDays(14), archives: [ARCHIVE('a20', 20000)],
+  highestRank: 4, penalties: false, support: { meta: { ...SUPPORT_META, durationDays: 7 }, start: dateAt(-9) } } });
+await page.waitForTimeout(800);
+const both = await prof();
+const bothArchives = await meArchives();
+check('9: both lanes finishing at once each archive exactly once',
+  bothArchives.filter(a => a.lane === 'support').length === 1
+    && bothArchives.filter(a => a.lane !== 'support' && a.challenge?.templateId === 'fat_loss_phase').length === 1,
+  bothArchives.map(a => `${a.lane || 'primary'}:${a.challenge?.templateId}`).join(', '));
+check('9: …and the profile is left consistent: Forge Daily, no support, no choice about one',
+  both.activeChallenge?.templateId === 'forge_daily' && both.supportChallenge === null && !both.pendingPrimaryChoice
+    && !both.tasks.some(t => (t.challenges || []).includes('support')),
+  JSON.stringify({ primary: both.activeChallenge?.templateId, support: both.supportChallenge?.templateId ?? null, choice: !!both.pendingPrimaryChoice }));
 
 // ══ 8: phone widths ════════════════════════════════════════════════════════
 await seed({ me: { start: dateAt(-1), days: { 1: { tasks: FULL() } } } });
