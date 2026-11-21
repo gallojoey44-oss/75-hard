@@ -28,15 +28,56 @@ import {
   DEFAULT_PASSING_SCORE, DEFAULT_KEYSTONE_REQUIREMENT, computeChallengeChanges, computeWithinChallengeTrend,
 } from '../utils/gamification';
 import { displayXP, scaleOfMeta } from '../utils/xpDisplay';
-import { displayScaleFor } from '../data/xpEconomy';
+import { displayScaleFor, dayRules } from '../data/xpEconomy';
+import { stampAttempt } from '../utils/xpAttempt';
 import { buildTimeline, entriesInLastNDays } from '../utils/archiveUtils';
 import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insightsUtils';
-import { getTemplateById, getCompletionBonusForDuration } from '../data/challengeTemplates';
+import {
+  getTemplateById, getCompletionBonusForDuration, FORGE_DAILY_META, FORGE_DAILY_TASKS,
+} from '../data/challengeTemplates';
 import { MENTAL_TRAINING_TEMPLATE, buildTrainingConfig, applyTrainingSetup } from '../data/mentalPractices';
 import { WEEKLY_REQUIREMENT_DEFS } from '../utils/weeklyRequirements';
 import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { formatDateShort, dayNumberForDate } from '../utils/dateUtils';
 import ScheduledStartCard from './ScheduledStart';
+
+// ── Forge Daily: what missed days cost ─────────────────────────────────────
+
+/**
+ * What a fully missed Forge Daily day costs, in the XP the balance moves by —
+ * read from the baseline's own rate card, never written into the copy. The
+ * running baseline's stamp is used when there is one; otherwise a freshly
+ * stamped baseline, which is what starting Forge Daily would run.
+ */
+function forgeDailyMissedDayXP(meta) {
+  const baseline = meta?.templateId === 'forge_daily' && meta.xpEconomyVersion
+    ? meta
+    : stampAttempt({ meta: { ...FORGE_DAILY_META }, tasks: FORGE_DAILY_TASKS, template: null }).meta;
+  const rules = dayRules(baseline);
+  return displayXP(rules.missedDay, rules.displayScale);
+}
+
+/**
+ * The line under "No Active Challenge". Forge Daily is not a challenge, and
+ * the Home screen says so — but it is not penalty-free either, and saying
+ * nothing let "no challenge" read as "no deductions".
+ */
+function ForgeDailyPenaltyNote({ penaltiesOn, missedDayXP, running }) {
+  if (!penaltiesOn) {
+    return (
+      <p className="fd-penalty-note" data-testid="fd-penalty-note" data-penalties="off">
+        XP Penalties are off, so missed days on Forge Daily cost no XP.
+      </p>
+    );
+  }
+  return (
+    <p className="fd-penalty-note" data-testid="fd-penalty-note" data-penalties="on">
+      {running ? 'Forge Daily' : 'Once started, Forge Daily'} counts missed days while XP Penalties
+      are on: a fully missed day costs {missedDayXP.toLocaleString()} XP, and habits left
+      unticked on a logged day cost a little too. You can turn penalties off in Settings.
+    </p>
+  );
+}
 
 // ── Challenge Complete screen ────────────────────────────────────────────────
 
@@ -1166,6 +1207,11 @@ export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPast
           <div className="start-challenge-emoji">🔥</div>
           <h2>No Active Challenge</h2>
           <p>Continue building yourself with Forge Daily — light daily habits that keep your streak alive.</p>
+          <ForgeDailyPenaltyNote
+            penaltiesOn={profile?.xpPenalties !== false}
+            missedDayXP={forgeDailyMissedDayXP(null)}
+            running={false}
+          />
           <button className="btn btn-primary btn-full" onClick={() => goToLibrary()}>
             Start New Challenge
           </button>
@@ -1231,6 +1277,11 @@ export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPast
         <div className="no-challenge-banner">
           <div className="ncb-text">
             <strong>No Active Challenge.</strong> Continue building yourself with Forge Daily.
+            <ForgeDailyPenaltyNote
+              penaltiesOn={profile?.xpPenalties !== false}
+              missedDayXP={forgeDailyMissedDayXP(meta)}
+              running
+            />
           </div>
           <button className="btn btn-primary" onClick={() => goToLibrary()}>Start New Challenge</button>
         </div>

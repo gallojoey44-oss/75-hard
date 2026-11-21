@@ -9075,3 +9075,11 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 @supports not (color: color-mix(in srgb, red 10%, blue)) {
   .mt-launch { background: var(--f4-surface-2); }
 }
+
+/* ═══ Forge Daily: what missed days cost ═════════════════════════════════ */
+.ncb-text .fd-penalty-note {
+  margin: 5px 0 0; font-size: 12px; line-height: 1.45; color: var(--text2);
+}
+.start-challenge .fd-penalty-note {
+  margin: -12px auto 22px; max-width: 340px; font-size: 12.5px; line-height: 1.5; color: var(--text2);
+}

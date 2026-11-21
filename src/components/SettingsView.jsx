@@ -9,6 +9,7 @@ import { checkForUpdate, applyUpdate } from '../utils/swUtils.js';
 import BuildBanner, { BUILD_VERSION } from './BuildBanner';
 import { computeTotalXP, BADGE_DEFS, LEGACY_PASSING_SCORE } from '../utils/gamification';
 import { displayXP, scaleOfMeta, scaleOfArchive } from '../utils/xpDisplay';
+import { dayRules } from '../data/xpEconomy';
 
 const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints', 'archives', 'notifPrefs', 'weeklyReflections'];
 
@@ -612,8 +613,16 @@ export default function SettingsView({ setView, onOpenFutureSelf = null }) {
         <div className="settings-row">
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600, fontSize: 14 }}>XP Penalties</div>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
-              Lose XP for missed tasks and broken streaks. Kept low — MWD reduces penalties by 70%.
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }} data-testid="xp-penalties-desc">
+              Lose XP for missed days and for habits left unticked, in challenges and in Forge
+              Daily. A Minimum Warrior Day cuts that day&apos;s penalty by 70%.
+              {/* Broken streaks cost nothing under the current XP rules. An
+                  attempt started under the earlier rules still charges for
+                  one, so it is said only where it is true. */}
+              {profile?.activeChallenge && (dayRules(profile.activeChallenge).streakBreakPenalty ?? 0) > 0 && (
+                <> This challenge also loses XP when a streak breaks, because it started under the
+                earlier XP rules.</>
+              )}
             </div>
           </div>
           <button

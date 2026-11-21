@@ -28,9 +28,109 @@ import { displayScaleFor, CURRENT_ECONOMY_VERSION } from '../data/xpEconomy';
  *
  * Effective Lifetime XP = earned - penalties, clamped up to the floor of the
  * highest rank ever unlocked. A rank, once unlocked, is never lost.
+ *
+ * ── Transitions and the floor ────────────────────────────────────────────
+ *
+ * Two holes remained, both at the moment a segment ends.
+ *
+ *   • Archiving still clipped. A segment that ended in deficit was archived as
+ *     max(0, gained - lost), and one with no day records was not archived at
+ *     all — so starting a new challenge handed the deficit straight back, and
+ *     a Forge Daily period spent entirely away cost nothing once it ended. New
+ *     archives record their GROSS figures (`xpGained`, `xpLost`, marked
+ *     `xpAccounting: 2`) and contribute exactly what the live segment did. A
+ *     segment that cannot be archived leaves the same figures in the ledger's
+ *     `carried` list. Either way, ending a segment moves no XP.
+ *
+ *   • Rank protection outlived what it protected. The floor's write-off is a
+ *     stored credit, and when the penalties it cancelled later disappeared — a
+ *     refund at a transition, a missed day logged after the fact, penalties
+ *     switched off — the credit stayed behind and the balance rose above
+ *     anything earned. The credit now remembers the penalty total it was
+ *     written against (`forgivenBasis`), and penalties that disappear cancel
+ *     the credit before they raise the balance. Penalties gone for good write
+ *     the credit down for good (forgivenessRatchet), so later missed days are
+ *     charged rather than refilling it; switching penalties off and on again
+ *     restores the balance exactly. Earning XP after reaching the floor still
+ *     moves the balance immediately.
+ *
+ * Archives written before this are read exactly as before (`xpEarned`), and a
+ * credit written before it keeps its full value, so no balance changes on the
+ * day this ships; only what happens next is different.
  */
 
 export const LEDGER_VERSION = 1;
+
+/** The accounting mode new archives are written in. */
+export const GROSS_ACCOUNTING = 2;
+
+/** True for an archive that records its gross earned and lost XP. */
+export function hasGrossAccounting(entry) {
+  return entry?.xpAccounting === GROSS_ACCOUNTING
+    && Number.isFinite(Number(entry?.xpGained))
+    && Number.isFinite(Number(entry?.xpLost));
+}
+
+/**
+ * What one archive contributes to Lifetime XP, in display units.
+ *
+ * A gross archive contributes exactly what its live segment contributed the
+ * moment before it was archived — earned XP and penalties separately, a
+ * deficit included. An archive written before gross accounting contributes the
+ * XP it banked, as it always has; its clipped deficit, if any, is what the
+ * one-time reconciliation exists for.
+ */
+export function archiveContribution(entry) {
+  const era = archiveEraOf(entry);
+  if (hasGrossAccounting(entry)) {
+    return { gained: toDisplayXP(entry.xpGained, era), lost: toDisplayXP(entry.xpLost, era) };
+  }
+  return { gained: toDisplayXP(entry?.xpEarned, era), lost: 0 };
+}
+
+/**
+ * Segments that ended with nothing to archive, carried in the ledger.
+ *
+ * A Forge Daily period with no day records at all is the usual one: every day
+ * of it was missed, so there is nothing to archive and everything to account
+ * for. Each entry is in DISPLAY units and says where it came from.
+ */
+export function carriedSegments(ledger) {
+  return Array.isArray(ledger?.carried) ? ledger.carried.filter(c => c && typeof c === 'object') : [];
+}
+
+/** A ledger with one more carried segment appended. Never rewrites the others. */
+export function appendCarried(ledger, entry) {
+  if (!entry) return ledger;
+  return { ...(ledger || makeLedger()), carried: [...carriedSegments(ledger), entry] };
+}
+
+/** The carried segments' combined earned and lost XP, in display units. */
+export function carriedTotals(ledger) {
+  return carriedSegments(ledger).reduce((s, c) => ({
+    gained: s.gained + (Number(c.gained) || 0),
+    lost: s.lost + (Number(c.lost) || 0),
+  }), { gained: 0, lost: 0 });
+}
+
+/**
+ * The rank-protection credit that still applies, in display units.
+ *
+ * `forgiven` was written against a penalty total, `forgivenBasis`. Penalties
+ * that have disappeared since — a missed day logged after the fact, penalties
+ * switched off, a record deleted — cancel the credit first, because a
+ * write-off can never outlive the charge it wrote off. Penalties that ADD to
+ * the total leave the credit alone. A credit with no basis was written before
+ * this rule existed and keeps its full value.
+ */
+export function effectiveForgiven(ledger, grossPenalties) {
+  const stored = forgivenDisplayAmount(ledger);
+  if (stored <= 0) return 0;
+  const basis = Number(ledger?.forgivenBasis);
+  if (ledger?.forgivenBasis == null || !Number.isFinite(basis)) return stored;
+  const removed = Math.max(0, basis - (Number(grossPenalties) || 0));
+  return Math.max(0, stored - removed);
+}
 
 /** A fresh, unreconciled ledger. */
 export function makeLedger() {
@@ -166,7 +266,11 @@ export function archiveDeficit(entry) {
     };
   }
 
-  const discarded = Math.max(0, withPenalties.lost - withPenalties.gained);
+  // A gross archive already counts its whole deficit in Lifetime XP (see
+  // archiveContribution), so nothing about it was discarded and there is
+  // nothing for the reconciliation to recover. Charging it here would take the
+  // same penalty twice.
+  const discarded = hasGrossAccounting(entry) ? 0 : Math.max(0, withPenalties.lost - withPenalties.gained);
   const detail = detailFor(true);
   return {
     ...base,
@@ -237,7 +341,7 @@ export function capToFloor(total, lifetimeBefore, floor) {
  * `uncounted` keeps the full figure that was found, and `forgiven` the part
  * written off, so the screen can show both without recomputing.
  */
-export function buildReconciliation(preview, lifetimeBefore, floor, forgivenBefore = 0) {
+export function buildReconciliation(preview, lifetimeBefore, floor, forgivenBefore = 0, forgivenBasisBefore = null) {
   const cap = capToFloor(preview.amount, lifetimeBefore, floor);
   return {
     at: new Date().toISOString(),
@@ -252,6 +356,9 @@ export function buildReconciliation(preview, lifetimeBefore, floor, forgivenBefo
     floor,
     lifetimeBefore,
     forgivenBefore,
+    // What the rank-protection credit was measured against before this, so
+    // undoing restores the credit exactly — amount and basis together.
+    forgivenBasisBefore,
     archiveCount: preview.archiveCount,
     unverifiedCount: preview.unverifiedCount,
     segments: preview.charged.map(s => ({
@@ -272,29 +379,106 @@ export function buildReconciliation(preview, lifetimeBefore, floor, forgivenBefo
  * net         earned - penalties, before the floor
  *
  * The current segment is counted RAW: a deficit now reduces Lifetime XP
- * directly, which is the behaviour that was previously clipped at zero.
+ * directly, which is the behaviour that was previously clipped at zero. A
+ * gross archive and a carried segment are counted the same way, so the
+ * figure does not move when the live segment becomes one of them.
  */
 export function computeXPBreakdown({ archives, currentSegment, ledger, currentEra = 1 }) {
   // Each record is converted to display units by the ERA THAT PRODUCED IT.
   // Era-1 archives keep their stored figures on disk and are scaled on the way
   // out, so the conversion never touches history and can be undone by removing
   // the scale table.
-  const archived = (archives || []).reduce(
-    (s, a) => s + toDisplayXP(a?.xpEarned, archiveEraOf(a)), 0);
+  let archivedEarned = 0;
+  let archivedLost = 0;
+  for (const a of archives || []) {
+    const c = archiveContribution(a);
+    archivedEarned += c.gained;
+    archivedLost += c.lost;
+  }
+  const carried = carriedTotals(ledger);
   const curScale = displayScaleFor(currentEra);
   const currentGained = Math.max(0, Number(currentSegment?.gained) || 0) * curScale;
   const currentLost = Math.max(0, Number(currentSegment?.lost) || 0) * curScale;
   const historical = ledgerDisplayAmount(ledger?.reconciled);
-  const forgiven = forgivenDisplayAmount(ledger);
-  const earned = archived + currentGained;
-  const penalties = historical + currentLost;
+  const earned = archivedEarned + carried.gained + currentGained;
+  const penalties = historical + archivedLost + carried.lost + currentLost;
+  const forgiven = effectiveForgiven(ledger, penalties);
   return {
-    archivedXP: archived, currentEarned: currentGained, currentPenalty: currentLost,
+    archivedXP: archivedEarned, archivedPenalty: archivedLost,
+    carriedEarned: carried.gained, carriedPenalty: carried.lost,
+    currentEarned: currentGained, currentPenalty: currentLost,
     historicalPenalty: historical, forgiven, earned,
     penalties: Math.max(0, penalties - forgiven),
     grossPenalties: penalties,
     net: earned - penalties + forgiven,
   };
+}
+
+/**
+ * The ledger fields to write when a live deficit has pushed the balance below
+ * the protected floor, or null when nothing needs writing.
+ *
+ * The new credit is the credit that still applies plus the new shortfall, and
+ * it is stamped with the penalty total it was written against — which is what
+ * lets a later disappearance of those penalties cancel it (effectiveForgiven).
+ * Written in display units.
+ */
+export function forgivenessUpdate(inputs, floor) {
+  const b = computeXPBreakdown(inputs);
+  const f = Math.max(0, Number(floor) || 0);
+  if (b.net >= f) return null;
+  const forgivable = Math.max(0, b.grossPenalties - b.forgiven);
+  const short = Math.min(f - b.net, forgivable);
+  if (!(short > 0)) return null;
+  return {
+    forgiven: b.forgiven + short,
+    forgivenUnits: CURRENT_ECONOMY_VERSION,
+    forgivenBasis: b.grossPenalties,
+  };
+}
+
+/**
+ * Writes the credit down when penalties it was written against have gone for
+ * good — a missed day logged after the fact, a record deleted — or null when
+ * there is nothing to write.
+ *
+ * Reading already ignores the part of the credit those penalties no longer
+ * need (effectiveForgiven). Writing it down as well is what keeps it gone:
+ * otherwise the penalties for NEW missed days would refill the cancelled part
+ * of the credit, and those days would go uncharged while the balance was
+ * above the floor.
+ *
+ * `inputs` must measure the live segment as it would stand with XP Penalties
+ * ON. Switching penalties off takes them away only until they are switched
+ * back on, and that round trip has to return the balance exactly to where it
+ * was — so it never writes the credit down.
+ */
+export function forgivenessRatchet(inputs) {
+  const ledger = inputs?.ledger;
+  if (forgivenDisplayAmount(ledger) <= 0) return null;
+  const basis = Number(ledger?.forgivenBasis);
+  if (ledger?.forgivenBasis == null || !Number.isFinite(basis)) return null;
+  const b = computeXPBreakdown(inputs);
+  if (!(b.grossPenalties < basis)) return null;
+  return {
+    forgiven: b.forgiven,
+    forgivenUnits: CURRENT_ECONOMY_VERSION,
+    forgivenBasis: b.grossPenalties,
+  };
+}
+
+/**
+ * A credit written before the basis existed is given one now, equal to the
+ * penalties it stands against today. That changes nothing about the balance —
+ * the credit keeps its full value — but from here on, penalties that
+ * disappear cancel it before they raise the balance. Null when there is
+ * nothing to stamp.
+ */
+export function forgivenessBasisStamp(inputs) {
+  const ledger = inputs?.ledger;
+  if (forgivenDisplayAmount(ledger) <= 0) return null;
+  if (ledger?.forgivenBasis != null && Number.isFinite(Number(ledger.forgivenBasis))) return null;
+  return { forgivenBasis: computeXPBreakdown(inputs).grossPenalties };
 }
 
 /**

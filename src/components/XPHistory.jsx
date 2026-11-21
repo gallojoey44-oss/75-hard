@@ -51,7 +51,8 @@ export default function XPHistory() {
             <>
               <div className="xph-group">Completed</div>
               {[...archived].reverse().map(r => (
-                <Period key={r.id} row={r} n={n} fmt={fmt} detailId={r.id} />
+                // A carried period has no archive behind it to break down.
+                <Period key={r.id} row={r} n={n} fmt={fmt} detailId={r.carried ? null : r.id} />
               ))}
             </>
           )}
@@ -116,8 +117,11 @@ function Period({ row, n, fmt, detailId = null }) {
               <span>Unfinished days</span><span>−{n(row.partialPenalties)}</span>
             </div>
           )}
+          {/* A period that cost more than it earned shows the loss with its
+              sign, so the rows above still add up to it. */}
           <div className="xph-period-row net">
-            <span>{row.archived ? 'Banked' : 'So far'}</span><span>{n(row.banked)} XP</span>
+            <span>{!row.archived ? 'So far' : row.banked < 0 ? 'Net' : 'Banked'}</span>
+            <span>{row.banked < 0 ? '−' : ''}{n(row.banked)} XP</span>
           </div>
           {detailId && (
             <button className="xph-detail-toggle" onClick={() => setOpen(v => !v)} aria-expanded={open}>
@@ -129,7 +133,8 @@ function Period({ row, n, fmt, detailId = null }) {
       ) : (
         <div className="xph-period-rows">
           <div className="xph-period-row net">
-            <span>Banked</span><span>{n(row.banked)} XP</span>
+            <span>{row.banked < 0 ? 'Net' : 'Banked'}</span>
+            <span>{row.banked < 0 ? '−' : ''}{n(row.banked)} XP</span>
           </div>
           <p className="xph-note">
             Forge could not read this challenge&apos;s day-by-day records, so the breakdown

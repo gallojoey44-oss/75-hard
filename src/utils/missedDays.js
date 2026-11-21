@@ -110,9 +110,12 @@ export function recentGap({ days, tasks, meta, challengeStart, rawDay, dayNum, p
 
   let penalty = 0;
   const rules = dayRules(meta);
+  const perDay = [];
   for (let i = gapStart; i <= gapEnd; i++) {
     const dayTasks = requiredTasksForDay(tasks || [], meta, challengeStart, i);
-    penalty += computeDayXP((days || {})[i], dayTasks, null, i, last, penaltiesEnabled, rawDay, rules).lost;
+    const lost = computeDayXP((days || {})[i], dayTasks, null, i, last, penaltiesEnabled, rawDay, rules).lost;
+    perDay.push({ dayNum: i, date: getDateForDayNumber(challengeStart, i), penalty: lost });
+    penalty += lost;
   }
 
   return {
@@ -123,23 +126,85 @@ export function recentGap({ days, tasks, meta, challengeStart, rawDay, dayNum, p
     fromDate: getDateForDayNumber(challengeStart, gapStart),
     toDate: getDateForDayNumber(challengeStart, gapEnd),
     daysSinceReturn,
+    // Each missed day and what it cost, so the part of a gap not yet shown
+    // can be stated on its own.
+    days: perDay,
+    // The segment this gap belongs to. Acknowledgements are kept per segment.
+    segment: challengeStart || 'none',
     // Identifies this specific stretch of time. Stable across reloads, so the
-    // same gap is never presented as a new event twice; a LATER gap produces a
-    // different key and is announced on its own.
+    // same gap is never presented as a new event twice.
     key: `${challengeStart || 'none'}|${gapStart}-${gapEnd}`,
   };
 }
 
 /**
+ * The last missed day already shown and acknowledged in this segment, read
+ * from the key stored when the notice was last dismissed — or 0.
+ *
+ * The stored key names a stretch ("start|3-8"). Its END is what matters: every
+ * missed day up to it has been seen, whether today's gap began on the same
+ * day or not. An acknowledgement from a different segment says nothing about
+ * this one.
+ */
+export function acknowledgedThrough(gap, dismissedKey) {
+  if (!gap || typeof dismissedKey !== 'string') return 0;
+  const bar = dismissedKey.lastIndexOf('|');
+  if (bar < 0) return 0;
+  if (dismissedKey.slice(0, bar) !== gap.segment) return 0;
+  const to = Number(dismissedKey.slice(bar + 1).split('-')[1]);
+  return Number.isFinite(to) && to > 0 ? to : 0;
+}
+
+/**
+ * The part of a gap that has NOT been shown yet: its days, what they cost and
+ * their dates — or null when every day in it has already been acknowledged.
+ *
+ * A notice dismissed on day 8 and a gap that has grown to day 9 by the next
+ * morning share days 3–8. Those were already shown, so only day 9 is new.
+ * Re-announcing the running total each morning made one deduction read as a
+ * fresh penalty every day it grew.
+ */
+export function unacknowledgedPart(gap, dismissedKey) {
+  if (!gap) return null;
+  const seen = acknowledgedThrough(gap, dismissedKey);
+  const fresh = (gap.days || []).filter(d => d.dayNum > seen);
+  if (!fresh.length) return null;
+  const isUpdate = seen >= gap.fromDay;
+  return {
+    missedDays: fresh.length,
+    penalty: fresh.reduce((s, d) => s + (Number(d.penalty) || 0), 0),
+    fromDay: fresh[0].dayNum,
+    toDay: fresh[fresh.length - 1].dayNum,
+    fromDate: fresh[0].date,
+    toDate: fresh[fresh.length - 1].date,
+    // Some of this gap was already shown; this is what has been added since.
+    isUpdate,
+  };
+}
+
+/**
+ * The key to store when a notice is dismissed: this gap, acknowledged through
+ * its last day — or through an EARLIER acknowledgement's last day if that one
+ * reached further (a day logged after the fact can shorten today's gap, and
+ * that must not un-acknowledge the days after it).
+ */
+export function acknowledgementKey(gap, previousKey) {
+  if (!gap) return previousKey || null;
+  const through = Math.max(gap.toDay, acknowledgedThrough(gap, previousKey));
+  return `${gap.segment}|${gap.fromDay}-${through}`;
+}
+
+/**
  * Whether the Welcome Back notice should appear.
  *
- * Shown for a gap the user has just come back from, once. It stops when they
- * dismiss it, and on its own once they have been active for a few days — so it
- * cannot become permanent furniture.
+ * Shown while a gap has days the user has not been shown yet. It stops when
+ * they dismiss it, and on its own once they have been active for a few days —
+ * so it cannot become permanent furniture. A gap that keeps growing is
+ * announced again only for its NEW days.
  */
 export function shouldShowComeback(gap, dismissedKey) {
   if (!gap) return false;
-  if (gap.key === dismissedKey) return false;
+  if (!unacknowledgedPart(gap, dismissedKey)) return false;
   return gap.daysSinceReturn <= NOTICE_WINDOW_DAYS;
 }
 
@@ -149,7 +214,7 @@ export function shouldShowComeback(gap, dismissedKey) {
  * `archiveDetail` is supplied by the caller (xpLedger.archiveDeficit) so this
  * module does not need to know how an archive is recomputed.
  */
-export function buildXPHistory({ archives, archiveDetail, current }) {
+export function buildXPHistory({ archives, archiveDetail, current, archiveNet = null }) {
   const rows = (archives || []).map(a => {
     const d = archiveDetail ? archiveDetail(a) : null;
     return {
@@ -157,7 +222,10 @@ export function buildXPHistory({ archives, archiveDetail, current }) {
       name: a?.challenge?.name || 'Challenge',
       startDate: a.challengeStart || null,
       endDate: a.endDate || a.archivedAt || null,
-      banked: Math.max(0, Number(a.xpEarned) || 0),
+      // What the period contributes to the balance. Banked XP for an older
+      // archive; for one that records its gross figures, earned minus lost —
+      // which can be below zero, because that is what it really cost.
+      banked: archiveNet ? archiveNet(a) : Math.max(0, Number(a.xpEarned) || 0),
       earned: d?.verified ? d.gained : null,
       penalties: d?.verified ? d.missedPenalty : null,
       // Days that were logged but left incomplete cost XP too. Reported on

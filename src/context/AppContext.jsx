@@ -29,13 +29,13 @@ import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, c
 import { applyTrainingSetup, trainingConfigOf } from '../data/mentalPractices';
 import { makeDefaultNotifPrefs, migrateAllNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS } from '../utils/gamification';
-import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLedger, isReconciled, capToFloor, forgivenessShortfall, archiveDeficit } from '../utils/xpLedger';
+import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLedger, isReconciled, capToFloor, archiveDeficit, GROSS_ACCOUNTING, forgivenessUpdate, forgivenessRatchet, forgivenessBasisStamp, carriedSegments, hasGrossAccounting, appendCarried } from '../utils/xpLedger';
 import { stampAttempt, repriceTasks, archiveEraOf, ledgerDisplayAmount, forgivenDisplayAmount, toDisplayXP } from '../utils/xpAttempt';
 import { reconciledSegmentBreakdown, toDisplay } from '../utils/xpBreakdown';
 import { CURRENT_ECONOMY_VERSION, economyVersionOf, displayScaleFor } from '../data/xpEconomy';
 import { displayXP, scaleOfMeta, scaleOfArchive } from '../utils/xpDisplay';
 import { checkStackEras } from '../utils/eraSafety';
-import { recentGap, shouldShowComeback, missedDayDetail, buildXPHistory } from '../utils/missedDays';
+import { recentGap, shouldShowComeback, missedDayDetail, buildXPHistory, unacknowledgedPart, acknowledgementKey } from '../utils/missedDays';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 import { readPastSelf } from '../utils/pastSelf';
 
@@ -1201,6 +1201,13 @@ export function AppProvider({ children }) {
         };
       })() : { tracked: false },
       xpEarned: totalXP,
+      // Gross accounting: what this segment earned and what it lost, kept
+      // apart, so Lifetime XP counts the archive exactly as it counted the live
+      // segment a moment ago — a deficit included. `xpEarned` keeps its old
+      // meaning (banked, never below zero) for every screen that shows it.
+      xpGained: xpData.gained,
+      xpLost: xpData.lost,
+      xpAccounting: GROSS_ACCOUNTING,
       badges,
       comebackHistory: prof.comebackHistory || [],
       xpOffset: prof.xpOffset ?? 0,
@@ -1307,6 +1314,9 @@ export function AppProvider({ children }) {
       // transfer, never a gain. Shared habits stay in the list, so their XP never
       // moves and can never be counted twice; only support-only rows carry over.
       xpEarned: 0,
+      // The era its figures are in: the PRIMARY's, whose rate card priced
+      // every row. The support descriptor carries no stamp of its own.
+      xpEconomyVersion: economyVersionOf(prof.activeChallenge),
       badges: [],
       comebackHistory: [],
       xpOffset: 0,
@@ -1324,6 +1334,63 @@ export function AppProvider({ children }) {
       resultDate: completed ? getTodayStr() : null,
     };
   }, [profiles, allDays]);
+
+  /**
+   * The XP record of a segment that is ending with nothing to archive.
+   *
+   * buildArchiveEntry only archives a segment that holds day records, so a
+   * period with none — typically a Forge Daily stretch spent entirely away —
+   * used to vanish at the next transition and take its missed-day penalties
+   * with it. Its figures are kept instead, as a ledger entry in DISPLAY units,
+   * so the transition moves no XP. Null when the segment moved no XP at all.
+   *
+   * `throughDay` ends the segment early, exactly as buildArchiveEntry's does.
+   */
+  const carriedSegmentFor = useCallback((profId, opts = {}) => {
+    const prof = profiles[profId];
+    if (!prof?.challengeStart || isScheduled(prof)) return null;
+    const live = getDayNumber(profId);
+    if (!live) return null;
+    const dayNum = opts.throughDay == null ? live : Math.min(live, opts.throughDay);
+    if (!(dayNum >= 1)) return null;
+    const seg = computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum);
+    if (!(seg.gained > 0) && !(seg.lost > 0)) return null;
+    const scale = displayScaleFor(economyVersionOf(prof.activeChallenge));
+    const missed = missedDayDetail({
+      days: allDays[profId] || {},
+      tasks: prof.tasks || [],
+      meta: prof.activeChallenge,
+      challengeStart: prof.challengeStart,
+      rawDay: getRawDayNumber(profId),
+      dayNum,
+      penaltiesEnabled: prof.xpPenalties !== false,
+      xpStartDay: prof.xpStartDay ?? 1,
+    });
+    return {
+      id: `carry_${Date.now()}`,
+      at: getTodayStr(),
+      name: prof.activeChallenge?.name || 'Challenge',
+      templateId: prof.activeChallenge?.templateId || null,
+      challengeStart: prof.challengeStart,
+      endDayNum: dayNum,
+      endDate: getDateForDayNumber(prof.challengeStart, dayNum),
+      gained: Math.round(seg.gained * scale),
+      lost: Math.round(seg.lost * scale),
+      missedDays: missed.missedDays,
+      missedPenalty: Math.round(missed.totalPenalty * scale),
+    };
+  }, [profiles, allDays, getDayCompletion, getDayNumber, getRawDayNumber]);
+
+  /**
+   * Everything that ends the live primary segment goes through this: the
+   * archive entry when there is one, otherwise the ledger record that keeps
+   * its XP. Exactly one of the two is returned (or neither, for a segment that
+   * moved no XP), so a transition can never both archive and carry.
+   */
+  const closeLiveSegment = useCallback((profId, opts = {}) => {
+    const entry = buildArchiveEntry(profId, opts);
+    return { entry, carried: entry ? null : carriedSegmentFor(profId, opts) };
+  }, [buildArchiveEntry, carriedSegmentFor]);
 
   /**
    * Start a new challenge. The current challenge (if any) is archived first —
@@ -1347,8 +1414,10 @@ export function AppProvider({ children }) {
     if (!options?.tasks?.length) return false;
 
     // Archive BOTH lanes before anything is replaced, so a stacked pair leaves
-    // two independent records rather than losing the support challenge.
-    const entry = buildArchiveEntry(profId);
+    // two independent records rather than losing the support challenge. A
+    // segment with nothing to archive keeps its XP in the ledger instead, so
+    // starting the new challenge cannot hand back what the old one cost.
+    const { entry, carried } = closeLiveSegment(profId);
     const supportEntry = buildSupportArchiveEntry(profId, 'ended_early');
     const newEntries = [entry, supportEntry].filter(Boolean);
     if (newEntries.length) {
@@ -1414,6 +1483,7 @@ export function AppProvider({ children }) {
         exerciseLog: [],
         cycleLogs: [],
         lastCompletion: null,
+        ...(carried ? { xpLedger: appendCarried(prev[profId]?.xpLedger, carried) } : {}),
       },
     }));
     setAllDays(prev => ({ ...prev, [profId]: {} }));
@@ -1423,7 +1493,7 @@ export function AppProvider({ children }) {
       return next;
     });
     return true;
-  }, [activeProfile, buildArchiveEntry, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
+  }, [activeProfile, closeLiveSegment, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   // ── Support challenge lifecycle ───────────────────────────────────────────
 
@@ -1527,8 +1597,14 @@ export function AppProvider({ children }) {
     //
     // Only support-ONLY rows contribute: a shared habit stays in the list, so its
     // XP never moves and can never be counted a second time.
+    //
+    // The transfer is SIGNED and kept gross. Rows the user left unticked cost
+    // penalties too, so removing them can raise the total rather than lower
+    // it; clipping that at zero handed those penalties back. Moving the
+    // earned and lost XP across separately keeps Lifetime XP exactly where it
+    // was, a net loss included.
     const dayNum = getDayNumber(profId);
-    let carriedXP = 0;
+    const transfer = { gained: 0, lost: 0, net: 0 };
     if (dayNum) {
       const before = computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum);
       const after = computeTotalXP(
@@ -1536,29 +1612,62 @@ export function AppProvider({ children }) {
         { ...profiles, [profId]: { ...prof, tasks: nextTasks, supportChallenge: null, supportChallengeStart: null } },
         profId, getDayCompletion, dayNum, dayNum,
       );
-      carriedXP = Math.max(0, before.rawTotal - after.rawTotal);
+      transfer.gained = before.gained - after.gained;
+      transfer.lost = before.lost - after.lost;
+      transfer.net = before.rawTotal - after.rawTotal;
     }
+    const banked = Math.max(0, transfer.net);
+    const moved = transfer.gained !== 0 || transfer.lost !== 0;
+    // The XP was computed under the PRIMARY's rate card, so that is the era
+    // the archive's figures are in. The support descriptor carries no stamp of
+    // its own, and without this the archive was read as era 1 — ten times its
+    // real value.
+    const era = economyVersionOf(prof.activeChallenge);
 
     // Null for a scheduled attempt that never reached Day 1 — cancelling one
     // must not write a misleading "ended early" record for days that never
     // happened. The slot is still cleared below.
     const entry = buildSupportArchiveEntry(profId, reason);
     if (entry) {
-      setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), { ...entry, xpEarned: carriedXP, taskXP: carriedXP }] }));
+      setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), {
+        ...entry,
+        xpEarned: banked,
+        taskXP: banked,
+        xpGained: transfer.gained,
+        xpLost: transfer.lost,
+        xpAccounting: GROSS_ACCOUNTING,
+        xpEconomyVersion: era,
+      }] }));
     }
+    // Rows that moved XP but left nothing to archive still take it with them.
+    const scale = displayScaleFor(era);
+    const carried = !entry && moved ? {
+      id: `carry_sup_${Date.now()}`,
+      at: getTodayStr(),
+      name: prof.supportChallenge?.name || 'Support Challenge',
+      templateId: prof.supportChallenge?.templateId || null,
+      challengeStart: prof.supportChallengeStart || null,
+      endDate: getTodayStr(),
+      gained: Math.round(transfer.gained * scale),
+      lost: Math.round(transfer.lost * scale),
+      missedDays: 0,
+      missedPenalty: 0,
+      lane: LANE.SUPPORT,
+    } : null;
 
     setProfiles(prev => ({
       ...prev,
       [profId]: {
         ...prev[profId],
-        // ONLY these three fields change. The primary's descriptor, start date,
+        // ONLY these fields change. The primary's descriptor, start date,
         // day records, XP, streak, weeklySessions, Future Self letter, upgrades
         // and reflections are all deliberately absent from this update, so the
         // primary attempt cannot be restarted, re-anchored or re-graded here.
         supportChallenge: null,
         supportChallengeStart: null,
         tasks: nextTasks,
-        xpOffset: (prev[profId].xpOffset ?? 0) + carriedXP,
+        xpOffset: (prev[profId].xpOffset ?? 0) + transfer.net,
+        ...(carried ? { xpLedger: appendCarried(prev[profId]?.xpLedger, carried) } : {}),
       },
     }));
     return true;
@@ -1765,11 +1874,12 @@ export function AppProvider({ children }) {
     if (prof.activeChallenge?.templateId === 'forge_daily') return; // baseline never "completes"
     if (isScheduled(prof)) return; // never begun — cannot complete
 
-    const entry = buildArchiveEntry(profId);
+    const { entry, carried } = closeLiveSegment(profId);
     const summary = entry ? buildCompletionSummary(entry, profId) : null;
     if (entry) {
       setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), entry] }));
     }
+    const carriedLedger = (prev) => (carried ? { xpLedger: appendCarried(prev[profId]?.xpLedger, carried) } : {});
 
     // ── A support challenge is still running ────────────────────────────────
     // Finishing the primary must not quietly end it. The primary slot drops to
@@ -1780,6 +1890,17 @@ export function AppProvider({ children }) {
     // pendingPrimaryChoice records that the decision is theirs to make.
     if (hasSupportChallenge(prof)) {
       const supportStart = prof.supportChallengeStart;
+      // The finished primary's archive (or its carried record) has banked
+      // every day up to its final day — including the days the support ran
+      // beside it, whose rows were part of the same daily list. The re-keyed
+      // records below keep those days for the support's own progress, but
+      // their XP is already counted, so the new segment's XP starts on the
+      // first day that is not. Without this, those days paid twice, and the
+      // baseline's habits were charged for days before the baseline existed.
+      const bankedThrough = entry?.endDate || carried?.endDate || null;
+      const firstUnbanked = bankedThrough && supportStart && bankedThrough >= supportStart
+        ? (dayNumberForDate(supportStart, bankedThrough) || 0) + 1
+        : 1;
       const supportTasks = tasksForLane(prof.tasks, LANE.SUPPORT)
         .map(t => { const { mergedFrom, targetConflict, ...rest } = t; return rest; });
       const { tasks } = mergeSupportTasks(
@@ -1801,10 +1922,11 @@ export function AppProvider({ children }) {
             supportEmoji: prof.supportChallenge?.emoji || null,
           },
           xpOffset: 0,
-          xpStartDay: 1,
+          xpStartDay: Math.max(1, firstUnbanked),
           comebackMode: { active: false, dayStart: null, dismissedAt: null },
           comebackHistory: [],
           weeklySessions: hasWeeklyRequirements(prof.supportChallenge) ? (prev[profId].weeklySessions || []) : [],
+          ...carriedLedger(prev),
         },
       }));
       setAllDays(prev => ({ ...prev, [profId]: rekeyDays(prev[profId] || {}, prof.challengeStart, supportStart) }));
@@ -1825,6 +1947,7 @@ export function AppProvider({ children }) {
         comebackMode: { active: false, dayStart: null, dismissedAt: null },
         comebackHistory: [],
         weeklySessions: [],
+        ...carriedLedger(prev),
       },
     }));
     setAllDays(prev => ({ ...prev, [profId]: {} }));
@@ -1833,7 +1956,7 @@ export function AppProvider({ children }) {
       saveLS('weeklyReflections', next);
       return next;
     });
-  }, [activeProfile, profiles, buildArchiveEntry, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
+  }, [activeProfile, profiles, closeLiveSegment, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   /**
    * The SUPPORT challenge has run past its final day: archive it and clear the
@@ -1869,12 +1992,14 @@ export function AppProvider({ children }) {
   const startForgeDaily = useCallback((profId = activeProfile) => {
     // Both lanes are archived, so ending everything while a support challenge
     // is stacked leaves two records rather than silently dropping the support.
-    const entries = [buildArchiveEntry(profId), buildSupportArchiveEntry(profId, 'ended_early')].filter(Boolean);
+    const { entry, carried } = closeLiveSegment(profId);
+    const entries = [entry, buildSupportArchiveEntry(profId, 'ended_early')].filter(Boolean);
     if (entries.length) setArchives(prev => ({ ...prev, [profId]: [...(prev[profId] || []), ...entries] }));
     setProfiles(prev => ({
       ...prev,
       [profId]: {
         ...prev[profId],
+        ...(carried ? { xpLedger: appendCarried(prev[profId]?.xpLedger, carried) } : {}),
         challengeStart: getTodayStr(),
         activeChallenge: stampedBaseline().meta,
         tasks: stampedBaseline({ challenges: [LANE.PRIMARY] }).tasks,
@@ -1902,7 +2027,7 @@ export function AppProvider({ children }) {
       saveLS('weeklyReflections', next);
       return next;
     });
-  }, [activeProfile, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+  }, [activeProfile, closeLiveSegment, buildSupportArchiveEntry, setArchives, setProfiles, setAllDays]);
 
   /**
    * Restore an archived challenge as the active one. If a challenge is
@@ -1914,7 +2039,7 @@ export function AppProvider({ children }) {
     if (!entry) return;
 
     let newList = list.filter(a => a.id !== archiveId);
-    const activeEntry = buildArchiveEntry(profId);
+    const { entry: activeEntry, carried } = closeLiveSegment(profId);
     if (activeEntry) newList = [...newList, activeEntry];
 
     setArchives(prev => ({ ...prev, [profId]: newList }));
@@ -1922,6 +2047,7 @@ export function AppProvider({ children }) {
       ...prev,
       [profId]: {
         ...prev[profId],
+        ...(carried ? { xpLedger: appendCarried(prev[profId]?.xpLedger, carried) } : {}),
         challengeStart: entry.challengeStart,
         activeChallenge: entry.challenge ? { ...entry.challenge } : { ...DISCIPLINE_75_META },
         tasks: entry.tasks?.length ? entry.tasks : prev[profId].tasks,
@@ -1932,7 +2058,7 @@ export function AppProvider({ children }) {
       },
     }));
     setAllDays(prev => ({ ...prev, [profId]: entry.days || {} }));
-  }, [activeProfile, archives, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+  }, [activeProfile, archives, closeLiveSegment, setArchives, setProfiles, setAllDays]);
 
   /**
    * True when the active challenge was started from an older version of its
@@ -2604,8 +2730,17 @@ export function AppProvider({ children }) {
   // Instead the shortfall is written off and PERSISTED, so earning 20 XP after
   // the floor is reached raises the balance to floor + 20 immediately.
   //
-  // Monotonic and self-limiting: the credit only grows, and once the net sits
-  // at or above the floor this computes 0 and stops writing.
+  // Self-limiting: once the net sits at or above the floor this computes
+  // nothing and stops writing.
+  //
+  // The credit is stamped with the penalty total it was written against
+  // (`forgivenBasis`). Penalties that later disappear — a missed day logged
+  // after the fact, penalties switched off, a record deleted — cancel the
+  // credit before they can raise the balance, so the floor can protect XP but
+  // never manufacture it. Penalties gone for good write the credit down for
+  // good, so it cannot refill and swallow later missed days. A credit written
+  // before the stamp existed is given one at its current value, which leaves
+  // the balance exactly where it is.
   useEffect(() => {
     for (const profId of Object.keys(profiles || {})) {
       const prof = profiles[profId];
@@ -2617,23 +2752,27 @@ export function AppProvider({ children }) {
       const currentSegment = dayNum
         ? computeTotalXP(allDays, profiles, profId, getDayCompletion, dayNum, dayNum)
         : { gained: 0, lost: 0 };
-      const short = forgivenessShortfall(
-        { archives: archives[profId] || [], currentSegment, ledger: prof.xpLedger,
-          currentEra: economyVersionOf(prof.activeChallenge) },
-        floor,
-      );
-      if (short > 0) {
+      const inputs = {
+        archives: archives[profId] || [], currentSegment, ledger: prof.xpLedger,
+        currentEra: economyVersionOf(prof.activeChallenge),
+      };
+      // Penalties that have gone for good are measured as they would stand
+      // with XP Penalties on, so switching them off is never mistaken for
+      // penalties gone for good (that round trip must change nothing).
+      const potentialSegment = prof.xpPenalties === false && dayNum
+        ? computeTotalXP(allDays, { ...profiles, [profId]: { ...prof, xpPenalties: true } },
+          profId, getDayCompletion, dayNum, dayNum)
+        : currentSegment;
+      // Every figure here is in display units, and the update says so.
+      const update = forgivenessUpdate(inputs, floor)
+        || forgivenessRatchet({ ...inputs, currentSegment: potentialSegment })
+        || forgivenessBasisStamp(inputs);
+      if (update) {
         setProfiles(prev => ({
           ...prev,
           [profId]: {
             ...prev[profId],
-            xpLedger: {
-              ...(prev[profId]?.xpLedger || makeLedger()),
-              // `short` is already in display units, so the stored credit is
-              // marked as such and never scaled again on read.
-              forgiven: forgivenDisplayAmount(prev[profId]?.xpLedger) + short,
-              forgivenUnits: CURRENT_ECONOMY_VERSION,
-            },
+            xpLedger: { ...(prev[profId]?.xpLedger || makeLedger()), ...update },
           },
         }));
         return;   // one profile per pass; the next render settles the other
@@ -2683,7 +2822,7 @@ export function AppProvider({ children }) {
         carried[k] = { ...rec, dayNumber: k };
       }
 
-      const entry = buildArchiveEntry(profId, { throughDay: todayNum - 1 });
+      const { entry, carried: carriedSegment } = closeLiveSegment(profId, { throughDay: todayNum - 1 });
       const stamped = stampAttempt({
         meta: { ...meta },
         tasks: prof.tasks || [],
@@ -2707,11 +2846,12 @@ export function AppProvider({ children }) {
           xpStartDay: 1,
           xpOffset: 0,
           xpEconomyMigratedAt: getTodayStr(),
+          ...(carriedSegment ? { xpLedger: appendCarried(prev[profId]?.xpLedger, carriedSegment) } : {}),
         },
       }));
       return;   // one profile per pass; the next render settles the other
     }
-  }, [profiles, allDays, buildArchiveEntry, setArchives, setProfiles, setAllDays]);
+  }, [profiles, allDays, closeLiveSegment, setArchives, setProfiles, setAllDays]);
 
   // ── Missed days: recent notice vs permanent record ───────────────────────
 
@@ -2748,14 +2888,28 @@ export function AppProvider({ children }) {
     const gap = recentGap(inputs);
     if (!gap) return null;
     const scale = scaleOfMeta(inputs.meta);
+    const seen = profiles[profId]?.xpLedger?.seenComeback;
+    // Only the days not yet shown. A gap that has grown since it was last
+    // dismissed is announced for its new days alone — the earlier ones were
+    // already shown, and they are not new penalties.
+    const part = unacknowledgedPart(gap, seen);
     return {
       ...gap,
       penalty: displayXP(gap.penalty, scale),
-      show: shouldShowComeback(gap, profiles[profId]?.xpLedger?.seenComeback),
+      newMissedDays: part?.missedDays ?? 0,
+      newPenalty: displayXP(part?.penalty ?? 0, scale),
+      newFromDate: part?.fromDate ?? null,
+      newToDate: part?.toDate ?? null,
+      isUpdate: !!part?.isUpdate,
+      show: shouldShowComeback(gap, seen),
     };
   }, [activeProfile, profiles, missedDayInputs]);
 
-  /** Record that this gap has been seen, so it is not announced again. */
+  /**
+   * Record that this gap has been seen, through its last day, so none of
+   * those days is announced again. Display state only: nothing here can move
+   * XP, and nothing that computes XP reads it.
+   */
   const dismissComebackNotice = useCallback((profId = activeProfile) => {
     const gap = getComeback(profId);
     if (!gap) return false;
@@ -2763,7 +2917,10 @@ export function AppProvider({ children }) {
       ...prev,
       [profId]: {
         ...prev[profId],
-        xpLedger: { ...(prev[profId]?.xpLedger || makeLedger()), seenComeback: gap.key },
+        xpLedger: {
+          ...(prev[profId]?.xpLedger || makeLedger()),
+          seenComeback: acknowledgementKey(gap, prev[profId]?.xpLedger?.seenComeback),
+        },
       },
     }));
     return true;
@@ -2816,7 +2973,9 @@ export function AppProvider({ children }) {
       name: prof.activeChallenge.name || 'Current challenge',
       startDate: prof.challengeStart,
       endDate: null,
-      banked: Math.max(0, seg.gained - seg.lost),
+      // Signed: the live segment counts raw in Lifetime XP, deficit included,
+      // so the row says what it is actually contributing.
+      banked: seg.gained - seg.lost,
       earned: seg.gained,
       penalties: missed.totalPenalty,
       partialPenalties: Math.max(0, seg.lost - missed.totalPenalty),
@@ -2828,7 +2987,10 @@ export function AppProvider({ children }) {
     // converts the live segment with.
     const archiveScale = new Map((archives[profId] || []).map(a => [a.id, scaleOfArchive(a)]));
     const liveScale = scaleOfMeta(prof?.activeChallenge);
-    const rows = buildXPHistory({ archives: archives[profId] || [], archiveDetail: archiveDeficit, current: live })
+    const archiveNet = (a) => (hasGrossAccounting(a)
+      ? (Number(a.xpGained) || 0) - (Number(a.xpLost) || 0)
+      : Math.max(0, Number(a.xpEarned) || 0));
+    const built = buildXPHistory({ archives: archives[profId] || [], archiveDetail: archiveDeficit, current: live, archiveNet })
       .map(r => {
         const scale = r.archived ? (archiveScale.get(r.id) ?? 1) : liveScale;
         return {
@@ -2840,6 +3002,32 @@ export function AppProvider({ children }) {
           partialPenalties: displayXP(r.partialPenalties, scale),
         };
       });
+    // Periods that ended with nothing to archive are part of the record too —
+    // a Forge Daily stretch spent entirely away is exactly what the balance
+    // has to be able to explain. Already in display units.
+    const carriedRows = carriedSegments(prof?.xpLedger).map(c => ({
+      id: c.id,
+      name: c.name || 'Forge Daily',
+      startDate: c.challengeStart || null,
+      endDate: c.endDate || c.at || null,
+      banked: (Number(c.gained) || 0) - (Number(c.lost) || 0),
+      earned: Number(c.gained) || 0,
+      penalties: Number(c.missedPenalty) || 0,
+      partialPenalties: Math.max(0, (Number(c.lost) || 0) - (Number(c.missedPenalty) || 0)),
+      missedDays: Number(c.missedDays) || 0,
+      detailAvailable: true,
+      archived: true,
+      carried: true,
+      scale: 1,
+    }));
+    // Each carried period is slotted in by date; the archives keep the order
+    // they have always been listed in.
+    const archivedRows = built.filter(r => r.archived);
+    for (const c of carriedRows) {
+      const idx = archivedRows.findIndex(r => !r.carried && (r.endDate || '') > (c.endDate || ''));
+      if (idx === -1) archivedRows.push(c); else archivedRows.splice(idx, 0, c);
+    }
+    const rows = [...archivedRows, ...built.filter(r => !r.archived)];
     return {
       rows,
       breakdown: getXPBreakdown(profId),
@@ -2946,7 +3134,11 @@ export function AppProvider({ children }) {
     if (preview.amount <= 0) return false;
     const before = getRawLifetimeXP(profId);
     const floor = rankFloorXP(profiles[profId]?.highestRank ?? 0);
-    const entry = buildReconciliation(preview, before, floor, profiles[profId]?.xpLedger?.forgiven ?? 0);
+    const entry = buildReconciliation(
+      preview, before, floor,
+      profiles[profId]?.xpLedger?.forgiven ?? 0,
+      profiles[profId]?.xpLedger?.forgivenBasis ?? null,
+    );
     if (entry.amount <= 0 && entry.forgiven <= 0) return false;
     setProfiles(prev => ({
       ...prev,
@@ -2974,6 +3166,9 @@ export function AppProvider({ children }) {
           ...(prev[profId]?.xpLedger || makeLedger()),
           ...makeLedger(),                 // resets the reconciliation only
           forgiven: applied.forgivenBefore ?? 0,
+          // And what that credit was measured against, so it cancels exactly
+          // as it would have if the reconciliation had never happened.
+          forgivenBasis: applied.forgivenBasisBefore ?? null,
         },
       },
     }));
