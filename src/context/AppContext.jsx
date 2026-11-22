@@ -26,7 +26,7 @@ import { ENERGY_RESET_TEMPLATE_ID, LAGGED_HABIT_KEYS, windowForDuration, insight
 import { buildEnergySummary } from '../utils/energyTracking';
 import { clearProfilePhotos } from '../utils/photoStore';
 import { getTemplateById, FORGE_DAILY_META, FORGE_DAILY_TASKS, DAILY_LOG_TASK, consolidateDailyLogTasks, applyColdExposureUpgrade, isColdExposureEnabled, MENTAL_TRAINING_TEMPLATE_ID, COLD_SHOWER_BONUS_ID } from '../data/challengeTemplates';
-import { applyTrainingSetup, trainingConfigOf } from '../data/mentalPractices';
+import { applyTrainingSetup, trainingConfigOf, lengthChoiceLane, profileWithLengthChoice } from '../data/mentalPractices';
 import { makeDefaultNotifPrefs, migrateAllNotifPrefs } from '../utils/notificationUtils';
 import { keystoneHabitsOf, RANKS } from '../utils/gamification';
 import { computeXPBreakdown, previewReconciliation, buildReconciliation, makeLedger, isReconciled, capToFloor, archiveDeficit, GROSS_ACCOUNTING, forgivenessUpdate, forgivenessRatchet, forgivenessBasisStamp, carriedSegments, hasGrossAccounting, appendCarried } from '../utils/xpLedger';
@@ -1871,8 +1871,11 @@ export function AppProvider({ children }) {
       // on the lifetime ladder rather than in the attempt's own stored units.
       xpEconomyVersion: archiveEraOf(entry),
       coldExposureEnabled: !!entry.challenge?.coldExposureUpgradeEnabled,
-      // So "Retry" can start the next attempt at the same daily length.
+      // So "Retry" can start the next attempt at the right daily length: the
+      // current recommendation when this one took the recommendation, the same
+      // length when it was chosen (or when nobody recorded which).
       mentalTrainingMinutes: entry.challenge?.mentalTraining?.minutes ?? null,
+      mentalTrainingSource: entry.challenge?.mentalTraining?.minutesSource ?? null,
       weeklyRequirements: entry.weeklyRequirements || { tracked: false },
       coldExposureStartDate: entry.challenge?.coldExposureUpgradeStartDate || null,
       challengeStart: entry.challengeStart || null,
@@ -2193,6 +2196,32 @@ export function AppProvider({ children }) {
       },
     }));
   }, [activeProfile, profiles, getTaskSource, setProfiles]);
+
+  /**
+   * The lane whose Mental Training attempt is waiting for the one-time Standard
+   * length choice (data/mentalPractices.js), or null. Read-only.
+   */
+  const trainingLengthChoiceLane = useCallback((profId = activeProfile) => (
+    lengthChoiceLane(profiles[profId])
+  ), [activeProfile, profiles]);
+
+  /**
+   * Answer the Standard length choice for one lane: 'switch' to ten minutes
+   * from today, or 'keep' fifteen as a deliberate choice. The answer is stored
+   * on the attempt, so it is asked once. Writes the attempt's stamp and, on a
+   * switch, its one training row — never a day record, so completed days, XP,
+   * streaks and history read exactly as before. Worked out again inside the
+   * update, so a second tap or a stale screen does nothing.
+   */
+  const answerTrainingLengthChoice = useCallback((lane, decision, profId = activeProfile) => {
+    const today = getTodayStr();
+    if (!profileWithLengthChoice(profiles[profId], lane, decision, today)) return false;
+    setProfiles(prev => {
+      const next = profileWithLengthChoice(prev[profId], lane, decision, today);
+      return next ? { ...prev, [profId]: next } : prev;
+    });
+    return true;
+  }, [activeProfile, profiles, setProfiles]);
 
   const deleteArchive = useCallback((archiveId, profId = activeProfile) => {
     setArchives(prev => ({
@@ -3415,6 +3444,7 @@ export function AppProvider({ children }) {
       getSupportMeta, hasSupport, getSupportDayNumber, getSupportStart, getLaneInfo,
       addSupportChallenge, previewSupportChallenge, endSupportChallenge,
       completeSupportChallenge, promoteSupportToPrimary, clearPrimaryChoice, LANE,
+      trainingLengthChoiceLane, answerTrainingLengthChoice,
       // Bonus Missions
       toggleBonusMission, addBonusMission, removeBonusMission, reorderBonusMissions,
       // Rank ceremony / Hall of Legends

@@ -26,6 +26,10 @@
  *   M. 320, 390 and 430px.
  *   N. Mental Training as a Support Challenge.
  *   O. An attempt already running at Standard's earlier 15 minutes keeps them.
+ *   P. …until its owner answers the one-time choice on Home: switch to 10
+ *      (from today, moving no XP, completed day or streak) or keep 15. Asked
+ *      once, on either lane and either profile, and never for anything else;
+ *      setup, the support picker and Retry record default or chosen.
  *
  * Run against a production build:  npx vite preview --port 4173
  */
@@ -208,8 +212,8 @@ check('A: the review lists exactly one Mental Training habit',
 await finishSetup();
 
 let p = await prof();
-check('A: the attempt is stamped with the six practices and 30 minutes',
-  JSON.stringify(p.activeChallenge.mentalTraining) === JSON.stringify({ version: 1, minutes: 30 }),
+check('A: the attempt is stamped with the six practices and 30 minutes, recorded as chosen',
+  JSON.stringify(p.activeChallenge.mentalTraining) === JSON.stringify({ version: 1, minutes: 30, minutesSource: 'customized' }),
   JSON.stringify(p.activeChallenge.mentalTraining));
 check('A: on Standard, template version 6, current habit rules',
   p.activeChallenge.variant === 'standard' && p.activeChallenge.templateVersion === 6 && p.activeChallenge.habitRulesVersion === 2);
@@ -444,8 +448,9 @@ await page.reload();
 await page.waitForSelector('.dashboard', { timeout: 15000 });
 await startMT({ mode: 'Beginner' });
 const gf = await prof('girlfriend');
-check('K: the other profile starts its own attempt at Beginner\'s 5 minutes',
-  gf.activeChallenge.mentalTraining?.minutes === 5 && gf.tasks.find(t => t.id === 'mt_mind').name === 'Mental Training — 5 minutes');
+check('K: the other profile starts its own attempt at Beginner\'s 5 minutes, recorded as the default',
+  gf.activeChallenge.mentalTraining?.minutes === 5 && gf.activeChallenge.mentalTraining?.minutesSource === 'default'
+    && gf.tasks.find(t => t.id === 'mt_mind').name === 'Mental Training — 5 minutes');
 check('K: its card layout offers Begin Training under the habit',
   (await page.locator('.mt-task .gf-task-card').count()) === 1 && (await page.locator('[data-testid="begin-training"]').count()) === 1);
 const gfAccent = await page.evaluate(() => getComputedStyle(document.querySelector('.mt-launch-go')).color);
@@ -556,7 +561,10 @@ check('O: …and the session counts toward 15, not the new 10',
   /15 minutes · your daily target/.test(await page.textContent('[data-testid="training-session"]')));
 await closeTraining();
 await openManage();
-check('O: it is not offered an update or a new length', !/Template update available/i.test(await page.textContent('.f4c-manage')));
+check('O: it is not offered a template update', !/Template update available/i.test(await page.textContent('.f4c-manage')));
+await gotoTab('Home');
+check('O: Home asks whether to keep 15 or switch to 10 (section P)', (await page.locator('.tlc-card').count()) === 1);
+check('O: …and asking wrote nothing', JSON.stringify(await prof()) === at15Stored);
 await gotoTab('Today');
 await page.waitForSelector('.check-item', { timeout: 15000 });
 
@@ -627,8 +635,9 @@ check('N: the preview lists the habit at the chosen length',
 await page.locator('.sup-confirm .btn-primary', { hasText: 'Add Support Challenge' }).click();
 await page.waitForTimeout(500);
 p = await prof();
-check('N: the support attempt is stamped with its length',
-  p.supportChallenge?.mentalTraining?.minutes === 30 && p.tasks.find(t => t.id === 'mt_mind')?.name === 'Mental Training — 30 minutes');
+check('N: the support attempt is stamped with its length, recorded as chosen',
+  JSON.stringify(p.supportChallenge?.mentalTraining) === JSON.stringify({ version: 1, minutes: 30, minutesSource: 'customized' })
+    && p.tasks.find(t => t.id === 'mt_mind')?.name === 'Mental Training — 30 minutes', JSON.stringify(p.supportChallenge?.mentalTraining));
 await gotoTab('Today');
 await page.waitForSelector('.lane-section.support');
 check('N: Begin Training appears in the support lane, under the habit',
@@ -641,6 +650,287 @@ check('N: completing it ticks the support habit and nothing else',
   supAfter?.tasks?.mt_mind === true
     && Object.entries(supAfter.tasks).filter(([, v]) => v).map(([k]) => k).join() === 'mt_mind', JSON.stringify(supAfter?.tasks));
 check('N: the primary\'s habits are untouched', !supBefore?.tasks?.fl_protein && !supAfter.tasks.fl_protein && !supAfter.tasks.fl_steps);
+
+// ══ P: the one-time Standard length choice ══════════════════════════════════
+const TODAY_STR = offset(0);
+const AT = (m) => LEGACY_TASKS.map(t => t.id === 'mt_mind'
+  ? { ...t, name: `Mental Training — ${m} minutes`, desc: TRAINING_DESC, target: { value: m, unit: 'minutes', direction: 'atLeast' } } : t);
+const mtAttempt = (variant, mentalTraining) => ({
+  templateId: 'mental_training_phase', name: 'Mental Training Phase', emoji: '🧠', variant,
+  durationDays: 21, templateVersion: 6, passingScore: 70, keystoneRequirement: 65,
+  xpEconomyVersion: 2, effortTier: 'medium', dailyBudget: 213, coldExposureUpgradeEnabled: false, habitRulesVersion: 2,
+  ...(mentalTraining ? { mentalTraining } : {}),
+});
+const OLD_15 = { version: 1, minutes: 15 };   // what v4.3.0 and v4.3.1 saved
+// Four finished days — three complete, one with the training missed — and
+// today is Day 5.
+const HISTORY = () => {
+  const all = Object.fromEntries(AT(15).map(t => [t.id, true]));
+  return {
+    1: { date: offset(-4), dayNumber: 1, tasks: all },
+    2: { date: offset(-3), dayNumber: 2, tasks: all, trainingPractice: 'dead_calm' },
+    3: { date: offset(-2), dayNumber: 3, tasks: { ...all, mt_mind: false } },
+    4: { date: offset(-1), dayNumber: 4, tasks: all, trainingPractice: 'open_sky' },
+  };
+};
+async function dismissRankUp() {
+  for (let i = 0; i < 3 && (await page.locator('.rankup-skip').count()); i++) {
+    await page.locator('.rankup-skip').first().click();
+    await page.waitForTimeout(300);
+  }
+}
+async function home() {
+  await page.reload();
+  await page.waitForSelector('.dashboard', { timeout: 15000 });
+  await dismissRankUp();
+  await gotoTab('Home');
+}
+async function seedProfiles(cfg, { penalties = true } = {}) {
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('activeProfile', JSON.stringify('me')); });
+  await page.reload();
+  await page.waitForSelector('.dashboard', { timeout: 15000 });
+  await page.evaluate(({ cfg, penalties }) => {
+    const p = JSON.parse(localStorage.getItem('profiles'));
+    const allDays = { me: {}, girlfriend: {} };
+    for (const [id, c] of Object.entries(cfg)) {
+      p[id].xpPenalties = penalties;
+      p[id].challengeStart = c.start;
+      p[id].activeChallenge = c.primary;
+      p[id].tasks = c.tasks.map((t, i) => ({ ...t, source: 'template', order: i }));
+      p[id].bonusMissions = [];
+      if (c.support) { p[id].supportChallenge = c.support; p[id].supportChallengeStart = c.supportStart; }
+      allDays[id] = c.days || {};
+    }
+    localStorage.setItem('profiles', JSON.stringify(p));
+    localStorage.setItem('allDays', JSON.stringify(allDays));
+  }, { cfg, penalties });
+  await home();
+}
+const cardCount = () => page.locator('.tlc-card:not(.tlc-done)').count();
+const rankXP = async () => parseInt(((await page.textContent('.f41-rank-xp-num')) || '0').replace(/[^\d]/g, ''), 10);
+const challengeXPNow = async () => parseInt(((await page.locator('.f41-rank-split .f41-rank-stat-value').first().textContent()) || '0').replace(/[^\d]/g, ''), 10);
+const consistencyNow = async () => (await page.textContent('.f41-con-figures')).replace(/\s+/g, ' ').trim();
+const without = (o, ...keys) => JSON.stringify(Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k))));
+
+// Both profiles on a Standard attempt saved at 15, with history.
+await seedProfiles({
+  me: { start: offset(-4), primary: mtAttempt('standard', OLD_15), tasks: AT(15), days: HISTORY() },
+  girlfriend: { start: offset(-4), primary: mtAttempt('standard', OLD_15), tasks: AT(15), days: HISTORY() },
+});
+const seededMe = JSON.stringify(await prof('me'));
+const seededGf = JSON.stringify(await prof('girlfriend'));
+await home();
+check('P: Home asks, on one card', (await cardCount()) === 1);
+check('P: showing it — and reloading — writes nothing',
+  JSON.stringify(await prof('me')) === seededMe && JSON.stringify(await prof('girlfriend')) === seededGf);
+const cardText = await page.textContent('.tlc-card');
+check('P: it recommends 10 and offers to keep 15',
+  /Standard now recommends 10 minutes/.test(cardText) && /Switch to 10 minutes\s*Recommended/.test(cardText) && /Keep 15 minutes/.test(cardText), cardText);
+check('P: it names the attempt and the 15 minutes it asks for now',
+  /Mental Training Phase asks for 15 minutes of Mental Training a day, the previous recommendation/.test(cardText));
+check('P: it says why it is asking, and what does not change',
+  /can’t tell whether 15 was your choice/.test(cardText) && /Completed days, XP and your streak stay as they are/.test(cardText)
+    && /A switch applies from today/.test(cardText));
+
+// Switch, on the first profile.
+const me0 = await prof('me');
+const meDays0 = JSON.stringify(await days('me'));
+const xp0 = await rankXP(), cxp0 = await challengeXPNow(), con0 = await consistencyNow();
+await page.click('.tlc-switch');
+await page.waitForTimeout(400);
+const me1 = await prof('me');
+check('P: Switch — 10 minutes, recorded as the default, with the day it changed',
+  JSON.stringify(me1.activeChallenge.mentalTraining)
+    === JSON.stringify({ version: 1, minutes: 10, minutesSource: 'default', lengthChoice: { decision: 'switched', from: 15, on: TODAY_STR } }),
+  JSON.stringify(me1.activeChallenge.mentalTraining));
+const mind0 = me0.tasks.find(t => t.id === 'mt_mind'), mind1 = me1.tasks.find(t => t.id === 'mt_mind');
+check('P: …the habit reads 10 and targets 10, with the same id, XP, weight and place',
+  mind1.name === 'Mental Training — 10 minutes' && mind1.target?.value === 10
+    && mind1.xp === mind0.xp && mind1.keystone === mind0.keystone && mind1.order === mind0.order && mind1.habitKey === mind0.habitKey);
+check('P: …every other habit is unchanged',
+  JSON.stringify(me1.tasks.filter(t => t.id !== 'mt_mind')) === JSON.stringify(me0.tasks.filter(t => t.id !== 'mt_mind')));
+check('P: …nothing else on the profile or the attempt changed',
+  without(me1, 'tasks', 'activeChallenge') === without(me0, 'tasks', 'activeChallenge')
+    && without(me1.activeChallenge, 'mentalTraining') === without(me0.activeChallenge, 'mentalTraining'));
+check('P: …no day record changed', JSON.stringify(await days('me')) === meDays0);
+check('P: …Lifetime XP, challenge XP and the streak read exactly as before',
+  (await rankXP()) === xp0 && (await challengeXPNow()) === cxp0 && (await consistencyNow()) === con0 && xp0 > 0,
+  `${xp0} XP · ${cxp0} challenge · ${con0}`);
+check('P: …the other profile is untouched', JSON.stringify(await prof('girlfriend')) === seededGf);
+check('P: …and the card confirms what was saved',
+  (await cardCount()) === 0 && /Mental Training is now 10 minutes a day, from today/.test(await page.textContent('.tlc-done')));
+
+await gotoTab('Today');
+await page.waitForSelector('.check-item', { timeout: 15000 });
+check('P: Today reads 10', (await mindRow().locator('.f4-task-title').textContent()).trim() === 'Mental Training — 10 minutes');
+await openTraining();
+check('P: Begin Training states 10', /Mental Training — 10 minutes/.test(await page.textContent('[data-testid="training-choose"]')));
+await choosePractice('dead_calm');
+check('P: …and the session counts toward 10', /10 minutes · your daily target/.test(await page.textContent('[data-testid="training-session"]')));
+await closeTraining();
+const me1s = JSON.stringify(await prof('me'));
+await home();
+check('P: after a reload it is not asked again', (await cardCount()) === 0 && (await page.locator('.tlc-done').count()) === 0);
+check('P: …and the reload changed nothing', JSON.stringify(await prof('me')) === me1s);
+
+// Keep, on the other profile.
+await page.click('.dash-switch-btn');
+await page.waitForTimeout(500);
+await dismissRankUp();
+check('P: the other profile is asked about its own attempt', (await cardCount()) === 1);
+const gf0 = await prof('girlfriend');
+const gfDays0 = JSON.stringify(await days('girlfriend'));
+const gxp0 = await rankXP(), gcon0 = await consistencyNow();
+await page.click('.tlc-keep');
+await page.waitForTimeout(400);
+const gf1 = await prof('girlfriend');
+check('P: Keep — 15 stays, recorded as a choice',
+  JSON.stringify(gf1.activeChallenge.mentalTraining)
+    === JSON.stringify({ version: 1, minutes: 15, minutesSource: 'customized', lengthChoice: { decision: 'kept', on: TODAY_STR } }),
+  JSON.stringify(gf1.activeChallenge.mentalTraining));
+check('P: …no habit changed', JSON.stringify(gf1.tasks) === JSON.stringify(gf0.tasks));
+check('P: …no day record, XP or streak changed',
+  JSON.stringify(await days('girlfriend')) === gfDays0 && (await rankXP()) === gxp0 && (await consistencyNow()) === gcon0);
+check('P: …the first profile is untouched', JSON.stringify(await prof('me')) === me1s);
+check('P: …and the card confirms it', /Keeping 15 minutes a day/.test(await page.textContent('.tlc-done')));
+await home();
+check('P: it is not asked again after a reload', (await cardCount()) === 0);
+await gotoTab('Today');
+await page.waitForSelector('.check-item', { timeout: 15000 });
+check('P: …and Today still reads 15', (await mindRow().locator('.f4-task-title').textContent()).trim() === 'Mental Training — 15 minutes');
+
+// Both answers fired in the same moment: the first is saved, once.
+await seedProfiles({ me: { start: offset(-4), primary: mtAttempt('standard', OLD_15), tasks: AT(15), days: HISTORY() } });
+await page.evaluate(() => {
+  document.querySelector('.tlc-switch').click();
+  document.querySelector('.tlc-keep').click();
+  document.querySelector('.tlc-switch').click();
+});
+await page.waitForTimeout(400);
+const dbl = await prof('me');
+check('P: answers fired together are saved once — the first one',
+  JSON.stringify(dbl.activeChallenge.mentalTraining)
+    === JSON.stringify({ version: 1, minutes: 10, minutesSource: 'default', lengthChoice: { decision: 'switched', from: 15, on: TODAY_STR } })
+    && dbl.tasks.filter(t => t.id === 'mt_mind').length === 1 && dbl.tasks.find(t => t.id === 'mt_mind').name === 'Mental Training — 10 minutes',
+  JSON.stringify(dbl.activeChallenge.mentalTraining));
+check('P: …and the card says what was saved, not the later tap', /now 10 minutes a day/.test(await page.textContent('.tlc-done')));
+
+// Widths.
+await seedProfiles({ me: { start: offset(-4), primary: mtAttempt('standard', OLD_15), tasks: AT(15), days: HISTORY() } });
+for (const w of [320, 390, 430]) {
+  await page.setViewportSize({ width: w, height: w === 320 ? 640 : 844 });
+  await page.waitForTimeout(250);
+  const fit = await page.evaluate(() => {
+    const card = document.querySelector('.tlc-card').getBoundingClientRect();
+    const btns = [...document.querySelectorAll('.tlc-card .btn')];
+    return {
+      page: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      inCard: btns.every(b => { const r = b.getBoundingClientRect(); return r.left >= card.left - 0.5 && r.right <= card.right + 0.5; }),
+      text: btns.every(b => b.scrollWidth <= b.clientWidth + 1),
+    };
+  });
+  check(`P: ${w}px — the card and both answers fit`, fit.page && fit.inCard && fit.text, JSON.stringify(fit));
+}
+await page.setViewportSize({ width: 390, height: 844 });
+
+// An attempt that has not started yet is asked on its scheduled screen.
+await seedProfiles({ me: { start: offset(3), primary: mtAttempt('standard', OLD_15), tasks: AT(15) } });
+check('P: a scheduled attempt saved at 15 is asked before it begins', (await cardCount()) === 1);
+await page.click('.tlc-switch');
+await page.waitForTimeout(400);
+check('P: …and Switch sets it to 10 from its first day',
+  (await prof('me')).activeChallenge.mentalTraining.minutes === 10
+    && (await prof('me')).tasks.find(t => t.id === 'mt_mind').name === 'Mental Training — 10 minutes');
+
+// Nothing else is ever asked.
+const NOT_ASKED = [
+  ['Standard at 30, saved before lengths were recorded', 'standard', { version: 1, minutes: 30 }, AT(30)],
+  ['Standard at 10, saved before lengths were recorded', 'standard', { version: 1, minutes: 10 }, AT(10)],
+  ['Beginner at 15', 'beginner', { version: 1, minutes: 15 }, AT(15)],
+  ['Hard at 30', 'hard', { version: 1, minutes: 30 }, AT(30)],
+  ['a new Standard attempt at 15, recorded as chosen', 'standard', { version: 1, minutes: 15, minutesSource: 'customized' }, AT(15)],
+  ['a new Standard attempt at 10, recorded as the default', 'standard', { version: 1, minutes: 10, minutesSource: 'default' }, AT(10)],
+  ['an attempt from before the six practices', 'standard', null, LEGACY_TASKS],
+];
+for (const [label, variant, mt, tasks] of NOT_ASKED) {
+  await seedProfiles({ me: { start: offset(-2), primary: mtAttempt(variant, mt), tasks } });
+  check(`P: not asked — ${label}`, (await cardCount()) === 0);
+}
+
+// Through the real setup flow: the length is recorded, and nothing is asked.
+await fresh('me');
+await startMT({ mode: 'Standard', minutes: 15 });
+check('P: choosing 15 in setup is recorded as a choice',
+  JSON.stringify((await prof()).activeChallenge.mentalTraining) === JSON.stringify({ version: 1, minutes: 15, minutesSource: 'customized' }));
+await gotoTab('Home');
+check('P: …and is never asked about', (await cardCount()) === 0);
+await fresh('me');
+await startMT({ mode: 'Standard' });
+check('P: keeping the recommendation in setup is recorded as the default',
+  JSON.stringify((await prof()).activeChallenge.mentalTraining) === JSON.stringify({ version: 1, minutes: 10, minutesSource: 'default' }));
+
+// The support lane: Mental Training saved at 15 beside a Fat Loss primary.
+const FL_META = {
+  xpEconomyVersion: 2, templateId: 'fat_loss_phase', name: 'Fat Loss Challenge', emoji: '⚡', variant: 'standard',
+  durationDays: 30, templateVersion: 3, passingScore: 70, keystoneRequirement: 65, weeklyRequirementsStartDate: '2099-01-01',
+  effortTier: 'medium_hard', dailyBudget: 300, habitRulesVersion: 2,
+};
+const SUP_TASKS = [
+  { id: 'fl_protein', name: 'Hit protein goal', icon: '🥩', xp: 60, keystone: 3, habitKey: 'protein_target', challenges: ['primary'] },
+  { id: 'fl_steps', name: 'Walk 8,000+ steps', icon: '🚶', xp: 40, keystone: 2, habitKey: 'daily_steps', challenges: ['primary'] },
+  { id: 'daily_log', name: 'Complete Daily Log', icon: '📊', xp: 20, keystone: 0, habitKey: 'daily_log', challenges: ['primary', 'support'] },
+  ...AT(15).filter(t => t.id !== 'daily_log').map(t => ({ ...t, challenges: ['support'] })),
+];
+await seedProfiles({ me: { start: offset(-6), primary: FL_META, tasks: SUP_TASKS, support: mtAttempt('standard', OLD_15), supportStart: offset(-2) } });
+const s0 = await prof('me');
+check('P: a support Mental Training attempt saved at 15 is asked too, by name',
+  (await page.locator('.tlc-card[data-lane="support"]').count()) === 1
+    && /Mental Training Phase \(your Support Challenge\) asks for 15 minutes/.test(await page.textContent('.tlc-card')));
+await page.click('.tlc-switch');
+await page.waitForTimeout(400);
+const s1 = await prof('me');
+check('P: …Switch moves the support attempt and its row to 10',
+  JSON.stringify(s1.supportChallenge.mentalTraining)
+    === JSON.stringify({ version: 1, minutes: 10, minutesSource: 'default', lengthChoice: { decision: 'switched', from: 15, on: TODAY_STR } })
+    && s1.tasks.find(t => t.id === 'mt_mind').name === 'Mental Training — 10 minutes');
+check('P: …the primary and every other habit are untouched',
+  JSON.stringify(s1.activeChallenge) === JSON.stringify(s0.activeChallenge)
+    && JSON.stringify(s1.tasks.filter(t => t.id !== 'mt_mind')) === JSON.stringify(s0.tasks.filter(t => t.id !== 'mt_mind')));
+await gotoTab('Today');
+await page.waitForSelector('.lane-section.support', { timeout: 15000 });
+check('P: …and the support lane reads 10', /Mental Training — 10 minutes/.test(await page.textContent('.lane-section.support')));
+
+// Retry follows what the finished attempt recorded.
+async function finishAndRetry(mentalTraining, tasks) {
+  // Started 21 days ago, so Day 21 is over and the attempt completes on load.
+  // (An attempt with no logged days leaves no archive and no result screen.)
+  const all = Object.fromEntries(tasks.map(t => [t.id, true]));
+  const ran = Object.fromEntries(Array.from({ length: 21 }, (_, i) => [i + 1, { date: offset(-21 + i), dayNumber: i + 1, tasks: all }]));
+  await seedProfiles({ me: { start: offset(-21), primary: mtAttempt('standard', mentalTraining), tasks, days: ran } }, { penalties: false });
+  await page.locator('button', { hasText: 'Retry This Challenge' }).waitFor({ timeout: 15000 });
+  const summary = (await prof('me')).lastCompletion;
+  await page.locator('button', { hasText: 'Retry This Challenge' }).click();
+  await page.waitForTimeout(600);
+  const after = await prof('me');
+  await gotoTab('Home');
+  await dismissRankUp();
+  return {
+    source: summary?.mentalTrainingSource ?? null,
+    stamp: JSON.stringify(after.activeChallenge?.mentalTraining),
+    row: after.tasks.find(t => t.id === 'mt_mind')?.name,
+    asked: (await cardCount()) === 1,
+  };
+}
+let r = await finishAndRetry({ version: 1, minutes: 15, minutesSource: 'customized' }, AT(15));
+check('P: Retry of a chosen 15 keeps 15, still recorded as chosen, and asks nothing',
+  r.source === 'customized' && r.stamp === JSON.stringify({ version: 1, minutes: 15, minutesSource: 'customized' })
+    && r.row === 'Mental Training — 15 minutes' && !r.asked, JSON.stringify(r));
+r = await finishAndRetry({ version: 1, minutes: 10, minutesSource: 'default' }, AT(10));
+check('P: Retry of the default gets today\'s default',
+  r.source === 'default' && r.stamp === JSON.stringify({ version: 1, minutes: 10, minutesSource: 'default' }) && !r.asked, JSON.stringify(r));
+r = await finishAndRetry(OLD_15, AT(15));
+check('P: Retry of an unanswered 15 keeps 15 without deciding for the person — and asks once on the new attempt',
+  r.source === null && r.stamp === JSON.stringify(OLD_15) && r.row === 'Mental Training — 15 minutes' && r.asked, JSON.stringify(r));
 
 // ══ summary ═════════════════════════════════════════════════════════════════
 const relevant = errors.filter(e => !/favicon|manifest|service worker|sw\.js/i.test(e));

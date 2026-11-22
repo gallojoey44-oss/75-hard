@@ -166,7 +166,10 @@ six practices, at a daily length chosen at setup (now 5, 10, 15 or 30
 minutes: Beginner from 5, Standard from 10, Hard 30; Standard was 15 when this
 was first released) — and stamps that onto the attempt itself
 (`meta.mentalTraining`, see `src/data/mentalPractices.js`) rather than adding a
-habit rules version. Since
+habit rules version. From 4.3.2 the stamp also records whether the length was
+the mode's recommendation or a choice (`minutesSource`), and a Standard attempt
+saved at 15 before that was recorded is asked once on Home whether to switch to
+10 or keep 15. Since
 no attempt can be on version 2 without that stamp, the Mental Training guide
 written for version 2 was retired before release; the six practices have their
 own guide. Attempts started before keep version 1, exactly as above.

@@ -13,6 +13,7 @@ import FatLossHardPanel from './FatLossHardPanel';
 import TransformationPhotos from './TransformationPhotos';
 import XPHistory from './XPHistory';
 import WelcomeBack from './WelcomeBack';
+import TrainingLengthChoice from './TrainingLengthChoice';
 import RankCard from './home/RankCard';
 import ConsistencyCard from './home/ConsistencyCard';
 import AchievementsCard from './home/AchievementsCard';
@@ -35,7 +36,7 @@ import { computeAveragesFromEntries, getPriorityBottleneck } from '../utils/insi
 import {
   getTemplateById, getCompletionBonusForDuration, FORGE_DAILY_META, FORGE_DAILY_TASKS,
 } from '../data/challengeTemplates';
-import { MENTAL_TRAINING_TEMPLATE, buildTrainingConfig, applyTrainingSetup } from '../data/mentalPractices';
+import { MENTAL_TRAINING_TEMPLATE, retryTrainingConfig, applyTrainingSetup } from '../data/mentalPractices';
 import { WEEKLY_REQUIREMENT_DEFS } from '../utils/weeklyRequirements';
 import { WEEKLY_REFLECTION_PROMPTS } from '../data/challengeContent';
 import { formatDateShort, dayNumberForDate } from '../utils/dateUtils';
@@ -936,10 +937,11 @@ export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPast
     const tpl = s?.templateId ? getTemplateById(s.templateId) : null;
     if (tpl && tpl.start_flow === 'variant' && s.variant && tpl.variants?.[s.variant]?.start_tasks) {
       // A retried Mental Training Phase is a new attempt, so it trains with the
-      // six practices — at the length the finished attempt used, when it had
-      // one the mode allows, and otherwise at the mode's recommendation.
+      // six practices. A length the finished attempt took as the recommendation
+      // becomes today's recommendation; a length it chose (or never recorded)
+      // is kept while the mode allows it.
       const training = tpl.id === MENTAL_TRAINING_TEMPLATE
-        ? buildTrainingConfig(s.variant, s.mentalTrainingMinutes)
+        ? retryTrainingConfig(s.variant, s.mentalTrainingMinutes, s.mentalTrainingSource)
         : null;
       startChallenge(undefined, {
         challenge: {
@@ -1142,6 +1144,7 @@ export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPast
           </button>
         </div>
         <ScheduledStartCard onChangeChallenge={() => setView('challenges')} />
+        <TrainingLengthChoice key={activeProfile} />
         {/* The days before a challenge starts are when people most want to write. */}
         {onOpenFutureSelf && (
           <HomeFutureSelfCard onOpen={onOpenFutureSelf} onRead={onReadPastSelf} />
@@ -1289,6 +1292,9 @@ export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPast
 
       {/* Returning after a gap — temporary, once per gap. */}
       <WelcomeBack />
+
+      {/* Standard Mental Training saved at 15 minutes — asked once, never assumed. */}
+      <TrainingLengthChoice key={activeProfile} />
 
       {/* 1. Where you stand */}
       <div style={{ position: 'relative' }}>

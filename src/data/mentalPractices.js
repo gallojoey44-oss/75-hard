@@ -16,7 +16,7 @@ import { HABIT_KEYS } from './habitKeys';
  * attempt and stamped when the attempt starts, like the Cold Exposure Upgrade
  * and Fat Loss Hard Mode's setup:
  *
- *   meta.mentalTraining = { version: 1, minutes: 15 }
+ *   meta.mentalTraining = { version: 1, minutes: 10, minutesSource: 'default' }
  *
  * An attempt with no stamp was started before this existed. It keeps exactly
  * the habit it started with — its name, its minutes, its wording, its guide
@@ -29,7 +29,8 @@ import { HABIT_KEYS } from './habitKeys';
  * (Mental Sparring, longer guided sessions) is added as version 2 beside it;
  * attempts on version 1 keep these six for life.
  *
- * `minutes` is the daily target chosen at setup and fixed for the attempt.
+ * `minutes` is the daily target chosen at setup and kept for the attempt;
+ * `minutesSource` says whether it was the recommendation or a choice.
  * It is a requirement, not a reward: every option pays the same XP, so there
  * is nothing to gain by choosing less, and the XP figure is never read from
  * here — it comes from the attempt's stamped economy like every other habit.
@@ -72,7 +73,8 @@ export const TRAINING_MINUTE_OPTIONS = [5, 10, 15, 30];
  *
  * These apply to attempts STARTED with them. An attempt keeps the minutes
  * stamped on it at setup (trainingConfigOf reads only the stamp), so changing
- * an option here never moves a running attempt's commitment.
+ * an option here never moves a running attempt's commitment by itself. The one
+ * exception is asked, not applied: see the Standard length choice below.
  */
 export const TRAINING_MINUTES_BY_MODE = {
   beginner: { recommended: 5,  options: [5, 10, 15, 30] },
@@ -104,9 +106,146 @@ export function resolveMinutes(mode, chosen = null) {
   return allowedMinutes(mode).includes(n) ? n : recommendedMinutes(mode);
 }
 
+// ── Default or customized ───────────────────────────────────────────────────
+//
+// An attempt records whether its daily length was the mode's recommendation or
+// something the person chose instead:
+//
+//   meta.mentalTraining.minutesSource = 'default' | 'customized'
+//
+// It is read from the length itself, at the moment the attempt is created —
+// setup, the Support Challenge picker and Retry all build their stamp through
+// buildTrainingConfig — so no screen has to report what was tapped. Choosing
+// the recommendation is accepting it. This is what lets a later improvement to
+// a recommendation reach the attempts that took the old one without touching
+// a length somebody picked on purpose.
+//
+// Attempts started before this was recorded have no source. Their length is
+// never changed for them: an unknown source is treated as a choice.
+
+export const MINUTES_SOURCE = { DEFAULT: 'default', CUSTOMIZED: 'customized' };
+
 /** The per-attempt stamp for a new attempt of this mode. */
 export function buildTrainingConfig(mode, chosen = null) {
-  return { version: TRAINING_VERSION, minutes: resolveMinutes(mode, chosen) };
+  const minutes = resolveMinutes(mode, chosen);
+  return {
+    version: TRAINING_VERSION,
+    minutes,
+    minutesSource: minutes === recommendedMinutes(mode) ? MINUTES_SOURCE.DEFAULT : MINUTES_SOURCE.CUSTOMIZED,
+  };
+}
+
+/** Whether an attempt's length was the default, customized, or is unknown (null). */
+export function minutesSourceOf(meta) {
+  const s = meta?.mentalTraining?.minutesSource;
+  return s === MINUTES_SOURCE.DEFAULT || s === MINUTES_SOURCE.CUSTOMIZED ? s : null;
+}
+
+/**
+ * The stamp for retrying a finished attempt, from its summary.
+ *
+ *   default    → today's recommendation for the mode, so a retry gets the
+ *                current best version of the challenge
+ *   customized → the same length again, while the mode still allows it
+ *   unknown    → the same length again, still unknown: an attempt from before
+ *                lengths were recorded is never decided for the person
+ */
+export function retryTrainingConfig(mode, previousMinutes = null, previousSource = null) {
+  if (previousSource === MINUTES_SOURCE.DEFAULT) return buildTrainingConfig(mode);
+  const kept = allowedMinutes(mode).includes(Number(previousMinutes));
+  if (previousSource === MINUTES_SOURCE.CUSTOMIZED) {
+    return kept
+      ? { version: TRAINING_VERSION, minutes: Number(previousMinutes), minutesSource: MINUTES_SOURCE.CUSTOMIZED }
+      : buildTrainingConfig(mode);
+  }
+  if (!kept) return buildTrainingConfig(mode);
+  return { version: TRAINING_VERSION, minutes: Number(previousMinutes) };
+}
+
+// ── The Standard length choice ──────────────────────────────────────────────
+//
+// Standard used to recommend fifteen minutes and now recommends ten. An attempt
+// saved at fifteen before lengths were recorded may have taken the old
+// recommendation or chosen fifteen on purpose, and the stored data cannot say
+// which. So it is asked, once: switch to ten, or keep fifteen. The answer is
+// stored on the attempt and the question never comes back for it.
+//
+// Switching applies from the moment it is chosen. Days already logged keep
+// their ticks, and XP, streaks and history are read from those ticks, so none
+// of them move; the habit simply asks for ten minutes from then on.
+
+/** The length an attempt is asked about, and the length it is offered. */
+export const LENGTH_CHOICE = { mode: 'standard', from: 15, to: 10 };
+
+/**
+ * Whether this attempt should be asked about its length: a Mental Training
+ * attempt in Standard, saved at fifteen minutes, with no recorded source and no
+ * answer yet. Everything else — every new attempt, every other mode or length,
+ * every attempt already asked — returns false.
+ */
+export function needsLengthChoice(meta) {
+  const config = trainingConfigOf(meta);
+  if (!config || meta.variant !== LENGTH_CHOICE.mode) return false;
+  if (config.minutes !== LENGTH_CHOICE.from) return false;
+  if (minutesSourceOf(meta)) return false;
+  return !meta.mentalTraining.lengthChoice;
+}
+
+/** The attempt's training stamp after its answer ('switch' or 'keep'). */
+export function answerLengthChoice(meta, decision, todayStr) {
+  const t = meta?.mentalTraining || {};
+  if (decision === 'switch') {
+    return {
+      ...t,
+      minutes: LENGTH_CHOICE.to,
+      minutesSource: MINUTES_SOURCE.DEFAULT,
+      lengthChoice: { decision: 'switched', from: LENGTH_CHOICE.from, on: todayStr },
+    };
+  }
+  return {
+    ...t,
+    minutesSource: MINUTES_SOURCE.CUSTOMIZED,
+    lengthChoice: { decision: 'kept', on: todayStr },
+  };
+}
+
+const LANE_KEYS = { primary: 'activeChallenge', support: 'supportChallenge' };
+
+/** The lane ('primary' or 'support') waiting for the length choice, or null. */
+export function lengthChoiceLane(profile) {
+  if (!profile) return null;
+  if (profile.challengeStart && needsLengthChoice(profile.activeChallenge)) return 'primary';
+  if (profile.supportChallenge && profile.supportChallengeStart && needsLengthChoice(profile.supportChallenge)) return 'support';
+  return null;
+}
+
+/**
+ * The profile after answering the length choice for one lane, or null when
+ * that lane is not waiting for one (already answered, a new attempt, another
+ * mode or length) — so answering twice changes nothing the second time.
+ *
+ * Writes that attempt's training stamp and, on a switch, the one training row
+ * that follows that attempt, chosen exactly as the Today list chooses it: its
+ * name, wording and target, never its id, XP or keystone weight. Day records
+ * are not part of a profile and are never touched, so completed days, XP,
+ * streaks and history read exactly as they did.
+ */
+export function profileWithLengthChoice(profile, lane, decision, todayStr) {
+  const key = LANE_KEYS[lane];
+  if (!key || (decision !== 'switch' && decision !== 'keep')) return null;
+  const current = profile?.[key];
+  if (!needsLengthChoice(current)) return null;
+  const meta = { ...current, mentalTraining: answerLengthChoice(current, decision, todayStr) };
+  if (decision === 'keep') return { ...profile, [key]: meta };
+  const primary = key === 'activeChallenge' ? meta : profile.activeChallenge;
+  const support = key === 'supportChallenge' ? meta : profile.supportChallenge;
+  const config = trainingConfigOf(meta);
+  const tasks = (profile.tasks || []).map(t => (
+    t.id === TRAINING_TASK_ID && attemptForTask(t, primary, support) === meta
+      ? applyTrainingSetup([t], config)[0]
+      : t
+  ));
+  return { ...profile, [key]: meta, tasks };
 }
 
 /**
