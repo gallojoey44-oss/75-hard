@@ -18,9 +18,10 @@ import {
   TRAINING_MINUTE_OPTIONS, TRAINING_TASK_ID, allowedMinutes, recommendedMinutes, resolveMinutes,
 } from '../../data/mentalPractices';
 
-/** How each daily length reads, so the three are told apart at a glance. */
+/** How each daily length reads, so the four are told apart at a glance. */
 const TRAINING_LENGTH_LABELS = {
   5: 'A focused start',
+  10: 'A steady session',
   15: 'A full session',
   30: 'Deep practice',
 };

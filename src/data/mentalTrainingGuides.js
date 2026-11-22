@@ -114,11 +114,11 @@ export const GUIDES = {
     ],
     examples: [
       {
-        label: 'Fifteen minutes of Dead Calm, first thing',
+        label: 'Ten minutes of Dead Calm, first thing',
         lines: [
           '06:50 — before the phone is unlocked, which is the one reliably quiet part of the day.',
-          'A minute of slow breathing to settle, then fourteen following the breath.',
-          'Your mind wanders perhaps thirty times. Each time you notice, you go back.',
+          'A minute of slow breathing to settle, then nine following the breath.',
+          'Your mind wanders perhaps twenty times. Each time you notice, you go back.',
           'Back to Forge, confirm, done.',
         ],
       },

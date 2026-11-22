@@ -27,8 +27,10 @@ import {
  *      which keeps its id, keystone weight and XP. No new habits, no new XP.
  *   2. The six practices exist, each with the content the session screen
  *      needs, and none of them promises an outcome.
- *   3. Duration is chosen at setup from 5 / 15 / 30, never below the mode's
- *      own minimum, fixed for the attempt — and it never changes the XP.
+ *   3. Duration is chosen at setup from 5 / 10 / 15 / 30, never below the
+ *      mode's own minimum (Beginner 5, Standard 10, Hard 30), fixed for the
+ *      attempt — and it never changes the XP. An attempt already running keeps
+ *      the length stamped on it, whatever the options are now.
  *   4. Versioning: the practices are stamped onto an attempt when it starts.
  *      An attempt without the stamp keeps exactly the habit it started with,
  *      the template is not bumped, and a template sync preserves both.
@@ -118,22 +120,28 @@ const promising = allCopy.filter(s => PROMISES.test(s));
 check('2: no practice copy promises a psychological or medical outcome', promising.length === 0, promising.join(' | '));
 
 // ══ 3: duration ═════════════════════════════════════════════════════════════
-check('3: the lengths on offer are 5, 15 and 30 minutes', JSON.stringify(TRAINING_MINUTE_OPTIONS) === '[5,15,30]');
-check('3: Beginner recommends 5 and allows all three',
-  recommendedMinutes('beginner') === 5 && JSON.stringify(allowedMinutes('beginner')) === '[5,15,30]');
-check('3: Standard recommends 15 and allows 15 or 30',
-  recommendedMinutes('standard') === 15 && JSON.stringify(allowedMinutes('standard')) === '[15,30]');
+check('3: the lengths on offer are 5, 10, 15 and 30 minutes', JSON.stringify(TRAINING_MINUTE_OPTIONS) === '[5,10,15,30]');
+check('3: Beginner recommends 5 and allows all four',
+  recommendedMinutes('beginner') === 5 && JSON.stringify(allowedMinutes('beginner')) === '[5,10,15,30]');
+check('3: Standard recommends 10 and allows 10, 15 or 30',
+  recommendedMinutes('standard') === 10 && JSON.stringify(allowedMinutes('standard')) === '[10,15,30]');
 check('3: Hard recommends and requires 30', recommendedMinutes('hard') === 30 && JSON.stringify(allowedMinutes('hard')) === '[30]');
 check('3: no mode allows less than its own recommendation',
   MODES.every(m => allowedMinutes(m).every(x => x >= recommendedMinutes(m))));
 check('3: a harder mode never recommends less than an easier one',
   recommendedMinutes('beginner') <= recommendedMinutes('standard') && recommendedMinutes('standard') <= recommendedMinutes('hard'));
 check('3: a length below the mode\'s minimum falls back to the recommendation',
-  resolveMinutes('hard', 5) === 30 && resolveMinutes('hard', 15) === 30 && resolveMinutes('standard', 5) === 15
-    && resolveMinutes('beginner', 30) === 30);
+  resolveMinutes('hard', 5) === 30 && resolveMinutes('hard', 10) === 30 && resolveMinutes('hard', 15) === 30
+    && resolveMinutes('standard', 5) === 10 && resolveMinutes('beginner', 30) === 30);
+check('3: every length a mode allows is kept as chosen',
+  resolveMinutes('beginner', 10) === 10 && resolveMinutes('beginner', 15) === 15
+    && resolveMinutes('standard', 10) === 10 && resolveMinutes('standard', 15) === 15 && resolveMinutes('standard', 30) === 30);
 check('3: lengths that were never offered fall back too',
-  resolveMinutes('standard', 20) === 15 && resolveMinutes('beginner', 10) === 5 && resolveMinutes('standard', 45) === 15
-    && resolveMinutes('standard', '30') === 30 && resolveMinutes('standard', null) === 15 && resolveMinutes('nonsense', 5) === 15);
+  resolveMinutes('standard', 20) === 10 && resolveMinutes('beginner', 20) === 5 && resolveMinutes('standard', 45) === 10
+    && resolveMinutes('standard', '30') === 30 && resolveMinutes('standard', null) === 10 && resolveMinutes('nonsense', 5) === 10);
+check('3: a new Standard attempt is set to 10 minutes unless another length is chosen',
+  buildAttemptPayload({ template: MT, variant: 'standard' }).challenge.mentalTraining?.minutes === 10
+    && buildAttemptPayload({ template: MT, variant: 'standard' }).tasks.find(t => t.id === 'mt_mind').name === 'Mental Training — 10 minutes');
 check('3: allowedMinutes hands back a copy, so a caller cannot change the rules',
   (() => { const a = allowedMinutes('hard'); a.push(5); return JSON.stringify(allowedMinutes('hard')) === '[30]'; })());
 
@@ -267,6 +275,29 @@ check('4: applyTrainingSetup with no config hands back the same list',
 check('4: applyTrainingSetup never mutates the template',
   MT.variants.standard.start_tasks.find(t => t.id === 'mt_mind').name === 'Mental Training — 5 minutes'
     && MT.variants.standard.start_tasks.find(t => t.id === 'mt_mind').target === undefined);
+
+// An attempt already running at Standard's previous minimum. Its stamp is the
+// only thing read, so the new options cannot reach it: same rule, same row,
+// same XP, same length through a sync and through Retry.
+{
+  const running = { ...legacyMeta, habitRulesVersion: 2, mentalTraining: { version: 1, minutes: 15 } };
+  const runningTasks = applyTrainingSetup(MT.variants.standard.start_tasks, trainingConfigOf(running));
+  check('4: a Standard attempt started at 15 minutes still reads 15',
+    trainingConfigOf(running)?.minutes === 15 && trainingFor(runningTasks.find(t => t.id === 'mt_mind'), running)?.minutes === 15);
+  check('4: …its habit row still says 15 and targets 15',
+    runningTasks.find(t => t.id === 'mt_mind').name === 'Mental Training — 15 minutes'
+      && runningTasks.find(t => t.id === 'mt_mind').target?.value === 15);
+  check('4: …a template sync keeps it at 15', sync(running).find(t => t.id === 'mt_mind').name === 'Mental Training — 15 minutes');
+  check('4: …and Retry keeps 15, which Standard still allows',
+    buildTrainingConfig('standard', 15).minutes === 15);
+  const at15 = previewAttempt({ template: MT, variant: 'standard', trainingMinutes: 15 });
+  const at10 = previewAttempt({ template: MT, variant: 'standard', trainingMinutes: 10 });
+  check('4: …and it is worth exactly what a 10-minute Standard attempt is worth',
+    at15.tasks.find(t => t.id === 'mt_mind').xp === at10.tasks.find(t => t.id === 'mt_mind').xp
+      && at15.dailyBudget === at10.dailyBudget && at15.completionBonus === at10.completionBonus);
+  const beginnerOld = { ...running, variant: 'beginner', mentalTraining: { version: 1, minutes: 15 } };
+  check('4: a Beginner attempt at 15 is untouched as well', trainingConfigOf(beginnerOld)?.minutes === 15);
+}
 
 // Practice sets are versioned and never edited.
 check('4: version 1 is the set new attempts get', practicesFor({ version: TRAINING_VERSION }) === PRACTICE_SETS[1]);

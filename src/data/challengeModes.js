@@ -8,8 +8,8 @@ import { getDefaultDuration } from './challengeTemplates';
  * the habit", "Strengthen the habit", "Optimize the habit" — which is three
  * ways of saying "harder" and tells nobody what they are agreeing to. The real
  * differences are already in the templates and are specific: Mental Training
- * asks for 2, 5 or 10 minutes of practice and a 30, 60 or 90 minute focus
- * block; Fat Loss asks for 6,000, 8,000 or 10,000 steps and adds a fullness
+ * asks for at least 5, 10 or 30 minutes of practice and a 30, 60 or 90 minute
+ * focus block; Fat Loss asks for 6,000, 8,000 or 10,000 steps and adds a fullness
  * habit and three more weekly sessions on Hard.
  *
  * So nothing is written here. Each mode is PREVIEWED through the same

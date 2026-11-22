@@ -162,9 +162,11 @@ a one-line change if you would rather everyone saw it.
 
 *Later: the six practices.* The Mental Training overhaul, released together
 with this work, replaces this row's version 2 for every new attempt — one of
-six practices, at a daily length of 5, 15 or 30 minutes chosen at setup — and
-stamps that onto the attempt itself (`meta.mentalTraining`, see
-`src/data/mentalPractices.js`) rather than adding a habit rules version. Since
+six practices, at a daily length chosen at setup (now 5, 10, 15 or 30
+minutes: Beginner from 5, Standard from 10, Hard 30; Standard was 15 when this
+was first released) — and stamps that onto the attempt itself
+(`meta.mentalTraining`, see `src/data/mentalPractices.js`) rather than adding a
+habit rules version. Since
 no attempt can be on version 2 without that stamp, the Mental Training guide
 written for version 2 was retired before release; the six practices have their
 own guide. Attempts started before keep version 1, exactly as above.

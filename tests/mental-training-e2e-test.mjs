@@ -5,8 +5,9 @@
  * real setup flow, the habit is completed through Begin Training, and every
  * claim is checked against what the app stores as well as what it shows.
  *
- *   A. Setup offers 5 / 15 / 30 minutes, never below the mode's minimum, and
- *      stamps the choice onto the attempt without a template update prompt.
+ *   A. Setup offers 5 / 10 / 15 / 30 minutes, never below the mode's minimum
+ *      (Beginner 5, Standard 10, Hard 30), and stamps the choice onto the
+ *      attempt without a template update prompt.
  *   B. Today shows ONE Mental Training habit, its sentence, its Guide and a
  *      Begin Training action that lives outside the checkbox row.
  *   C. Opening, reading, choosing, timing and the Guide award nothing.
@@ -24,6 +25,7 @@
  *      minutes through a sync.
  *   M. 320, 390 and 430px.
  *   N. Mental Training as a Support Challenge.
+ *   O. An attempt already running at Standard's earlier 15 minutes keeps them.
  *
  * Run against a production build:  npx vite preview --port 4173
  */
@@ -151,9 +153,15 @@ await fresh('me');
 // ══ A: setup ════════════════════════════════════════════════════════════════
 check('A: the setup flow has a Daily Mental Training step', await toTrainingStep({ mode: 'Standard' }));
 let opts = await lengths();
-check('A: it offers 5, 15 and 30 minutes', opts.map(o => o.text).join('|') === '5 minutes a day|15 minutes a day|30 minutes a day');
-check('A: Standard recommends 15 and has it selected', opts.find(o => o.on)?.text === '15 minutes a day');
-check('A: Standard cannot choose less than 15', opts[0].disabled && !opts[1].disabled && !opts[2].disabled);
+check('A: it offers 5, 10, 15 and 30 minutes',
+  opts.map(o => o.text).join('|') === '5 minutes a day|10 minutes a day|15 minutes a day|30 minutes a day', opts.map(o => o.text).join('|'));
+check('A: Standard recommends 10 and has it selected', opts.find(o => o.on)?.text === '10 minutes a day');
+check('A: Standard cannot choose less than 10, and can choose 10, 15 or 30',
+  opts[0].disabled && !opts[1].disabled && !opts[2].disabled && !opts[3].disabled, JSON.stringify(opts));
+check('A: 10 minutes is labelled as Standard\'s recommendation',
+  /A steady session · Recommended for Standard/.test(await page.locator('[data-testid="setup-training"] .mt-length', { hasText: /^10 minutes a day/ }).textContent()));
+check('A: the step states Standard\'s minimum',
+  /Standard Mode trains for at least 10 minutes/.test(await page.textContent('[data-testid="setup-training"]')));
 check('A: the step says the length is fixed and pays the same XP',
   /fixed once the challenge starts/i.test(await page.textContent('[data-testid="setup-training"]'))
     && /same \d+ XP a day/i.test(await page.textContent('[data-testid="setup-training"]')));
@@ -166,7 +174,7 @@ for (let i = 0; i < 6 && !(await page.locator('[data-testid="setup-training"]').
 }
 opts = await lengths();
 check('A: Hard Mode requires 30 — the shorter lengths are unavailable',
-  opts[0].disabled && opts[1].disabled && !opts[2].disabled && opts[2].on, JSON.stringify(opts));
+  opts[0].disabled && opts[1].disabled && opts[2].disabled && !opts[3].disabled && opts[3].on, JSON.stringify(opts));
 
 await H.backToStep(page, '.f4c-mode');
 await H.pickMode(page, 'Beginner');
@@ -174,11 +182,14 @@ for (let i = 0; i < 6 && !(await page.locator('[data-testid="setup-training"]').
   await page.locator('.f4c-setup .f4c-btn.primary').last().click(); await page.waitForTimeout(300);
 }
 opts = await lengths();
-check('A: Beginner allows all three and recommends 5',
-  opts.every(o => !o.disabled) && opts[0].on, JSON.stringify(opts));
+check('A: Beginner allows all four and recommends 5',
+  opts.length === 4 && opts.every(o => !o.disabled) && opts[0].on, JSON.stringify(opts));
+await pickLength(10);
+opts = await lengths();
+check('A: Beginner can choose 10', opts[1].on && !opts[0].on);
 await pickLength(30);
 opts = await lengths();
-check('A: choosing 30 selects it', opts[2].on && !opts[0].on);
+check('A: choosing 30 selects it', opts[3].on && !opts[0].on && !opts[1].on);
 
 // Choosing 30 in Beginner and then moving to Standard keeps 30, which Standard allows.
 await H.backToStep(page, '.f4c-mode');
@@ -187,7 +198,7 @@ for (let i = 0; i < 6 && !(await page.locator('[data-testid="setup-training"]').
   await page.locator('.f4c-setup .f4c-btn.primary').last().click(); await page.waitForTimeout(300);
 }
 opts = await lengths();
-check('A: a length the new mode allows carries across', opts[2].on, JSON.stringify(opts));
+check('A: a length the new mode allows carries across', opts[3].on, JSON.stringify(opts));
 
 check('A: the review lists the habit at the chosen length', await H.advanceToReview(page)
   && /Mental Training — 30 minutes/.test(await page.textContent('.f4c-reqs'))
@@ -524,6 +535,31 @@ check('L: a sync keeps a six-practice attempt at its own length',
 await gotoTab('Today');
 check('L: …with Begin Training still there', (await page.locator('[data-testid="begin-training"]').count()) === 1);
 
+// ══ O: an attempt already running at Standard's earlier 15 minutes ══════════
+// Stored exactly as an attempt started before Standard's minimum became 10:
+// stamped with 15 minutes. The new options apply to new attempts only.
+const AT_15 = LEGACY_TASKS.map(t => t.id === 'mt_mind'
+  ? { ...t, name: 'Mental Training — 15 minutes', desc: TRAINING_DESC, target: { value: 15, unit: 'minutes', direction: 'atLeast' } } : t);
+await seedMT({ mentalTraining: { version: 1, minutes: 15 }, habitRulesVersion: 2, tasks: AT_15 });
+const at15Stored = JSON.stringify(await prof());
+await page.reload();
+await page.waitForSelector('.dashboard', { timeout: 15000 });
+await gotoTab('Today');
+await page.waitForSelector('.check-item', { timeout: 15000 });
+check('O: a Standard attempt started at 15 minutes still reads 15 on Today',
+  (await mindRow().locator('.f4-task-title').textContent()).trim() === 'Mental Training — 15 minutes');
+check('O: opening Forge rewrote nothing about it — stamp, habit, XP', JSON.stringify(await prof()) === at15Stored);
+await openTraining();
+check('O: Begin Training states its own 15 minutes', /Mental Training — 15 minutes/.test(await page.textContent('[data-testid="training-choose"]')));
+await choosePractice('dead_calm');
+check('O: …and the session counts toward 15, not the new 10',
+  /15 minutes · your daily target/.test(await page.textContent('[data-testid="training-session"]')));
+await closeTraining();
+await openManage();
+check('O: it is not offered an update or a new length', !/Template update available/i.test(await page.textContent('.f4c-manage')));
+await gotoTab('Today');
+await page.waitForSelector('.check-item', { timeout: 15000 });
+
 // ══ M: widths ═══════════════════════════════════════════════════════════════
 for (const w of [320, 390, 430]) {
   await page.setViewportSize({ width: w, height: w === 320 ? 640 : 844 });
@@ -582,7 +618,8 @@ await page.waitForSelector('[data-testid="sup-training-minutes"]');
 const supChips = await page.evaluate(() => [...document.querySelectorAll('[data-testid="sup-training-minutes"] .sup-chip')]
   .map(b => ({ t: b.textContent, on: b.getAttribute('aria-pressed') === 'true', off: b.disabled })));
 check('N: adding Mental Training as support asks for its daily length too',
-  supChips.length === 3 && supChips[0].off && supChips[1].on && !supChips[2].off, JSON.stringify(supChips));
+  supChips.length === 4 && supChips[0].off && supChips[1].on && /^10 min · Recommended$/.test(supChips[1].t.trim())
+    && !supChips[2].off && !supChips[3].off, JSON.stringify(supChips));
 await page.locator('[data-testid="sup-training-minutes"] .sup-chip', { hasText: '30 min' }).click();
 await page.locator('.sup-add-list', { hasText: 'Mental Training — 30 minutes' }).waitFor({ timeout: 3000 }).catch(() => {});
 check('N: the preview lists the habit at the chosen length',

@@ -54,7 +54,7 @@ export const TRAINING_KEYSTONE_WHY =
 // ── Daily minutes ───────────────────────────────────────────────────────────
 
 /** Every daily length a Mental Training attempt can be set to. */
-export const TRAINING_MINUTE_OPTIONS = [5, 15, 30];
+export const TRAINING_MINUTE_OPTIONS = [5, 10, 15, 30];
 
 /**
  * What each mode recommends and what it allows.
@@ -65,10 +65,18 @@ export const TRAINING_MINUTE_OPTIONS = [5, 15, 30];
  * earn from, which is exactly the contradiction a mode exists to prevent.
  * Training for longer than your mode asks is always allowed; it simply pays
  * what the mode pays.
+ *
+ * Standard asks for ten. The phase already holds reading, prayer, gratitude
+ * and a focus block every day, so the dedicated practice is kept approachable
+ * rather than making the whole day heavier.
+ *
+ * These apply to attempts STARTED with them. An attempt keeps the minutes
+ * stamped on it at setup (trainingConfigOf reads only the stamp), so changing
+ * an option here never moves a running attempt's commitment.
  */
 export const TRAINING_MINUTES_BY_MODE = {
-  beginner: { recommended: 5,  options: [5, 15, 30] },
-  standard: { recommended: 15, options: [15, 30] },
+  beginner: { recommended: 5,  options: [5, 10, 15, 30] },
+  standard: { recommended: 10, options: [10, 15, 30] },
   hard:     { recommended: 30, options: [30] },
 };
 
