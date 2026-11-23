@@ -9,12 +9,13 @@ import { isSleepOpportunity } from '../../data/habitPresentation';
  * Sits directly under the daily habits, because recording how the day went
  * belongs with doing the day — not after the scorecard.
  *
- * The four things people log every single day lead: mood, energy, hours slept
- * and a note. Everything else the app has always tracked — confidence, sleep
- * quality, recovery, workout effort, stress — is one tap away under "More
+ * The things people log every single day lead: mood, energy, stress, hours
+ * slept and a note. Everything else the app has always tracked — confidence,
+ * sleep quality, recovery, workout effort — is one tap away under "More
  * metrics", unchanged, on the same 1–10 scales and writing to the same fields,
  * so history stays comparable. Nothing was converted to a shorter scale and no
- * metric was dropped.
+ * metric was dropped. (Stress moved up from "More metrics" in 4.3.3; it writes
+ * the same `stress` field it always did.)
  *
  * Completion is NOT a checkbox. Saving any one metric marks the shared
  * `daily_log` task complete exactly once (see DailyView.handleUpdate), and the
@@ -112,7 +113,7 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
           : 'Fill in any one of these and your “Complete Daily Log” habit completes itself.'}
       </p>
 
-      {/* ── The daily four ── */}
+      {/* ── Every day: mood, energy, stress, hours slept (notes below) ── */}
       <div className="f4-log-quick">
         <RatingSlider
           label="Mood" emoji="😊"
@@ -123,6 +124,14 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
           label="Energy" emoji="⚡"
           value={dayData?.energy || 0}
           onChange={v => onUpdate({ energy: v })}
+        />
+        {/* Same `stress` field and 1–10 scale it always had; only its place
+            and its wording changed. Optional, like every metric here. */}
+        <RatingSlider
+          label="Stress" emoji="🧠"
+          value={dayData?.stress || 0}
+          onChange={v => onUpdate({ stress: v })}
+          hint="1 = minimal stress · 10 = extreme stress"
         />
 
         <div className="sleep-hours-row f4-log-hours">
@@ -175,7 +184,7 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
         onClick={() => setShowMore(v => !v)}
       >
         {showMore ? '▾' : '▸'} {showMore ? 'Fewer metrics' : 'More metrics'}
-        <span className="f4-log-more-hint">Confidence · Sleep Quality · Recovery · Workout Effort · Stress</span>
+        <span className="f4-log-more-hint">Confidence · Sleep Quality · Recovery · Workout Effort</span>
       </button>
 
       {showMore && (
@@ -201,12 +210,6 @@ export default function QuickLog({ dayData, onUpdate, profile, activeProfile, lo
             value={dayData?.workoutEffort || 0}
             onChange={v => onUpdate({ workoutEffort: v })}
             hint="1 = very easy · 10 = extremely hard"
-          />
-          <RatingSlider
-            label="Stress" emoji="🌡️"
-            value={dayData?.stress || 0}
-            onChange={v => onUpdate({ stress: v })}
-            hint="1 = very calm · 10 = very stressed"
           />
         </div>
       )}

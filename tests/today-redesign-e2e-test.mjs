@@ -469,14 +469,14 @@ await page.waitForTimeout(350);
 check('14.2: the partial note survives opening More Metrics',
   (await notes.inputValue()) === 'Half a thou', await notes.inputValue());
 // Enter a metric that only exists inside the disclosure, then close it.
-await page.locator('.f4-log-rest .rating-row', { hasText: 'Stress' }).locator('.rating-track').fill('6');
+await page.locator('.f4-log-rest .rating-row', { hasText: 'Workout Effort' }).locator('.rating-track').fill('6');
 await page.waitForTimeout(350);
 check('14.2: a metric entered inside More Metrics is saved immediately',
-  (await days())[3]?.stress === 6, String((await days())[3]?.stress));
+  (await days())[3]?.workoutEffort === 6, String((await days())[3]?.workoutEffort));
 await page.locator('.f4-log-more').click();
 await page.waitForTimeout(350);
 check('14.2: closing More Metrics keeps both the note and the hidden metric',
-  (await notes.inputValue()) === 'Half a thou' && (await days())[3]?.stress === 6);
+  (await notes.inputValue()) === 'Half a thou' && (await days())[3]?.workoutEffort === 6);
 await notes.fill('Half a thought, finished.');
 await page.waitForTimeout(400);
 check('14.2: and editing afterwards still writes through',

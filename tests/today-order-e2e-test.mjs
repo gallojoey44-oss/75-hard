@@ -187,14 +187,16 @@ const fields = await page.evaluate(() => {
 check('5: the card keeps its title', fields.title);
 check('5: the notes field is still there', fields.notes);
 check('5: the hours-slept input is still there', fields.sleepHours);
-// The four logged every day lead; the rest are one tap away under "More
-// metrics". Every metric the app has ever stored is still here, on the same
-// 1-10 scales, writing to the same fields.
-const QUICK = ['Mood', 'Energy'];
-const REST = ['Confidence', 'Sleep Quality', 'Recovery', 'Workout Effort', 'Stress'];
-check('5: the daily four lead the card',
-  QUICK.every(m => new RegExp(m, 'i').test(fields.text)) && fields.sleepHours && fields.notes,
-  QUICK.filter(m => !new RegExp(m, 'i').test(fields.text)).join(', ') || 'all present');
+// The metrics logged every day lead — mood, energy, stress, hours slept and a
+// note; the rest are one tap away under "More metrics". Every metric the app
+// has ever stored is still here, on the same 1-10 scales, writing to the same
+// fields.
+const QUICK = ['Mood', 'Energy', 'Stress'];
+const REST = ['Confidence', 'Sleep Quality', 'Recovery', 'Workout Effort'];
+const leading = await page.locator('.daily-log-card .f4-log-quick .rating-row .rating-label-left').allTextContents();
+check('5: the everyday metrics lead the card',
+  QUICK.every(m => leading.some(l => l.includes(m))) && leading.length === QUICK.length && fields.sleepHours && fields.notes,
+  leading.join(' · '));
 await page.locator('.f4-log-more').click();
 await page.waitForTimeout(300);
 const expanded = await page.evaluate(() => document.querySelector('.daily-log-card').textContent);
