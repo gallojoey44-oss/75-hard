@@ -10,20 +10,30 @@ import BuildBanner, { BUILD_VERSION } from './BuildBanner';
 import { computeTotalXP, BADGE_DEFS, LEGACY_PASSING_SCORE } from '../utils/gamification';
 import { displayXP, scaleOfMeta, scaleOfArchive } from '../utils/xpDisplay';
 import { dayRules } from '../data/xpEconomy';
+import { IS_NATIVE_APP } from '../utils/platform';
+import { shareBackupFile } from '../utils/nativeBackup';
 
 const LS_KEYS = ['profiles', 'allDays', 'activeProfile', 'quoteData', 'experiments', 'dismissedHints', 'archives', 'notifPrefs', 'weeklyReflections'];
 
-function exportData() {
+function backupJSON() {
   const data = {};
   for (const key of LS_KEYS) {
     const val = localStorage.getItem(key);
     if (val != null) data[key] = JSON.parse(val);
   }
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  return JSON.stringify(data, null, 2);
+}
+
+function backupFilename() {
+  return `75hard-backup-${new Date().toISOString().slice(0, 10)}.json`;
+}
+
+function exportData() {
+  const blob = new Blob([backupJSON()], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `75hard-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = backupFilename();
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -53,6 +63,20 @@ export default function SettingsView({ setView, onOpenFutureSelf = null }) {
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const [importStatus, setImportStatus] = useState('idle'); // 'idle'|'success'|'error'
   const importRef = useRef(null);
+  // iPhone app only: the share sheet stands in for the download. 'idle'|'working'|'error'
+  const [exportStatus, setExportStatus] = useState('idle');
+
+  async function handleExport() {
+    if (!IS_NATIVE_APP) { exportData(); return; }
+    setExportStatus('working');
+    try {
+      await shareBackupFile(backupFilename(), backupJSON());
+      setExportStatus('idle');
+    } catch {
+      setExportStatus('error');
+      setTimeout(() => setExportStatus('idle'), 4000);
+    }
+  }
 
   // Challenge start date controls
   const [startDateInput, setStartDateInput] = useState('');
@@ -645,7 +669,8 @@ export default function SettingsView({ setView, onOpenFutureSelf = null }) {
         </div>
       </div>
 
-      {/* Install instructions */}
+      {/* Install instructions — for the web app; the iPhone app is already installed */}
+      {!IS_NATIVE_APP && (
       <div className="settings-section">
         <div className="section-title">📱 Add to iPhone Home Screen</div>
         <div className="install-steps">
@@ -667,17 +692,25 @@ export default function SettingsView({ setView, onOpenFutureSelf = null }) {
           </div>
         </div>
       </div>
+      )}
 
       {/* Backup & Restore */}
       <div className="settings-section">
         <div className="section-title">💾 Backup &amp; Restore</div>
         <p className="text-muted" style={{ marginBottom: 12, lineHeight: 1.6 }}>
-          Export saves all your progress to a file. Import restores it — the app will reload after importing.
+          {IS_NATIVE_APP
+            ? 'Export opens the share sheet: choose Save to Files to keep your backup. Import restores it — the app will reload after importing.'
+            : 'Export saves all your progress to a file. Import restores it — the app will reload after importing.'}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button className="btn btn-ghost btn-full" onClick={exportData}>
+          <button className="btn btn-ghost btn-full" onClick={handleExport} disabled={exportStatus === 'working'}>
             ⬇️ Export / Backup Data
           </button>
+          {exportStatus === 'error' && (
+            <div className="update-status-row warn">
+              <span>⚠️</span><span>Couldn&apos;t create the backup file. Please try again.</span>
+            </div>
+          )}
           <button className="btn btn-ghost btn-full" onClick={() => importRef.current?.click()}>
             ⬆️ Import / Restore Data
           </button>
@@ -710,7 +743,9 @@ export default function SettingsView({ setView, onOpenFutureSelf = null }) {
         </div>
       </div>
 
-      {/* App updates */}
+      {/* App updates — the web app updates itself; the iPhone app updates
+          through the App Store (or a new build from Xcode) */}
+      {!IS_NATIVE_APP && (
       <div className="settings-section">
         <div className="section-title">🔄 App Updates</div>
         <p className="text-muted" style={{ marginBottom: 12, lineHeight: 1.6 }}>
@@ -769,6 +804,7 @@ export default function SettingsView({ setView, onOpenFutureSelf = null }) {
           </div>
         )}
       </div>
+      )}
 
       {/* Advanced Danger Zone (hidden behind a collapsed section) */}
       <details className="settings-section danger-zone">

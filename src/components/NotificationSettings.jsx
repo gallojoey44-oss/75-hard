@@ -7,6 +7,7 @@ import {
   requestNotificationPermission, subscribeToPush, unsubscribeFromPush,
   showTestNotification, backgroundTestPush, getPushStatus,
   scheduledTestPush, localSubscriptionState, timeInQuietHours, minutesOf,
+  PUSH_BACKEND_CONFIGURED,
 } from '../utils/notificationUtils';
 import { scaleOfMeta } from '../utils/xpDisplay';
 import {
@@ -18,13 +19,13 @@ import {
   readPastSelf, deliveryActive, describeDays, formatTime, pushStillNeeded,
 } from '../utils/pastSelf';
 
-// VITE_VAPID_PUBLIC_KEY is inlined at BUILD time. If it was missing when the
-// production bundle was built, this is false and no push subscription can ever
-// be created — while the local "Send Test Notification" button still works,
-// because that path needs only permission. That combination is exactly what
-// "notifications work in the app but never arrive in the background" looks
-// like, so it is reported loudly rather than silently.
-const PUSH_BACKEND_CONFIGURED = !!import.meta.env.VITE_VAPID_PUBLIC_KEY;
+// PUSH_BACKEND_CONFIGURED: VITE_VAPID_PUBLIC_KEY is inlined at BUILD time. If it
+// was missing when the production bundle was built, this is false and no push
+// subscription can ever be created — while the local "Send Test Notification"
+// button still works, because that path needs only permission. That combination
+// is exactly what "notifications work in the app but never arrive in the
+// background" looks like, so it is reported loudly rather than silently.
+// (Always false in the iPhone app, which has no Web Push at all.)
 
 function fmtTime(iso) {
   if (!iso) return '—';
@@ -65,8 +66,12 @@ export default function NotificationSettings({ onOpenFutureSelf = null }) {
     'Enabled':       '#10B981',
     'Denied':        '#EF4444',
     'Unsupported':   '#9090B8',
+    'Not in the app yet': '#9090B8',
     'Not requested': 'var(--text2)',
   }[status];
+  // The iPhone app: web notifications do not exist there, and the native ones
+  // are not built yet. The settings stay; the web-only guidance does not.
+  const native = !!support.native;
 
   const refreshDiag = useCallback(async () => {
     setDiagLoading(true);
@@ -207,9 +212,16 @@ export default function NotificationSettings({ onOpenFutureSelf = null }) {
         <span className="notif-status-chip" style={{ color: statusColor }}>{status}</span>
       </div>
 
-      <p className="text-muted" style={{ lineHeight: 1.6, marginBottom: 12 }}>
-        Install Forge on your Home Screen and enable notifications to receive reminders.
-      </p>
+      {native ? (
+        <div className="notif-banner" data-testid="native-notif-note" style={{ marginBottom: 12 }}>
+          🔕 Notifications aren&apos;t available in the iPhone app yet. Your reminder choices are saved,
+          but this app doesn&apos;t send any notifications for now.
+        </div>
+      ) : (
+        <p className="text-muted" style={{ lineHeight: 1.6, marginBottom: 12 }}>
+          Install Forge on your Home Screen and enable notifications to receive reminders.
+        </p>
+      )}
 
       {/* iOS not-installed guidance */}
       {support.iosNeedsInstall && (
@@ -220,7 +232,7 @@ export default function NotificationSettings({ onOpenFutureSelf = null }) {
       )}
 
       {/* Unsupported */}
-      {!support.supported && !support.iosNeedsInstall && (
+      {!support.supported && !support.iosNeedsInstall && !native && (
         <div className="notif-banner">
           ℹ️ Notifications aren&apos;t available in this browser. Reminders will appear here once you
           use a browser that supports them.
@@ -278,17 +290,19 @@ export default function NotificationSettings({ onOpenFutureSelf = null }) {
       </div>
 
       {/* Delivery status */}
-      <div className="notif-banner" style={{ marginTop: 10 }}>
-        {PUSH_BACKEND_CONFIGURED
-          ? '📡 Timed reminders are sent by the server, so they can arrive with Forge closed. A few reminders depend on live task state and stay in-app (labelled below). Use the 3-minute test to confirm background delivery actually reaches this phone.'
-          : '⏳ Background push cannot work in this build. The VAPID public key was missing when this version was built, so no push subscription can be created — only in-app notifications will appear. See SETUP-PUSH.md, then redeploy.'}
-      </div>
+      {!native && (
+        <div className="notif-banner" style={{ marginTop: 10 }}>
+          {PUSH_BACKEND_CONFIGURED
+            ? '📡 Timed reminders are sent by the server, so they can arrive with Forge closed. A few reminders depend on live task state and stay in-app (labelled below). Use the 3-minute test to confirm background delivery actually reaches this phone.'
+            : '⏳ Background push cannot work in this build. The VAPID public key was missing when this version was built, so no push subscription can be created — only in-app notifications will appear. See SETUP-PUSH.md, then redeploy.'}
+        </div>
+      )}
 
       {/* Background-push preconditions, read from the device itself. iOS grants
           the Push API only to a Home Screen install, and permission alone is
           not enough — so each precondition is shown separately instead of one
           misleading "enabled". */}
-      {local && (
+      {local && !native && (
         <div className="notif-diag" style={{ marginTop: 10 }}>
           <div className="notif-diag-head">
             <span className="notif-reminder-label">📲 This device</span>
@@ -356,7 +370,8 @@ export default function NotificationSettings({ onOpenFutureSelf = null }) {
             </div>
           </div>
 
-          {/* Tests */}
+          {/* Tests — nothing to test in the iPhone app, which cannot notify yet */}
+          {!native && (<>
           <button
             className="btn btn-ghost btn-full"
             style={{ marginTop: 10 }}
@@ -417,6 +432,7 @@ export default function NotificationSettings({ onOpenFutureSelf = null }) {
               <span>{schedStatus.msg}</span>
             </div>
           )}
+          </>)}
 
           {/* Diagnostics */}
           {PUSH_BACKEND_CONFIGURED && (

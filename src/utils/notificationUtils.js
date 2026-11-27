@@ -16,6 +16,17 @@ import {
   buildReminderPlan, UNIVERSAL_REMINDERS, PERSONAL_HABITS, CATEGORY,
 } from '../data/reminderPlan';
 import { reminderPayload, reminderFallbackFor } from '../data/reminderCopy';
+import { IS_NATIVE_APP } from './platform';
+
+/**
+ * Whether this build can use the Web Push backend (the /api/push routes).
+ *
+ * The VAPID public key is inlined at BUILD time; without it no subscription can
+ * be created. The iPhone app never has the backend, whatever the build
+ * environment says: it has no Push API, and its /api paths would not reach
+ * Forge's server. Its notifications need a native implementation instead.
+ */
+export const PUSH_BACKEND_CONFIGURED = !IS_NATIVE_APP && !!(import.meta.env || {}).VITE_VAPID_PUBLIC_KEY;
 
 // ─── Reminder catalogue ─────────────────────────────────────────────────────
 //
@@ -54,6 +65,15 @@ export function makeDefaultNotifPrefs() {
 // ─── Feature detection / permission ─────────────────────────────────────────
 
 export function getNotificationSupport() {
+  // The iPhone app's web view has neither the Notification API nor service
+  // workers, and it is already installed, so the Home Screen advice for Safari
+  // does not apply to it. Notifications there need a native implementation.
+  if (IS_NATIVE_APP) {
+    return {
+      supported: false, pushSupported: false, permission: 'unsupported',
+      isIOS: true, isStandalone: true, iosNeedsInstall: false, native: true,
+    };
+  }
   const hasNotification = typeof window !== 'undefined' && 'Notification' in window;
   const hasSW   = typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
   const hasPush = hasSW && typeof window !== 'undefined' && 'PushManager' in window;
@@ -82,6 +102,7 @@ export function getNotificationSupport() {
 }
 
 export function permissionLabel(support) {
+  if (support.native) return 'Not in the app yet';
   if (!support.supported) return 'Unsupported';
   if (support.permission === 'granted') return 'Enabled';
   if (support.permission === 'denied')  return 'Denied';
@@ -163,6 +184,7 @@ export async function subscribeToPush(profileId) {
 }
 
 export async function unsubscribeFromPush(profileId) {
+  if (IS_NATIVE_APP) return { ok: true };   // no push subscription can exist there
   try {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
@@ -192,6 +214,7 @@ export async function unsubscribeFromPush(profileId) {
  * Returns { ok, reason }.
  */
 export async function syncPushSchedule(profileId, prefs, ctx, todayStr) {
+  if (IS_NATIVE_APP) return { ok: false, reason: 'native-app' };
   if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) return { ok: false, reason: 'no-vapid-key' };
   try {
     publishInstallIdentity(profileId);
@@ -246,6 +269,7 @@ export async function syncPushSchedule(profileId, prefs, ctx, todayStr) {
  * Returns { ok, stored, contentStored } or { ok: false, reason }.
  */
 export async function syncPastSelf(profileId, body) {
+  if (IS_NATIVE_APP) return { ok: false, reason: 'native-app' };
   if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) return { ok: false, reason: 'no-vapid-key' };
   try {
     const res = await fetch('/api/push/sync', {

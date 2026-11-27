@@ -12,6 +12,7 @@ import { getTodayStr } from './utils/dateUtils';
 import {
   getDueReminders, getNotificationSupport, showNotification, markFired, syncPushSchedule,
   syncPastSelf, subscribeToPush, localSubscriptionState, alreadyFiredToday, inQuietHours,
+  PUSH_BACKEND_CONFIGURED,
 } from './utils/notificationUtils';
 import FutureSelfSpace from './components/pastself/FutureSelfSpace';
 import PastSelfReveal from './components/pastself/PastSelfReveal';
@@ -186,7 +187,8 @@ function NotificationScheduler() {
 // server claims a slot per profile per local date before it sends. And the
 // in-app path below runs only when there is NO background push for this device
 // to deliver through — so the two can never both fire for the same day.
-const PUSH_BACKEND_CONFIGURED = !!import.meta.env.VITE_VAPID_PUBLIC_KEY;
+// (PUSH_BACKEND_CONFIGURED comes from notificationUtils; it is never true in
+// the iPhone app.)
 
 function PastSelfScheduler() {
   const { activeProfile, profile, notifPrefs } = useApp();

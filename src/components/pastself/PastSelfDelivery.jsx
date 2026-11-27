@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import {
   getNotificationSupport, requestNotificationPermission, subscribeToPush, unsubscribeFromPush,
   localSubscriptionState, showNotification, timeInQuietHours, minutesOf,
-  makeDefaultNotifPrefs,
+  makeDefaultNotifPrefs, PUSH_BACKEND_CONFIGURED,
 } from '../../utils/notificationUtils';
 import {
   updateDelivery, eligibleMessages, hasSomethingToSend, deliveryActive,
@@ -15,8 +15,6 @@ import {
   getPastSelfStatus, subscribePastSelfStatus, requestPastSelfSync,
 } from '../../utils/pastSelfStatus';
 import LockScreenPreview from './LockScreenPreview';
-
-const PUSH_BACKEND_CONFIGURED = !!import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
 /**
  * When the messages arrive, which one, and what the lock screen shows.
@@ -65,7 +63,12 @@ export default function PastSelfDelivery({ state, update, onGoToMessages }) {
     if (!sendable) return;
     let s = getNotificationSupport();
     if (s.iosNeedsInstall) { setNotice('On iPhone, notifications only work from the installed app. Add Forge to your Home Screen, open it from there, then switch this on.'); return; }
-    if (!s.supported) { setNotice('This browser cannot show notifications, so there is nothing to switch on here.'); return; }
+    if (!s.supported) {
+      setNotice(s.native
+        ? 'The iPhone app can’t send notifications yet, so there is nothing to switch on here.'
+        : 'This browser cannot show notifications, so there is nothing to switch on here.');
+      return;
+    }
     if (s.permission === 'default') {
       // Asked only here, from the user's own tap.
       await requestNotificationPermission();
@@ -324,7 +327,7 @@ export default function PastSelfDelivery({ state, update, onGoToMessages }) {
         <h3 className="ps-card-title">Try it</h3>
         <p className="ps-note" data-testid="delivery-capability">
           {!support.supported
-            ? 'This browser cannot show notifications.'
+            ? (support.native ? 'The iPhone app can’t show notifications yet.' : 'This browser cannot show notifications.')
             : support.permission !== 'granted'
               ? 'Notifications are not allowed for Forge on this device yet.'
               : background

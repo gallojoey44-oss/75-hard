@@ -11,6 +11,8 @@
 // - applyUpdate() / checkForUpdate() drive activation through the SKIP_WAITING
 //   message — the single intended update path.
 
+import { IS_NATIVE_APP } from './platform.js';
+
 let registration = null;
 let isApplyingUpdate = false; // true once the user has asked to apply an update
 let refreshing = false;       // guards against multiple reloads on controllerchange
@@ -27,6 +29,9 @@ function updateIsReady() {
 }
 
 export async function registerSW() {
+  // The iPhone app carries its code inside the app and is updated through the
+  // App Store, so there is no service worker to register or update there.
+  if (IS_NATIVE_APP) return;
   if (!('serviceWorker' in navigator)) return;
 
   // Reload once when a NEW worker takes control — but only if the user asked to
@@ -109,6 +114,7 @@ export function applyUpdate() {
  * Returns: 'update-available' | 'up-to-date' | 'unavailable' | 'error'
  */
 export async function checkForUpdate() {
+  if (IS_NATIVE_APP) return 'unavailable';
   if (!registration) {
     try {
       registration = await navigator.serviceWorker.getRegistration('/sw.js') ?? null;
