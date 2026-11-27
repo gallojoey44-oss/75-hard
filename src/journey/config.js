@@ -18,8 +18,12 @@
  * restore never touches them.
  */
 
-export const JOURNEY_URL = import.meta.env.VITE_SUPABASE_URL || '';
-export const JOURNEY_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Vite fills `import.meta.env` at build time. Code that imports this file
+// outside Vite (the unit tests, bundled with esbuild) has no env at all —
+// which reads, correctly, as "not configured".
+const ENV = import.meta.env || {};
+export const JOURNEY_URL = ENV.VITE_SUPABASE_URL || '';
+export const JOURNEY_KEY = ENV.VITE_SUPABASE_ANON_KEY || '';
 
 /** True when this build was given a Supabase project to talk to. */
 export function journeyConfigured() {
