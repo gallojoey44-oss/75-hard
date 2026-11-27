@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense, Component } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import ProfileSelector from './components/ProfileSelector';
 import Dashboard from './components/Dashboard';
@@ -15,6 +15,33 @@ import {
 } from './utils/notificationUtils';
 import FutureSelfSpace from './components/pastself/FutureSelfSpace';
 import PastSelfReveal from './components/pastself/PastSelfReveal';
+import { journeyConfigured, setPendingInvite } from './journey/config';
+
+// Our Journey is loaded only when it is opened, so personal Forge never
+// downloads the shared-journey code (or the Supabase client) otherwise.
+const JourneyApp = lazy(() => import('./journey/JourneyApp'));
+
+/**
+ * If Our Journey's code cannot be loaded — offline before it was ever opened,
+ * say — say so and offer the way back, rather than letting the failure take
+ * the rest of Forge down with it.
+ */
+class JourneyBoundary extends Component {
+  constructor(props) { super(props); this.state = { failed: false }; }
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="ps-space" data-testid="journey-unavailable">
+        <header className="ps-head">
+          <button type="button" className="ps-back" onClick={this.props.onExit}><span aria-hidden="true">‹</span> Home</button>
+          <h1 className="ps-title">Our Journey</h1>
+          <p className="ps-lede">Our Journey needs a connection to open. Everything personal in Forge works as usual.</p>
+        </header>
+      </div>
+    );
+  }
+}
 import { readPastSelf, buildSyncBody, deliveryActive, eligibleMessages, scheduledDays, todayLocalDate } from './utils/pastSelf';
 import { buildPayload, isScheduledDay, PAST_SELF_TYPE, PAST_SELF_VIEW } from '../api/_lib/pastSelf.js';
 import { CATCH_UP_MINUTES } from '../api/_lib/schedule.js';
@@ -347,7 +374,7 @@ function ChallengeLifecycle() {
 }
 
 function AppContent() {
-  const { activeProfile } = useApp();
+  const { activeProfile, profiles } = useApp();
   const [view, setView] = useState('home');
   // Letters to My Future Self is a place, not a tab: it remembers which screen
   // it was opened from so Back returns there, and which of its parts to show.
@@ -367,6 +394,14 @@ function AppContent() {
 
     const params = new URLSearchParams(window.location.search);
     const target = params.get('view');
+    // A friend's invite link (?friend=CODE). The code is held until this
+    // person is signed in, then Our Journey asks whether to send a request.
+    const friendCode = params.get('friend');
+    if (friendCode && journeyConfigured()) {
+      setPendingInvite(friendCode.replace(/[^0-9A-Fa-f-]/g, '').slice(0, 11));
+      setView('journey');
+      window.history.replaceState({}, '', '/');
+    }
     if (target === PAST_SELF_VIEW) {
       openMessage({ msg: params.get('msg'), profile: params.get('profile'), date: params.get('date') });
       window.history.replaceState({}, '', '/');
@@ -413,6 +448,18 @@ function AppContent() {
         {view === 'insights'   && <InsightsView />}
         {view === 'challenges' && <ChallengesView setView={navigate} />}
         {view === 'settings'   && <SettingsView setView={navigate} onOpenFutureSelf={openFutureSelf} />}
+        {view === 'journey' && (
+          <JourneyBoundary key={activeProfile} onExit={() => setView('home')}>
+            <Suspense fallback={<div className="jr-loading" aria-busy="true" />}>
+              <JourneyApp
+                key={activeProfile}
+                slot={activeProfile}
+                profileName={profiles?.[activeProfile]?.name || 'this'}
+                onExit={() => setView('home')}
+              />
+            </Suspense>
+          </JourneyBoundary>
+        )}
         {view === 'futureself' && (
           <FutureSelfSpace
             key={`${activeProfile}:${space.tab}`}
@@ -423,7 +470,10 @@ function AppContent() {
         )}
       </main>
       {/* The bottom bar has no tab for it; the screen it was opened from stays lit. */}
-      <BottomNav view={view === 'futureself' ? (space.from || 'home') : view} setView={navigate} />
+      <BottomNav
+        view={view === 'futureself' ? (space.from || 'home') : view === 'journey' ? 'home' : view}
+        setView={navigate}
+      />
       {reveal && (
         <PastSelfReveal
           target={reveal}

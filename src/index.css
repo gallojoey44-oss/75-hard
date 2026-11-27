@@ -9098,3 +9098,12 @@ button.f4-lane-link:focus-visible { outline: 2px solid var(--accent); outline-of
 .start-challenge .fd-penalty-note {
   margin: -12px auto 22px; max-width: 340px; font-size: 12.5px; line-height: 1.5; color: var(--text2);
 }
+
+/* ── Our Journey: the Home entry card (the Journey screens style themselves) ── */
+.jr-home {
+  background:
+    radial-gradient(130% 120% at 0% 0%, color-mix(in srgb, var(--accent) 16%, transparent) 0%, transparent 60%),
+    var(--f4-surface);
+}
+.jr-home-text { font-size: var(--f4-fs-sm); color: var(--text2); line-height: 1.55; margin: 0; }
+.jr-home-btn { min-height: 44px; padding: 10px 14px; font-size: 14px; }

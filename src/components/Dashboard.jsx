@@ -14,6 +14,7 @@ import TransformationPhotos from './TransformationPhotos';
 import XPHistory from './XPHistory';
 import WelcomeBack from './WelcomeBack';
 import TrainingLengthChoice from './TrainingLengthChoice';
+import HomeJourneyCard from './home/HomeJourneyCard';
 import RankCard from './home/RankCard';
 import ConsistencyCard from './home/ConsistencyCard';
 import AchievementsCard from './home/AchievementsCard';
@@ -1145,6 +1146,7 @@ export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPast
         </div>
         <ScheduledStartCard onChangeChallenge={() => setView('challenges')} />
         <TrainingLengthChoice key={activeProfile} />
+        <HomeJourneyCard onOpen={() => setView('journey')} />
         {/* The days before a challenge starts are when people most want to write. */}
         {onOpenFutureSelf && (
           <HomeFutureSelfCard onOpen={onOpenFutureSelf} onRead={onReadPastSelf} />
@@ -1229,6 +1231,8 @@ export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPast
           longest={longest}
           onOpenCalendar={() => setView('insights')}
         />
+        {/* Shared with one other person, by choice — after what is yours. */}
+        <HomeJourneyCard onOpen={() => setView('journey')} />
         <AchievementsCard badges={badges} milestones={milestones} />
         <RecentWins wins={wins} />
         {/* Writing to yourself does not need a challenge to be running. */}
@@ -1363,6 +1367,9 @@ export default function Dashboard({ setView, onOpenFutureSelf = null, onReadPast
       <FatLossHardPanel />
       <ChallengePerformance setView={setView} compact />
       <SupportProgress />
+
+      {/* Shared with one other person, by choice — after what is yours. */}
+      <HomeJourneyCard onOpen={() => setView('journey')} />
 
       {/* 5. What you have earned, and what is close */}
       <AchievementsCard badges={badges} milestones={milestones} />

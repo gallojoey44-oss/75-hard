@@ -217,8 +217,10 @@ export function startGateway(port = PORTS.gateway) {
       host: '127.0.0.1', port: route[1], method: req.method,
       path: req.url.slice(route[0].length) || '/', headers,
     }, (up) => {
-      const out = { ...up.headers, ...cors };
-      res.writeHead(up.statusCode, out);
+      // Like Kong's CORS plugin: the gateway's CORS headers replace the
+      // service's own (Auth sends `*`; two values would be refused).
+      const out = Object.fromEntries(Object.entries(up.headers).filter(([k]) => !/^access-control-/i.test(k)));
+      res.writeHead(up.statusCode, { ...out, ...cors });
       up.pipe(res);
     });
     upstream.on('error', () => fail(502, 'upstream unavailable'));

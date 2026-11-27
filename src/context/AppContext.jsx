@@ -39,6 +39,7 @@ import { promotionBasis, promotedDescriptor } from '../utils/supportPromotion';
 import { recentGap, shouldShowComeback, missedDayDetail, buildXPHistory, unacknowledgedPart, acknowledgementKey } from '../utils/missedDays';
 import { resolveRankState, resolveHighestRank, rankFloorXP } from '../utils/rank';
 import { readPastSelf } from '../utils/pastSelf';
+import { clearJourneyLocal } from '../journey/config';
 
 export const MENTAL_OPTIONS = [
   { id: 'breathwork',    label: '5 min breathwork',             icon: '🫁' },
@@ -2247,6 +2248,9 @@ export function AppProvider({ children }) {
     // profile's data has to clear them explicitly or the images would outlive
     // everything else the user asked to erase.
     clearProfilePhotos(profId);
+    // This profile's Our Journey sign-in and cached copy go too. The account
+    // and its shared Journey live on the server and are not deleted from here.
+    clearJourneyLocal(profId);
   }, [activeProfile, setProfiles, setAllDays, setArchives, setQuoteData, setExperiments, setDismissedHints]);
 
   // Update start date without wiping saved day data — used for backfilling
