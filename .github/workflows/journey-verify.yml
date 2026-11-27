@@ -1,0 +1,79 @@
+name: Verify Our Journey (hosted Supabase)
+
+# Checks the real Supabase project behind Our Journey before anyone relies on
+# it. Two scripts, both run from GitHub's network (which can reach Supabase):
+#
+#   tools/verify-journey.mjs          the server's rules, as three throwaway
+#                                     accounts, through the Data API
+#   tools/verify-journey-devices.mjs  two separate browser "phones" through the
+#                                     app itself: friends, a Journey, a goal to
+#                                     completion, Our Future, a check-in, and
+#                                     that nothing personal leaves either phone
+#
+# Neither sends email, and both delete their test accounts when they finish.
+#
+# Three repository secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL               https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY          the publishable / anon key — the one the app uses
+#   SUPABASE_SERVICE_ROLE_KEY  the secret / service_role key — used ONLY here, to
+#                              create and delete the throwaway accounts
+# Until they exist the job says so and passes.
+#
+# This repository is public, so these logs are public: the scripts print only
+# check names and throwaway usernames, and GitHub masks secret values.
+
+on:
+  push:
+    branches: [claude/shared-journey-mvp]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: journey-verify
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Are the Supabase secrets set?
+        id: gate
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::notice::The three Supabase secrets are not set yet, so there is nothing to verify."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        if: steps.gate.outputs.ready == 'true'
+        run: npm ci
+
+      - name: Server rules on the hosted project
+        if: steps.gate.outputs.ready == 'true'
+        run: node tools/verify-journey.mjs
+
+      - name: Browser for the two-device check
+        if: steps.gate.outputs.ready == 'true'
+        run: npm install --no-save playwright@1.63.0 && npx playwright install --with-deps chromium
+
+      - name: Two phones through the app, against the hosted project
+        if: steps.gate.outputs.ready == 'true'
+        run: node tools/verify-journey-devices.mjs

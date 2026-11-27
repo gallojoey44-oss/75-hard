@@ -159,11 +159,16 @@ be read top to bottom.
 
 3. **Authentication → URL Configuration:** set **Site URL** to the Forge
    address you will use. Codes don't need it, but leave it correct.
-4. **Rate limits:** Supabase's built-in email service is meant for testing and
-   sends only a few emails an hour. Two people signing in once is fine, and
-   sessions last a long time. If codes stop arriving, wait a little, or add your
-   own SMTP under **Authentication → Emails → SMTP Settings** (for example
-   Resend or Postmark).
+4. **An email sender that reaches both of you.** Supabase's built-in sender
+   is meant for testing: it delivers only to members of your Supabase
+   organization, and only a few emails an hour. For your partner to receive a
+   code, add your own SMTP under **Authentication → Emails → SMTP Settings**.
+   A Gmail account works:
+   * In your Google Account, turn on 2-Step Verification, then create an
+     **App password** named "Forge".
+   * In Supabase: Host `smtp.gmail.com`, Port `465`, Username and Sender email
+     your Gmail address, Password the 16-character app password, Sender name
+     `Forge`.
 
 ### 4.3 Get the keys
 
@@ -193,29 +198,30 @@ In **Project Settings → API Keys**, copy:
 
 ### 4.5 Check the project before relying on it
 
-On your own computer, from this repository:
+The simplest way is GitHub, which can reach Supabase and keeps the keys out of
+every chat and file. In the repository's **Settings → Secrets and variables →
+Actions**, add three repository secrets:
 
-```bash
-npm install
-SUPABASE_URL=https://<ref>.supabase.co \
-SUPABASE_ANON_KEY=<anon or publishable key> \
-SUPABASE_SERVICE_ROLE_KEY=<service_role key> \
-node tools/verify-journey.mjs
-```
+| Name | Value |
+|---|---|
+| `SUPABASE_URL` | the Project URL |
+| `SUPABASE_ANON_KEY` | the publishable / anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | the secret / service_role key, used only by these checks |
 
-The script:
+The **Verify Our Journey (hosted Supabase)** workflow
+(`.github/workflows/journey-verify.yml`) then runs two checks against the real
+project:
 
-* uses the service-role key **only on your machine**, to create three
-  throwaway accounts (no email is sent) and to delete them afterwards;
-* runs every check as those people through the real Data API:
-  * signed-out callers are refused;
-  * lookups only work by exact username;
-  * friend requests and Journeys need consent;
-  * two separate sessions see the same combined goal;
-  * an outsider can't read or change anything;
-  * no table is readable directly;
-  * leaving ends the Journey for both;
-* should end with every line `PASS`.
+* `tools/verify-journey.mjs` tests the server's rules as three throwaway
+  accounts;
+* `tools/verify-journey-devices.mjs` drives two separate browser "phones"
+  through the app: friends, a Journey, a goal to completion, Our Future, a
+  check-in, and proof that nothing personal leaves either phone and that each
+  phone's Forge data and XP stay exactly as they were.
+
+Neither check sends email, and both delete their test accounts at the end.
+They can also be run on your own computer with the same three values set as
+environment variables.
 
 ### 4.6 Connect your two phones
 
